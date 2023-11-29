@@ -1,0 +1,44 @@
+---
+title: "urban-planet"
+author: "Jiali Zhu"
+date: "2023-10-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+The relationship between tcc and lst 2013-2021
+```{r}
+# plot scatter
+library(raster)
+library(dplyr)
+source("script/plot_scatter_lst_tcc.R")
+
+for (i in 2013:2021){
+  rs_tcc <- raster(stringr::str_c("data/raw/NY/nlcd_tcc/clipped/nlcd_tcc_NY_",i,".tif"))
+  rs_lst <- raster(stringr::str_c("data/raw/NY/LST_L8/year_mean/",i,".tif")) %>%
+    projectRaster(., rs_tcc, method = "ngb")
+
+  output_dir <- stringr::str_c("result/orig_scatter/tcc_lst_",i,".jpg")
+  scatters(tree= rs_tcc, lst = rs_lst,xlabel = '', output_file = output_dir)
+}
+
+```
+
+The relationship between lst and phenology index(sos,eos from Li, 2019) 2013-2021
+```{r cars}
+
+lst_rs <- raster("~/lab-data/phenology/phenology_urban/NY/LST_L8/year_mean/2013.tif")
+lst_rs2 <- projectRaster(lst_rs, clipped_raster, method = "ngb")
+
+```
+
+The relationship between lst and individual tree info
+```{r cars}
+trees_df <- read_csv("~/phenology-batchplanet/alldata/tree/Tree_Inventory_NewYork.csv") %>%
+  dplyr::select(id = tree_id, species = spc_latin, lat = latitude, lon = longitude, time = created_at)
+
+v_taxa <- c("Quercus", "Morus", "Ulmus", "Fraxinus", "Betula", "Acer", "Populus", "Vacant")
+```
