@@ -1,0 +1,8 @@
+library(BAT)
+comm <- matrix(c(2,5,0,0,0,1,1,0,0,0,0,1,2,0,0,0,0,0,10,1), nrow = 4, ncol = 5, byrow = TRUE)
+rownames(comm) = c("Site1","Site2","Site3","Site4")
+colnames(comm) = c("Sp1","Sp2","Sp3","Sp4","Sp5")
+trait <- data.frame(Trait1 = c(1,0,0,2,0), Trait2 = c(rep("A",2), rep("B",3)))
+rownames(trait) = colnames(comm)
+cwm(comm, trait)
+cwm(comm, trait, FALSE)

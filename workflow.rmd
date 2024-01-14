@@ -25,19 +25,9 @@ rs_lst <- raster(stringr::str_c("data/raw/NY/LST_L8/year_mean/2015.tif")) %>%
 output_dir <- stringr::str_c("result/orig_scatter/tcc_lst_2015.jpg")
 scatters_tcc_lst(tree= rs_tcc, lst = rs_lst,
                  xlabel = expression(bold(paste('Tree Canopy Cover / %', sep = ''))),
-                 ylabel = expression(bold(paste('Land Surface Temp / °C ', sep = ''))), 
+                 ylabel = expression(bold(paste('Land Surface Temp / °C', sep = ''))), 
                  output_file = output_dir)
   
-
-for (i in 2020:2021){
-  rs_tcc <- raster(stringr::str_c("data/raw/NY/nlcd_tcc/clipped/nlcd_tcc_NY_",i,".tif"))
-  rs_lst <- raster(stringr::str_c("data/raw/NY/LST_L8/year_mean/",i,".tif")) %>%
-    projectRaster(., rs_tcc, method = "ngb")
-
-  output_dir <- stringr::str_c("result/orig_scatter/tcc_lst_",i,".jpg")
-  scatters_tcc_lst(tree= rs_tcc, lst = rs_lst,xlabel = '', output_file = output_dir)
-}
-
 ```
 
 2. The relationship between lst and phenology index(sos,eos from Li, 2019) 2013-2021
