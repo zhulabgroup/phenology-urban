@@ -1,0 +1,28 @@
+---
+title: "urban-planet"
+author: "Jiali Zhu"
+date: "2023-10-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+1. Insert tree id
+```{r}
+source("script/read_tree_inventory.R")
+cityoi <- "NY"
+df_tree <- read_tree_inventory(city = cityoi)
+
+v_taxa <- c("Quercus", "Morus", "Ulmus", "Fraxinus", "Betula", "Acer", "Populus", "Vacant")
+```
+
+2. Creat buffer zone near tree point
+```{r}
+source("script/read_tree_inventory.R")
+cityoi <- "NY"
+df_tree <- read_tree_inventory(city = cityoi)
+
+v_taxa <- c("Quercus", "Morus", "Ulmus", "Fraxinus", "Betula", "Acer", "Populus", "Vacant")
+```
