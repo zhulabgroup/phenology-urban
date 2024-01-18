@@ -1,0 +1,152 @@
+1. Boundary
+```{r}
+library(tidyverse)
+library(sf)
+library(rnaturalearth)
+
+mainmap <- ne_states(country = c("united states of america", "canada"), returnclass = "sf")
+michiganplus <- mainmap %>% dplyr::filter(name %in% c("Illinois", "Michigan", "Wisconsin", "Ontario"))
+
+ggplot() +
+geom_sf(data = michiganplus, fill = "white", color = "black") +
+  coord_sf(ylim = c(42, 46), xlim = c(-87, -82)) + # reduce visualization to smaller area
+  theme_minimal()
+```
+
+2. plot the data on top of the map
+```{r}
+df <- read.csv("data/michigan_greenness.csv")
+
+ggplot() +
+geom_sf(data = michiganplus, fill = "white", color = "black") +
+  coord_sf(ylim = c(42, 46), xlim = c(-87, -82)) +
+  geom_point(data = df, aes(x=Longitude, y=Latitude, color=Greenness), size=.7) +
+  scale_color_viridis_c() +
+  theme_minimal()
+  
+```
+
+
+3. several variables
+```{r}
+colnames(df)[3:4] <- c("gdd0800", "gdd0900")
+
+df_long <- df %>% dplyr::select(Longitude, Latitude, contains("gdd")) %>%
+  tidyr::pivot_longer(cols=c(-Longitude, -Latitude), names_to = "GDD degree", values_to = "GDD value")
+  
+ggplot() +
+geom_sf(data = michiganplus, fill = "white", color = "black") +
+  coord_sf(ylim = c(42, 46), xlim = c(-87, -82)) +
+  geom_point(data = df_long, aes(x=Longitude, y=Latitude, color=`GDD value`), size=.7) +
+  scale_color_viridis_c() +
+  facet_wrap(~ `GDD degree`, nrow=4) +
+  theme_minimal()
+```
+
+
+4. multiple panels for forest type
+```{r}
+df %>% dplyr::select(contains("dc")) %>% table()
+df_long <- df %>% dplyr::select(Longitude, Latitude, contains("dc_")) %>%
+  tidyr::pivot_longer(cols=c(-Longitude, -Latitude), names_to = "Forest type", values_to = "value") %>% 
+  dplyr::filter(value == 1)
+  
+ggplot() +
+geom_sf(data = michiganplus, fill = "white", color = "black") +
+  coord_sf(ylim = c(42, 46), xlim = c(-87, -82)) +
+  geom_point(data = df_long, aes(x=Longitude, y=Latitude, color=factor(value)), size=2, shape=17) +
+  scale_color_manual(values="darkgreen") +
+  facet_wrap(~ `Forest type`) +
+  theme_minimal() +
+  theme(legend.position="none")
+  
+```
+
+
+5. color option - raster
+```{r}
+library(scico)
+
+scico::scico_palette_show()
+
+ggplot() +
+geom_sf(data = michiganplus, fill = "white", color = "black") +
+  coord_sf(ylim = c(42, 46), xlim = c(-87, -82)) +
+  geom_raster(data = df, aes(x=Longitude, y=Latitude, fill=gdd1800)) +
+  scale_fill_scico(palette="batlowK") +
+  theme_minimal()
+```
+
+6. map areal data
+```{r}
+library(tigris)
+library(tidycensus)
+library(tidyverse)
+
+df <- read.csv("data/heart_disease.csv")
+# look through
+head(df %>% dplyr::filter(LocationAbbr == "MI"), 3)
+
+# clean up to Midwest
+df <- df %>% 
+  dplyr::filter(GeographicLevel == "County",
+                LocationAbbr %in% c("IL", "IN", "MI", "OH", "WI")) %>%
+  mutate(LocationDesc = gsub(" County", "", LocationDesc))
+
+#boundary of county
+# https://www.census.gov/geographies/mapping-files/time-series/geo/carto-boundary-file.html
+counties <- sf::read_sf('data/cb_2018_us_county_500k/cb_2018_us_county_500k.shp')
+head(counties)
+
+#FIPS-State abbreviation table
+state_fips <- tidycensus::fips_codes %>% 
+  dplyr::select(state, state_code) %>% 
+  unique() %>%
+# call the columns with the names they have in the respective datasets
+  dplyr::rename(STATEFP = state_code, LocationAbbr = state) 
+
+counties <- counties %>% 
+  left_join(state_fips) %>% 
+  dplyr::rename(LocationDesc = NAME)
+
+# plot the map
+df_local <- df %>% 
+  left_join(counties, by = c("LocationAbbr", "LocationDesc")) %>% 
+  st_as_sf()
+  
+ggplot(data=df_local %>% 
+         dplyr::filter(Stratification1 != "Overall", Stratification2 == "Overall")) +
+  geom_sf(aes(fill=Data_Value)) +
+  theme_minimal() +
+  labs(fill = "Heart disease per 100k pop") +
+  scale_fill_viridis_c() +
+  facet_grid(~ Stratification1)
+
+# plot the map by gender
+ggplot(data=df_local %>% 
+         dplyr::filter(Stratification1 != "Overall", Stratification2 == "Overall")) +
+  geom_sf(aes(fill=Data_Value)) +
+  theme_minimal() +
+  labs(fill = "Heart disease per 100k pop") +
+  scale_fill_viridis_c() +
+  facet_grid(~ Stratification1)
+
+# plot the map by gender and races
+ggplot(data=df_local %>% 
+         dplyr::filter(Stratification1 != "Overall", Stratification2 != "Overall")) +
+  geom_sf(aes(fill=Data_Value)) +
+  theme_minimal() +
+  labs(fill = "Heart disease per 100k pop") +
+  scale_fill_viridis_c() +
+  facet_grid(~ Stratification1)
+
+#plot with transform and restrict
+ggplot(data=df_local %>% 
+         dplyr::filter(Stratification1 != "Overall", Stratification2 %in% c("Black", "Overall"))) +
+  geom_sf(aes(fill=log(Data_Value))) +
+  theme_minimal() +
+  labs(fill = "Heart disease per 100k pop\n(log scale)") +
+  scale_fill_viridis_c() +
+  facet_grid(Stratification1 ~ Stratification2)
+
+```

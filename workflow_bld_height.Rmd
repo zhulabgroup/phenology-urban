@@ -18,11 +18,60 @@ df_tree <- read_tree_inventory(city = cityoi)
 v_taxa <- c("Quercus", "Morus", "Ulmus", "Fraxinus", "Betula", "Acer", "Populus", "Vacant")
 ```
 
-2. Creat buffer zone near tree point
+2. Creat buffer zone near tree point (sample points)
 ```{r}
-source("script/read_tree_inventory.R")
-cityoi <- "NY"
-df_tree <- read_tree_inventory(city = cityoi)
+library(sp)
+library(sf)
+library(ggplot2)
 
-v_taxa <- c("Quercus", "Morus", "Ulmus", "Fraxinus", "Betula", "Acer", "Populus", "Vacant")
+boundary_NY <- sf::read_sf('data/raw/NY/boundary/nybb_dissolved.shp')
+coordinates(df_tree) <- c("lon", "lat")
+point_tree <- st_as_sf(df_tree)
+
+# randomly pick
+set.seed(123)
+sample_points <- point_tree[sample(nrow(point_tree), 5), ]
+sample_points <- st_set_crs(sample_points, "EPSG:4326")
+
+# Transform the data to a new CRS with explicit units
+sample_points <- st_transform(sample_points, crs = st_crs("+proj=longlat +datum=WGS84 +units=m"))
+st_crs(sample_points)
+
+# Create buffer for height index
+buffers <- st_buffer(sample_points, dist = 500)
+
+# Visualize
+ggplot() +
+geom_sf(data = boundary_NY, fill = "white", color = "black") +
+  coord_sf(ylim = c(40.5, 40.9), xlim = c(-74.3, -73.6)) +
+  geom_sf(data = sample_points, color = "black", size=2, shape=17) +
+  scale_color_manual(values="darkgreen") +
+  theme_minimal() +
+  theme(legend.position="none") +
+  geom_sf(data = buffers, fill = "white", color = "red")
+
+```
+
+3. Insert building data
+```{r}
+building_footprint <- sf::read_sf('~/phenology-urban/data/raw/NY/NY_building_footprint/geo_export_56deb8a8-0463-4f00-8f45-99e751e3b8e1.shp') %>%
+  st_make_valid(building_footprint)
+
+buffers <- st_transform(buffers, crs = st_crs(building_footprint))
+intersection <- st_intersection(buffers, building_footprint)
+
+library(foreach)
+library(progress)
+library(sf)
+library(doParallel)
+
+cl <- makeCluster(min(5, detectCores()), outfile = "")
+registerDoParallel(cl)
+intersection <- foreach(i = 1:nrow(buffers), .combine = rbind) %dopar% {
+  sf::st_intersection(buffers[i, ], building_footprint)
+}
+
+stopCluster(cl)
+saveRDS(intersection, file = "/result/intersection_result_sample.rds")
+
 ```
