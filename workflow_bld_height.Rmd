@@ -75,3 +75,66 @@ stopCluster(cl)
 saveRDS(intersection, file = "/result/intersection_result_sample.rds")
 
 ```
+
+
+
+4. building index _ betula_200_buffer
+
+```{r}
+library(dplyr)
+library(foreign)
+
+dbf_file <- "~/phenology-urban/data/raw/NY/NY_building_footpritn/inter_buffer_200_betula.dbf"
+intersect_200_bld_betula <- read.dbf(dbf_file)
+
+#BCR_betula_200
+bld_index_betula_200 <- intersect_200_bld_betula %>%
+  group_by(tree_id) %>%
+  summarise(BCR_betula_200 = sum(Shape_Ar_1) / (40000 * pi))
+
+#BVD_betula_200
+BVD_betula_200 <- intersect_200_bld_betula %>%
+  group_by(tree_id) %>%
+  summarise(BVD_betula_200 = sum(Shape_Ar_1 * heightroof) / (40000 * pi))
+
+bld_index_betula_200 <- left_join(bld_index_betula_200, BVD_betula_200, by = "tree_id")
+
+#BHD_betula_200
+BHD_betula_200 <- intersect_200_bld_betula %>%
+  group_by(tree_id) %>%
+  summarise(BHD_betula_200 = sum(heightroof) / (40000 * pi))
+
+bld_index_betula_200 <- left_join(bld_index_betula_200, BHD_betula_200, by = "tree_id")
+
+
+# sky view factor
+projection_crs <- CRS("+proj=utm +zone=18 +datum=WGS84 +units=m +no_defs")
+proj4string(betula_point_sp) <- projection_crs
+```
+
+5. visualize
+
+```{r}
+library(ggplot2)
+library(sf)
+library(dplyr)
+
+building_footprint_sp <- subset(building_footprint_sp, !is.na(heightroof))
+
+sf_data <- st_read("path/to/your/sf_data.shp")
+csv_data <- read.csv("path/to/your/csv_data.csv")
+merged_data <- merge(sf_data, csv_data, by.x = "id", by.y = "tree_id", all.x = TRUE)
+merged_data <- left_join(sf_data, csv_data, by = c("id" = "tree_id"))
+print(merged_data)
+
+
+plot <- ggplot() +
+  geom_sf(data = boundary_NY, fill = "white", color = "black") +
+  coord_sf(ylim = c(40.5, 40.9), xlim = c(-74.3, -73.6)) +
+  theme_minimal() +
+  theme(legend.position="none") +
+  geom_sf(data = buffers, fill = "white", color = "red")
+
+ggsave("path/to/your/output/folder/plot.jpg", plot, device = "jpeg")
+
+```
