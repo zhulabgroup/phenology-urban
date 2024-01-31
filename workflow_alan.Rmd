@@ -1,0 +1,123 @@
+1. Download alan data
+
+```{r}
+library(blackmarbler)
+library(geodata)
+library(sf)
+library(raster)
+library(ggplot2)
+
+bearer <- "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJlbWFpbF9hZGRyZXNzIjoiamlhbGl6QHVtaWNoLmVkdSIsImlzcyI6IkFQUyBPQXV0aDIgQXV0aGVudGljYXRvciIsImlhdCI6MTcwNjU4MDAwNywibmJmIjoxNzA2NTgwMDA3LCJleHAiOjE4NjQyNjAwMDcsInVpZCI6ImppYWxpejk4IiwidG9rZW5DcmVhdG9yIjoiamlhbGl6OTgifQ.00pMRaYU0YJBfodt70ptBeZyfiAoSeVLsryGmTI0sq0"
+roi_sf <- sf::read_sf('data/raw/NY/boundary/nybb_dissolved.shp')
+ny_boundary <- st_transform(roi_sf, crs = st_crs(4326))
+
+alan_2018 <- bm_raster(roi_sf = us_boundary,
+                    product_id = "VNP46A4",
+                    date = 2018,
+                    bearer = bearer,
+                    output_location_type = "file",
+                    file_dir = "~/phenology-urban/data/raw/CONUS/ALAN",
+                    check_all_tiles_exist = FALSE,
+                    variable = "NearNadir_Composite_Snow_Free") # defult, different angle, snow cover
+
+```
+
+2. log_transform
+
+```{r}
+
+img <- raster("~/phenology-urban/data/raw/NY/ALAN/VNP46A4_t2018.tif")
+alan_2018 <- img |> mask(ny_boundary)
+r_df <- rasterToPoints(img, spatial = TRUE) |> as.data.frame()
+names(r_df) <- c("value", "x", "y")
+## Remove very low values of NTL; can be considered noise
+r_df$value[r_df$value <= 2] <- 0
+## Distribution is skewed, so log
+r_df$value_adj <- log(r_df$value+1)
+```
+
+
+3. Map
+
+```{r}
+source("script/read_tree_inventory.R")
+cityoi <- "NY"
+df_tree <- read_tree_inventory(city = cityoi)
+coordinates(df_tree) <- c("lon", "lat")
+point_tree <- st_as_sf(df_tree)
+
+betula_point <- point_tree %>% filter(str_detect(taxa, "Betula"))
+bld_index <- read.csv("~/phenology-urban/result/bld_index/bld_index_betula_200.csv")
+merged_data <- merge(betula_point, bld_index, by.x = "id", by.y = "tree_id", all.x = TRUE)
+#plot buffer
+boundary_NY <- sf::read_sf('data/raw/NY/boundary/nybb_dissolved.shp')
+merged_data <- st_set_crs(merged_data, "EPSG:4326")
+
+
+##### Map
+p <- ggplot() +
+  geom_tile(data = r_df,  aes(x = x, y = y,  fill = value_adj)) +
+  scale_fill_gradient2(low = "black",
+                       mid = "yellow",
+                       high = "red",
+                       midpoint = 4.5) +
+  labs(title = "Nighttime Lights: 2018") +
+  coord_quickmap() +
+  theme_void() +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5), legend.position = "none")
+
+
+p <- p + geom_sf(data = merged_data, color = "red", size = 0.02)
+p
+ggsave("~/phenology-urban/result/alan/alan_2018_betula.jpg", p, width = 8, height = 6, units = "in")
+
+
+```
+
+4. Relationship
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(ggpmisc)
+library(future)
+library(foreign)
+library(raster)
+library(sf)
+
+## ALAN data for tree
+extracted_values <- extract(img, betula_point)
+betula_point$alan <- extracted_values
+## Remove very low values of NTL; can be considered noise
+betula_point$alan[betula_point$alan_adj <= 2] <- 0
+## Distribution is skewed, so log
+betula_point$alan_adj <- log(betula_point$alan+1)
+hist(betula_point$alan_adj, main = "Histogram of log (Artificial Light at Night) for Betula")
+
+
+doy_NY_Betula <- readRDS("~/phenology-batchplanet/alldata/PSdata/urban/doy/doy_NY_Betula.rds")
+
+down_doy <- doy_NY_Betula %>%
+  filter(year == 2018, direction == "down", thres == 0.5) %>%
+  select(id, down_05_2018 = doy)
+up_doy <- doy_NY_Betula %>%
+  filter(year == 2018, direction == "up", thres == 0.5) %>%
+  select(id, up_05_2018 = doy)
+doy_NY_Betula <- down_doy %>%
+  left_join(up_doy, by = "id")
+
+bld_index <- read.csv("~/phenology-urban/result/bld_index/bld_index_betula_200.csv")
+betula_200_bld_forstats <- left_join(doy_NY_Betula, bld_index, by = c("id" = "tree_id"))
+
+betula_200_bld_forstats <- left_join(betula_200_bld_forstats, betula_point, by = c("id" = "id"))
+
+saveRDS(betula_200_bld_forstats, "~/phenology-urban/result/betula_200_bld_forstats_alan.rds")
+
+source("~/phenology-urban/script/plot_linear.R")
+plot <- plot_function(betula_200_bld_forstats$alan_adj, betula_200_bld_forstats$BHD_betula_200, 
+                    "alan_adj", "bcr")
+plot
+```
+
+5. Add temperature - 2018 Birch
+

@@ -38,17 +38,7 @@ sample_points <- st_transform(sample_points, crs = st_crs("+proj=longlat +datum=
 st_crs(sample_points)
 
 # Create buffer for height index
-buffers <- st_buffer(sample_points, dist = 500)
-
-# Visualize
-ggplot() +
-geom_sf(data = boundary_NY, fill = "white", color = "black") +
-  coord_sf(ylim = c(40.5, 40.9), xlim = c(-74.3, -73.6)) +
-  geom_sf(data = sample_points, color = "black", size=2, shape=17) +
-  scale_color_manual(values="darkgreen") +
-  theme_minimal() +
-  theme(legend.position="none") +
-  geom_sf(data = buffers, fill = "white", color = "red")
+buffers <- st_buffer(sample_points, dist = 200)
 
 ```
 
@@ -67,6 +57,7 @@ library(doParallel)
 
 cl <- makeCluster(min(5, detectCores()), outfile = "")
 registerDoParallel(cl)
+
 intersection <- foreach(i = 1:nrow(buffers), .combine = rbind) %dopar% {
   sf::st_intersection(buffers[i, ], building_footprint)
 }
@@ -131,7 +122,7 @@ svf_betula <- SVF(
   building_footprint_sp,
   obstacles_height_field = "heightroof",
   res_angle = 10,
-  b = 10,
+  b = 5,
   parallel = 4
 )
 saveRDS(svf_betula, file = "result/bld_index/svf_betula.rds")
@@ -201,7 +192,6 @@ ggsave("result/bld_index/BHD_betula_200.jpg", plot_BHD, width = 8, height = 6, u
 ```
 
 6. Correlation
-
 ```{r}
 library(dplyr)
 library(ggplot2)
@@ -233,36 +223,11 @@ betula_200_bld_forstats <- left_join(betula_200_bld_forstats, betula_point_all, 
 
 # BCR ~ 50% greenup doy
 # Create a ggplot with hexagonal bins
-plot_function <- function(x_ind, y_ind, label_x, label_y) {
-  plot <- ggplot(betula_200_bld_forstats, aes(x = x_ind, y = y_ind)) +    # change
-    geom_hex(bins = 60, color = NA) +  
-    scale_fill_gradient(low = "lightcoral", high = "darkred") +
-    theme_classic() +
-    labs(x = label_x, y = label_y, fill = "Point Count") +               # change
-    theme(axis.text = element_text(size = 20), axis.title = element_text(size = 22)) +
-    scale_x_continuous(breaks = pretty(x_ind)) +       # change
-    scale_y_continuous(breaks = pretty(y_ind)) +  # change
-    theme(
-      axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1),
-      axis.title.x = element_text(margin = margin(t = 10)),
-      axis.title.y = element_text(margin = margin(r = 10)),
-      legend.title = element_text(size = 22),
-      legend.text = element_text(size = 18)
-    ) +
-    geom_smooth(method = "lm", se = FALSE, color = "blue", formula = y ~ x) +
-    stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., ..p.value.label.., sep = "~~~~")),
-                 formula = y ~ x,
-                 parse = TRUE,
-                 label.x = "right", label.y = 0.9,
-                 size = 4, color = "blue")
-  
-  ggsave(str_c("result/bld_index/",label_x, "_", label_y,".jpg"), plot, width = 8, height = 6, units = "in")
-  
-  }
 
-
-
+source("~/phenology-urban/script/plot_linear.R")
 plot <- plot_function(betula_200_bld_forstats$BCR_betula_200, betula_200_bld_forstats$lst, 
                     "Betula_BCR", "LST")
 
 ```
+
+7. 
