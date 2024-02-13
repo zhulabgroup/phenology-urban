@@ -30,8 +30,8 @@ point_tree <- st_as_sf(df_tree)
 
 # randomly pick
 set.seed(123)
-sample_points <- point_tree[sample(nrow(point_tree), 5), ]
-point_tree <- st_set_crs(point_tree, "EPSG:4326")
+betula_points <- point_tree %>% filter(str_detect(taxa, "Betula")) 
+sample_points <- st_set_crs(sample_points, "EPSG:4326")
 
 # Transform the data to a new CRS with explicit units
 sample_points <- st_transform(sample_points, crs = st_crs("+proj=longlat +datum=WGS84 +units=m"))
@@ -40,30 +40,27 @@ st_crs(sample_points)
 # Create buffer for height index
 buffers <- st_buffer(sample_points, dist = 200)
 
+# Visualize
+ggplot() +
+geom_sf(data = boundary_NY, fill = "white", color = "black") +
+  coord_sf(ylim = c(40.5, 40.9), xlim = c(-74.3, -73.6)) +
+  geom_sf(data = sample_points, color = "black", size=2, shape=17) +
+  scale_color_manual(values="darkgreen") +
+  theme_minimal() +
+  theme(legend.position="none") +
+  geom_sf(data = buffers, fill = "white", color = "red")
+
 ```
 
 3. Insert building data / Intersection fail (prelimilary result from Arcgis)
 ```{r}
+source("~/phenology-urban/script/faster_intersect.R")
 building_footprint <- sf::read_sf('~/phenology-urban/data/raw/NY/NY_building_footprint/geo_export_56deb8a8-0463-4f00-8f45-99e751e3b8e1.shp') %>%
-  st_make_valid(building_footprint)
+  st_make_valid(building_footprint) %>% select(base_bbl, bin, groundelev, heightroof)
 
 buffers <- st_transform(buffers, crs = st_crs(building_footprint))
-intersection <- st_intersection(buffers, building_footprint)
 
-library(foreach)
-library(progress)
-library(sf)
-library(doParallel)
-
-cl <- makeCluster(min(5, detectCores()), outfile = "")
-registerDoParallel(cl)
-
-intersection <- foreach(i = 1:nrow(buffers), .combine = rbind) %dopar% {
-  sf::st_intersection(buffers[i, ], building_footprint)
-}
-
-stopCluster(cl)
-saveRDS(intersection, file = "/result/intersection_result_sample.rds")
+intersection_result <- faster_intersect(building_footprint, buffers)
 
 ```
 
@@ -98,17 +95,12 @@ write.csv(bld_index_betula_200, file = "~/phenology-urban/result/bld_index/bld_i
 
 # sky view factor
 #data prepare
-
-betula_point_all <- point_tree %>% filter(str_detect(taxa, "Betula"))
-
-set.seed(123)
-betula_point <- betula_point_all[sample(nrow(betula_point_all), 10), ]
-
-
+betula_point <- point_tree %>% filter(str_detect(taxa, "Betula"))
 building_footprint <- sf::read_sf('~/phenology-urban/data/raw/NY/NY_building_footprint/geo_export_56deb8a8-0463-4f00-8f45-99e751e3b8e1.shp') %>%
   st_make_valid(building_footprint)
 
-betula_point_sp <- as(betula_point, "Spatial")
+set.seed(123)
+betula_point_sp <- as(sample_points %>% sample_n(5), "Spatial") 
 building_footprint_sp <- as(building_footprint, "Spatial")
 
 projection_crs <- CRS("+proj=utm +zone=18 +datum=WGS84 +units=m +no_defs")
@@ -118,14 +110,14 @@ building_footprint_sp <- subset(building_footprint_sp, !is.na(heightroof))
 
 library(shadow)
 svf_betula <- SVF(
-  betula_point_sp, 
+  betula_point_cor, 
   building_footprint_sp,
   obstacles_height_field = "heightroof",
   res_angle = 10,
-  b = 5,
-  parallel = 4
+  b = 10,
+  parallel = getOption("mc.cores")
 )
-saveRDS(svf_betula, file = "result/bld_index/svf_betula.rds")
+
 ```
 
 5. visualize
@@ -191,43 +183,5 @@ ggsave("result/bld_index/BHD_betula_200.jpg", plot_BHD, width = 8, height = 6, u
 
 ```
 
-6. Correlation
-```{r}
-library(dplyr)
-library(ggplot2)
-library(ggpmisc)
-library(future)
-library(foreign)
-library(raster)
-library(sf)
-
-doy_NY_Betula <- readRDS("~/phenology-batchplanet/alldata/PSdata/doy/doy_NY_Betula.rds")
-
-betula_2018_greenup_50 <- doy_NY_Betula %>%
-  filter(year == 2018, direction == "down", thres == 0.5) %>%
-  group_by(id) %>%
-  filter(row_number() == 1) %>%
-  ungroup()
-
-bld_index <- read.csv("~/phenology-urban/result/bld_index/bld_index_betula_200.csv")
-betula_200_bld_forstats <- left_join(betula_2018_greenup_50, bld_index, by = c("id" = "tree_id"))
 
 
-lst <- raster("~/phenology-urban/data/raw/NY/LST_L8/year_mean/2018.tif")
-extracted_values <- extract(lst, betula_point_all)
-betula_point_all$lst <- extracted_values
-
-betula_200_bld_forstats <- left_join(betula_200_bld_forstats, betula_point_all, by = c("id" = "id"))
-
-
-
-# BCR ~ 50% greenup doy
-# Create a ggplot with hexagonal bins
-
-source("~/phenology-urban/script/plot_linear.R")
-plot <- plot_function(betula_200_bld_forstats$BCR_betula_200, betula_200_bld_forstats$lst, 
-                    "Betula_BCR", "LST")
-
-```
-
-7. 

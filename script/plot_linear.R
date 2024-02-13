@@ -1,5 +1,5 @@
-plot_function <- function(x_ind, y_ind, label_x, label_y) {
-  plot <- ggplot(betula_200_bld_forstats, aes(x = x_ind, y = y_ind)) +    # change
+plot_function <- function(dataframe, taxa, x_ind, y_ind, label_x, label_y) {
+  plot <- ggplot(dataframe, aes(x = x_ind, y = y_ind)) +    # change
     geom_hex(bins = 60, color = NA) +  
     scale_fill_gradient(low = "lightcoral", high = "darkred") +
     theme_classic() +
@@ -19,7 +19,9 @@ plot_function <- function(x_ind, y_ind, label_x, label_y) {
                  formula = y ~ x,
                  parse = TRUE,
                  label.x = "right", label.y = 0.9,
-                 size = 4, color = "blue")
+                 size = 4, color = "blue") +
+    ggtitle(str_c("2018, ", taxa)) +
+    theme(plot.title = element_text(size = 22))
   
 #  ggsave(str_c("result/bld_index/",label_x, "_", label_y,".jpg"), plot, width = 8, height = 6, units = "in")
 
