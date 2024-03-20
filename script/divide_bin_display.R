@@ -6,7 +6,7 @@ make_group_display <- function(point, trend, temp){
                 ceiling(max(point[["lst_2018"]])), by = 2)
   } else {
     bins <- seq(floor(min(point[[temp]])),
-                ceiling(max(point[[temp]])), by = 0.1)
+                ceiling(max(point[[temp]])), by = 1)
   }
  
 
@@ -30,9 +30,9 @@ make_group_display <- function(point, trend, temp){
     scale_fill_manual(values = c("#FF9999", "#FFCC99", "#66FF66")) +
     theme_classic() +
     theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-    ggtitle(str_c("2018, ", taxa))
+    ggtitle(str_c("2018"))
   #+
   #  geom_text(data = significance_results, aes(x = bin, y = 1.05 * max(betula_200_bld_forstats_alan$up_05_2018), label = ifelse(p_value < 0.05, "*", "")), size = 4, vjust = -0.5)
 
   return(p)
-  }
+}

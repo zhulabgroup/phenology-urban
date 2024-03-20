@@ -10,7 +10,6 @@ scatters_tcc_lst <- function(
   d <- data.table::data.table(x = value.tree, y = value.lst)
   d <- d[complete.cases(d)]
   d <- d[x > 0 & x <= 100]
-  d <- d[y > 0]
 
     # make bins
   # for (k in 0:100) d[(x >= min(d$x) + k) & (x < min(d$x) + k + 1), bin := (k + 1)]
@@ -47,17 +46,16 @@ scatters_tcc_lst <- function(
                  formula = y ~ x,
                  parse = TRUE,
                  label.x = "right", label.y = 0.9,
-                 size = 6, color = "blue")
-    # +
-    # geom_smooth(
-    #   method = "nls",
-    #   formula = y ~ a * x ^ b,
-    #   se = FALSE,
-    #   method.args = list(start = c(a = 50, b = -0.01)),
-    #   col = 'red',
-    #   lwd = 1.7
-    # )
-  
+                 size = 6, color = "blue") +
+    geom_smooth(
+      method = "nls",
+      formula = y ~ a * x ^ b,
+      se = FALSE,
+      method.args = list(start = c(a = 50, b = -0.01)),
+      col = 'red',
+      lwd = 1.7
+    )
+
   
   # Save the plot to a file
   plot

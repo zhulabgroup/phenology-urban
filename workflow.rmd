@@ -14,6 +14,7 @@ knitr::opts_chunk$set(echo = TRUE)
 # plot scatter
 library(raster)
 library(dplyr)
+library(ggplot2)
 source("script/plot_scatter_lst_tcc.R")
 
 
