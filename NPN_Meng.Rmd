@@ -1,3 +1,4 @@
+# Prepare
 insert data
 ```{r}
 library(readr)
@@ -147,6 +148,8 @@ analyze_color_leaf <- filter(species_color_leaf, alan >= threshold | alan == 0) 
   mutate(Tavg_Fall = (Tmin_Fall + Tmax_Fall) / 2)
 ```
 
+
+# Reproduce results from Meng
 visualize Fig.2 - Bud break
 ```{r}
 library(ggplot2)
@@ -216,15 +219,12 @@ plot_bin_c
 ggsave("~/phenology-urban/result/npn_meng/Fig2_color.jpg", plot_bin_c, width = 8, height = 6, units = "in")
 ```
 
-model Table1 Fig3
+model Table1 Fig3 - Bud break (confusing about the )
 ```{r}
 library(lme4)
 
 mod <- lmer(First_Yes_DOY ~ Tavg_Spring + alan + Tavg_Spring*alan +(1 | Species) + (1 | First_Yes_Year), data = analyze_leaf_bud)
 summary(mod)
-
-mod2 <- lmer(First_Yes_DOY ~ Tavg_Summer + alan + Tavg_Summer*alan +(1 | Species) + (1 | First_Yes_Year), data = analyze_color_leaf)
-summary(mod2)
 
 # just the line for bud break model
 
@@ -246,17 +246,23 @@ prediction_data$ci_upper <- prediction_data$prediction + 1.96 * ci$se.fit
 prediction_data$ci_lower <- prediction_data$prediction - 1.96 * ci$se.fit
 
 # Step 4: Plot the predictions
-ggplot(prediction_data, aes(x = alan, y = prediction, color = as.factor(Tavg_Spring))) +
+bud <- ggplot(prediction_data, aes(x = alan, y = prediction, color = as.factor(Tavg_Spring))) +
   geom_line(aes(color = as.factor(Tavg_Spring))) +
   geom_ribbon(aes(ymin = ci_lower, ymax = ci_upper, fill = as.factor(Tavg_Spring)), alpha = 0.2) +
   scale_color_manual(values = c("blue", "grey", "red")) +
   scale_fill_manual(values = c("blue", "grey", "red")) +
   theme_minimal() +
   labs(x = "Log(ALAN)", y = "Phenology (DOY)", color = "Temperature Quantile", fill = "Temperature Quantile")
+
+# ggsave("~/phenology-urban/result/npn_meng/Fig3_model_bud.jpg", bud, width = 8, height = 6, units = "in")
 ```
 
-
+model Table1 Fig3 - Colored leaf
 ```{r}
+
+mod2 <- lmer(First_Yes_DOY ~ Tavg_Summer + alan + Tavg_Summer*alan +(1 | Species) + (1 | First_Yes_Year), data = analyze_color_leaf)
+summary(mod2)
+
 # just the line for colored leaf model
 
 # Step 1: Calculate the quantiles of temperature
@@ -277,7 +283,7 @@ prediction_data$ci_upper <- prediction_data$prediction + 1.96 * ci$se.fit
 prediction_data$ci_lower <- prediction_data$prediction - 1.96 * ci$se.fit
 
 # Step 4: Plot the predictions
-ggplot(prediction_data, aes(x = alan, y = prediction, color = as.factor(Tavg_Summer))) +
+color <- ggplot(prediction_data, aes(x = alan, y = prediction, color = as.factor(Tavg_Summer))) +
   geom_line(aes(color = as.factor(Tavg_Summer))) +
   geom_ribbon(aes(ymin = ci_lower, ymax = ci_upper, fill = as.factor(Tavg_Summer)), alpha = 0.2) +
   scale_color_manual(values = c("blue", "grey", "red")) +
@@ -285,9 +291,13 @@ ggplot(prediction_data, aes(x = alan, y = prediction, color = as.factor(Tavg_Sum
   theme_minimal() +
   labs(x = "Log(ALAN)", y = "Phenology (DOY)", color = "Temperature Quantile", fill = "Temperature Quantile")
 
+# ggsave("~/phenology-urban/result/npn_meng/Fig3_model_color.jpg", color, width = 8, height = 6, units = "in")
+
 ```
 
-# add scatter point
+
+# Additional steps
+add scatter point
 ```{r}
 # bud 
 plot_sca <- ggplot(analyze_leaf_bud, aes(x = Tavg_Spring, y = First_Yes_DOY, color = group)) +    # city
@@ -320,7 +330,7 @@ plot_sca <- ggplot(analyze_leaf_bud, aes(x = Tavg_Spring, y = First_Yes_DOY, col
     theme(plot.title = element_text(size = 22))
 plot_sca
 
-ggsave("~/phenology-urban/result/npn_meng/Fig2_scatter_bud.jpg", plot_sca, width = 8, height = 6, units = "in")
+# ggsave("~/phenology-urban/result/npn_meng/Fig2_scatter_bud.jpg", plot_sca, width = 8, height = 6, units = "in")
 
 
 # bud 
@@ -355,10 +365,8 @@ plot_sca_c <- ggplot(analyze_color_leaf, aes(x = Tavg_Summer, y = First_Yes_DOY,
 
 plot_sca_c
 
-ggsave("~/phenology-urban/result/npn_meng/Fig2_scatter_color.jpg", plot_sca_c, width = 8, height = 6, units = "in")
+# ggsave("~/phenology-urban/result/npn_meng/Fig2_scatter_color.jpg", plot_sca_c, width = 8, height = 6, units = "in")
 ```
-
-
 
 adding the GDD
 
