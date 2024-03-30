@@ -1,0 +1,35 @@
+---
+title: "urban-planet"
+author: "Jiali Zhu"
+date: "2023-10-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+1. The relationship between tcc and lst 2013-2021
+```{r}
+# plot scatter
+library(raster)
+library(dplyr)
+library(ggplot2)
+source("script/plot_scatter_lst_tcc.R")
+
+
+# year 2015
+rs_tcc <- raster(stringr::str_c("data/raw/NY/nlcd_tcc/clipped/nlcd_tcc_NY_2015.tif"))
+rs_lst <- raster(stringr::str_c("data/raw/NY/LST_L8/year_mean/2015.tif")) %>%
+  projectRaster(., rs_tcc, method = "ngb")
+
+
+
+output_dir <- stringr::str_c("result/orig_scatter/tcc_lst_2015.jpg")
+
+scatters_tcc_lst(tree= rs_tcc, lst = rs_lst,
+                 xlabel = expression(bold(paste('Tree Canopy Cover / %', sep = ''))),
+                 ylabel = expression(bold(paste('Land Surface Temp / °C', sep = ''))), 
+                 output_file = output_dir)
+  
+```

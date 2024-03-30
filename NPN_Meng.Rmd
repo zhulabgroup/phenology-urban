@@ -1,0 +1,366 @@
+insert data
+```{r}
+library(readr)
+library(dplyr)
+individual_phenometrics_data <- read_csv("~/phenology-urban/data/raw/CONUS/NPN_Meng/individual_phenometrics_data.csv")
+individual_leaf_bud <- subset(individual_phenometrics_data, Phenophase_Description == "Breaking leaf buds")
+individual_color_leaf <- subset(individual_phenometrics_data, Phenophase_Description == "Colored leaves")
+```
+
+average with sites/species/year (avg.individual)
+```{r}
+individual_leaf_bud_filter <- individual_leaf_bud %>%
+  group_by(Individual_ID, First_Yes_Year) %>%
+  summarise(First_Yes_DOY = min(First_Yes_DOY, na.rm = TRUE)) %>%
+  left_join(individual_leaf_bud, by = c("Individual_ID", "First_Yes_Year", "First_Yes_DOY"))%>%
+  filter(First_Yes_DOY <= 183)
+
+individual_color_leaf_filter <- individual_color_leaf %>%
+  group_by(Individual_ID, First_Yes_Year) %>%
+  summarise(First_Yes_DOY = min(First_Yes_DOY, na.rm = TRUE)) %>%
+  left_join(individual_color_leaf, by = c("Individual_ID", "First_Yes_Year", "First_Yes_DOY")) %>%
+  filter(First_Yes_DOY >= 182)
+
+# breaking leaf buds (species) >= 80
+individual_leaf_bud_filter2 <- individual_leaf_bud_filter %>%
+    group_by(Genus, Species) %>%
+    count() %>%
+    filter(n >= 80) %>%
+    inner_join(individual_leaf_bud_filter, by = c("Genus", "Species"))
+
+# colored leaves (species) >= 40
+individual_color_leaf_filter2 <- individual_color_leaf_filter %>%
+    group_by(Genus, Species) %>%
+    count() %>%
+    filter(n >= 40) %>%
+    inner_join(individual_color_leaf_filter, by = c("Genus", "Species"))
+
+# species-site-year average doy for leaf-bud
+species_leaf_bud <- individual_leaf_bud_filter2 %>%
+  group_by(Site_ID, Latitude, Longitude, 
+           Genus, Species, First_Yes_Year, 
+           Tmin_Winter, Tmin_Spring, Tmin_Summer, Tmin_Fall, 
+           Tmax_Winter, Tmax_Spring, Tmax_Summer, Tmax_Fall) %>%
+  summarise(First_Yes_DOY = mean(First_Yes_DOY, na.rm = TRUE))
+
+# species-site-year average doy for color_leaf
+species_color_leaf <- individual_color_leaf_filter2 %>%
+  group_by(Site_ID, Latitude, Longitude, 
+           Genus, Species, First_Yes_Year, 
+           Tmin_Winter, Tmin_Spring, Tmin_Summer, Tmin_Fall, 
+           Tmax_Winter, Tmax_Spring, Tmax_Summer, Tmax_Fall) %>%
+  summarise(First_Yes_DOY = mean(First_Yes_DOY, na.rm = TRUE))
+```
+
+extract ALAN
+```{r}
+library(sf)
+library(sp)
+library(raster)
+library(stringr)
+
+coordinates(species_leaf_bud) <- c("Longitude", "Latitude")
+species_leaf_bud_site <- st_as_sf(species_leaf_bud) %>% st_set_crs("EPSG:4326")
+
+coordinates(species_color_leaf) <- c("Longitude", "Latitude")
+species_color_leaf_site <- st_as_sf(species_color_leaf) %>% st_set_crs("EPSG:4326")
+
+for (y in 2012:2016){
+  ## insert alan
+  raster_file <- str_c("~/phenology-urban/data/raw/CONUS/ALAN/VNP46A4_t",y,".tif")
+  alan_year <- raster(raster_file)
+  ## Remove very low values of NTL; can be considered noise
+  alan_year[alan_year <= 2] <- 0
+  ## Distribution is skewed, so log
+  alan_year <- log(alan_year + 1)
+  
+  extract_alan <- extract(alan_year, species_leaf_bud_site)
+  species_leaf_bud_site <- cbind(species_leaf_bud_site, setNames(list(extract_alan), paste0("alan_", y)))
+}
+
+for (y in 2012:2016){
+  ## insert alan
+  raster_file <- str_c("~/phenology-urban/data/raw/CONUS/ALAN/VNP46A4_t",y,".tif")
+  alan_year <- raster(raster_file)
+  ## Remove very low values of NTL; can be considered noise
+  alan_year[alan_year <= 2] <- 0
+  ## Distribution is skewed, so log
+  alan_year <- log(alan_year + 1)
+  
+  extract_alan <- extract(alan_year, species_color_leaf_site)
+  species_color_leaf_site <- cbind(species_color_leaf_site, setNames(list(extract_alan), paste0("alan_", y)))
+}
+
+saveRDS(species_leaf_bud_site, "result/npn_meng/leaf_bud.rds")
+saveRDS(species_color_leaf_site, "result/npn_meng/color_leaf.rds")
+```
+
+processing
+```{r}
+species_leaf_bud <- readRDS("result/npn_meng/leaf_bud.rds")
+species_color_leaf <- readRDS("result/npn_meng/color_leaf.rds")
+ 
+species_leaf_bud <- species_leaf_bud %>%
+  mutate(alan = case_when(
+    First_Yes_Year == 2011 ~ alan_2012,
+    First_Yes_Year == 2012 ~ alan_2012,
+    First_Yes_Year == 2013 ~ alan_2013,
+    First_Yes_Year == 2014 ~ alan_2014,
+    First_Yes_Year == 2015 ~ alan_2015,
+    First_Yes_Year == 2016 ~ alan_2016,
+    TRUE ~ NA_real_ 
+  )) %>% na.omit()
+
+species_color_leaf <- species_color_leaf %>%
+  mutate(alan = case_when(
+    First_Yes_Year == 2011 ~ alan_2012,
+    First_Yes_Year == 2012 ~ alan_2012,
+    First_Yes_Year == 2013 ~ alan_2013,
+    First_Yes_Year == 2014 ~ alan_2014,
+    First_Yes_Year == 2015 ~ alan_2015,
+    First_Yes_Year == 2016 ~ alan_2016,
+    TRUE ~ NA_real_ 
+  )) %>% na.omit()
+
+# with ALAN: threshold at 75% with all sites from the papper (19.1 nW/cm2/sr)
+# vagueness about the range
+threshold <- log(19.1 +1)
+
+analyze_leaf_bud <- filter(species_leaf_bud, alan >= threshold | alan == 0) %>%
+  mutate(group = case_when(
+    alan >= threshold ~ "ALAN",
+    alan == 0 ~ "No ALAN"
+    )) %>%
+  mutate(Tavg_Winter = (Tmin_Winter + Tmax_Winter) / 2) %>% 
+  mutate(Tavg_Spring = (Tmin_Spring + Tmax_Spring) / 2) %>% 
+  mutate(Tavg_Summer = (Tmin_Summer + Tmax_Summer) / 2) %>% 
+  mutate(Tavg_Fall = (Tmin_Fall + Tmax_Fall) / 2) 
+
+analyze_color_leaf <- filter(species_color_leaf, alan >= threshold | alan == 0) %>%
+  mutate(group = case_when(
+    alan >= threshold ~ "ALAN",
+    alan == 0 ~ "No ALAN"
+    )) %>%
+  mutate(Tavg_Winter = (Tmin_Winter + Tmax_Winter) / 2) %>% 
+  mutate(Tavg_Spring = (Tmin_Spring + Tmax_Spring) / 2) %>% 
+  mutate(Tavg_Summer = (Tmin_Summer + Tmax_Summer) / 2) %>% 
+  mutate(Tavg_Fall = (Tmin_Fall + Tmax_Fall) / 2)
+```
+
+visualize Fig.2 - Bud break
+```{r}
+library(ggplot2)
+library(ggpmisc)
+
+bins_bud <- seq(floor(min(analyze_leaf_bud$Tavg_Spring)), ceiling(max(analyze_leaf_bud$Tavg_Spring)), by = 1) 
+# bins_color <- seq(floor(min(analyze_color_leaf$Tavg_Summer)), ceiling(max(analyze_color_leaf$Tavg_Summer)), by = 1)
+# analyze_color_leaf_bin <- analyze_color_leaf %>% mutate(summer_bin = cut(analyze_color_leaf$Tavg_Summer, breaks = bins_color))
+
+analyze_leaf_bud_bin <- analyze_leaf_bud %>% mutate(spring_bin = cut(analyze_leaf_bud$Tavg_Spring, breaks = bins_bud)) %>%
+  filter(spring_bin != "(21,22]")%>%
+  group_by(spring_bin, group) %>%
+  summarise(
+    mean = mean(First_Yes_DOY, na.rm = TRUE),
+    sd = sd(First_Yes_DOY, na.rm = TRUE),
+    n = n(),
+    se = sd / sqrt(n),
+    ci = qt(0.975, df = n-1) * se
+  ) %>%
+  ungroup()
+
+plot_bin <- ggplot(analyze_leaf_bud_bin, aes(x = spring_bin, y = mean, color = group)) +
+  geom_point(position = position_dodge(0.2), size = 3) +
+  geom_errorbar(aes(ymin = mean - ci, ymax = mean + ci), width = 0.2, position = position_dodge(0.2)) +
+  geom_line(aes(group = group), position = position_dodge(0.2)) +
+  labs(color = "Group") +
+  scale_color_manual(values = c("red", "blue")) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ggtitle(str_c("Spring Temperature - Bud Break"))
+
+plot_bin
+ggsave("~/phenology-urban/result/npn_meng/Fig2_bud.jpg", plot_bin, width = 8, height = 6, units = "in")
+```
+
+visualize Fig.2 - Colored leaf
+```{r}
+library(ggplot2)
+library(ggpmisc)
+
+bins_color <- seq(floor(min(analyze_color_leaf$Tavg_Summer)), ceiling(max(analyze_color_leaf$Tavg_Summer)), by = 1)
+# analyze_color_leaf_bin <- analyze_color_leaf %>% mutate(summer_bin = cut(analyze_color_leaf$Tavg_Summer, breaks = bins_color))
+
+analyze_color_leaf_bin <- analyze_color_leaf %>% mutate(summer_bin = cut(analyze_color_leaf$Tavg_Summer, breaks = bins_color)) %>%
+  filter(summer_bin != "(27,28]")%>%
+  group_by(summer_bin, group) %>%
+  summarise(
+    mean = mean(First_Yes_DOY, na.rm = TRUE),
+    sd = sd(First_Yes_DOY, na.rm = TRUE),
+    n = n(),
+    se = sd / sqrt(n),
+    ci = qt(0.975, df = n-1) * se
+  ) %>%
+  ungroup()
+
+plot_bin_c <- ggplot(analyze_color_leaf_bin, aes(x = summer_bin, y = mean, color = group)) +
+  geom_point(position = position_dodge(0.2), size = 3) +
+  geom_errorbar(aes(ymin = mean - ci, ymax = mean + ci), width = 0.2, position = position_dodge(0.2)) +
+  geom_line(aes(group = group), position = position_dodge(0.2)) +
+  labs(color = "Group") +
+  scale_color_manual(values = c("red", "blue")) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ggtitle(str_c("Summer Temperature - Colored leaf"))
+
+plot_bin_c
+ggsave("~/phenology-urban/result/npn_meng/Fig2_color.jpg", plot_bin_c, width = 8, height = 6, units = "in")
+```
+
+model Table1 Fig3
+```{r}
+library(lme4)
+
+mod <- lmer(First_Yes_DOY ~ Tavg_Spring + alan + Tavg_Spring*alan +(1 | Species) + (1 | First_Yes_Year), data = analyze_leaf_bud)
+summary(mod)
+
+mod2 <- lmer(First_Yes_DOY ~ Tavg_Summer + alan + Tavg_Summer*alan +(1 | Species) + (1 | First_Yes_Year), data = analyze_color_leaf)
+summary(mod2)
+
+# just the line for bud break model
+
+# Step 1: Calculate the quantiles of temperature
+quantiles <- quantile(analyze_leaf_bud$Tavg_Spring, probs = c(0.25, 0.5, 0.75))
+# Step 2: Create a prediction dataset
+log_alan_seq <- seq(min((analyze_leaf_bud$alan)), max((analyze_leaf_bud$alan)), length.out = 100)
+prediction_data <- expand.grid(
+  Tavg_Spring = quantiles,
+  alan = log_alan_seq
+)
+# Step 3: Generate predictions and confidence intervals
+# Assuming 'mod' is your mixed-effects model from lmer
+prediction_data$prediction <- predict(mod, newdata = prediction_data, re.form = NA)
+
+# Get the confidence intervals
+ci <- predict(mod, newdata = prediction_data, re.form = NA, se.fit = TRUE)
+prediction_data$ci_upper <- prediction_data$prediction + 1.96 * ci$se.fit
+prediction_data$ci_lower <- prediction_data$prediction - 1.96 * ci$se.fit
+
+# Step 4: Plot the predictions
+ggplot(prediction_data, aes(x = alan, y = prediction, color = as.factor(Tavg_Spring))) +
+  geom_line(aes(color = as.factor(Tavg_Spring))) +
+  geom_ribbon(aes(ymin = ci_lower, ymax = ci_upper, fill = as.factor(Tavg_Spring)), alpha = 0.2) +
+  scale_color_manual(values = c("blue", "grey", "red")) +
+  scale_fill_manual(values = c("blue", "grey", "red")) +
+  theme_minimal() +
+  labs(x = "Log(ALAN)", y = "Phenology (DOY)", color = "Temperature Quantile", fill = "Temperature Quantile")
+```
+
+
+```{r}
+# just the line for colored leaf model
+
+# Step 1: Calculate the quantiles of temperature
+quantiles <- quantile(analyze_color_leaf$Tavg_Summer, probs = c(0.25, 0.5, 0.75))
+# Step 2: Create a prediction dataset
+log_alan_seq <- seq(min((analyze_color_leaf$alan)), max((analyze_color_leaf$alan)), length.out = 100)
+prediction_data <- expand.grid(
+  Tavg_Summer = quantiles,
+  alan = log_alan_seq
+)
+# Step 3: Generate predictions and confidence intervals
+# Assuming 'mod' is your mixed-effects model from lmer
+prediction_data$prediction <- predict(mod2, newdata = prediction_data, re.form = NA)
+
+# Get the confidence intervals
+ci <- predict(mod2, newdata = prediction_data, re.form = NA, se.fit = TRUE)
+prediction_data$ci_upper <- prediction_data$prediction + 1.96 * ci$se.fit
+prediction_data$ci_lower <- prediction_data$prediction - 1.96 * ci$se.fit
+
+# Step 4: Plot the predictions
+ggplot(prediction_data, aes(x = alan, y = prediction, color = as.factor(Tavg_Summer))) +
+  geom_line(aes(color = as.factor(Tavg_Summer))) +
+  geom_ribbon(aes(ymin = ci_lower, ymax = ci_upper, fill = as.factor(Tavg_Summer)), alpha = 0.2) +
+  scale_color_manual(values = c("blue", "grey", "red")) +
+  scale_fill_manual(values = c("blue", "grey", "red")) +
+  theme_minimal() +
+  labs(x = "Log(ALAN)", y = "Phenology (DOY)", color = "Temperature Quantile", fill = "Temperature Quantile")
+
+```
+
+# add scatter point
+```{r}
+# bud 
+plot_sca <- ggplot(analyze_leaf_bud, aes(x = Tavg_Spring, y = First_Yes_DOY, color = group)) +    # city
+    geom_point(alpha = 0.2,  stroke = NA) + 
+    theme_classic() +
+    labs(x = "Temp", y = "DOY") +  #city             
+    theme(axis.text = element_text(size = 20), axis.title = element_text(size = 22)) +
+    scale_x_continuous(breaks = pretty(analyze_leaf_bud$Tavg_Spring)) +
+    scale_y_continuous(breaks = pretty(analyze_leaf_bud$First_Yes_DOY)) +
+    theme(
+      axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1),
+      axis.title.x = element_text(margin = margin(t = 10)),
+      axis.title.y = element_text(margin = margin(r = 10)),
+      legend.title = element_text(size = 22),
+      legend.text = element_text(size = 18)
+    ) +
+    geom_smooth(method = "lm", se = FALSE, aes(group = group), formula = y ~ x) +  #city
+    #geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed", formula = y ~ x) +
+    stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., ..p.value.label.., sep = "~~~~")),
+                 formula = y ~ x,
+                 parse = TRUE,
+                 label.x = "right", label.y = "top",  
+                 size = 2,
+                 geom = "text",   
+                 hjust = 1,       
+                 vjust = -0.5     
+    ) +
+    
+    ggtitle("Spring temp - bud break") +
+    theme(plot.title = element_text(size = 22))
+plot_sca
+
+ggsave("~/phenology-urban/result/npn_meng/Fig2_scatter_bud.jpg", plot_sca, width = 8, height = 6, units = "in")
+
+
+# bud 
+plot_sca_c <- ggplot(analyze_color_leaf, aes(x = Tavg_Summer, y = First_Yes_DOY, color = group)) +    # city
+    geom_point(alpha = 0.2,  stroke = NA) + 
+    theme_classic() +
+    labs(x = "Temp", y = "DOY") +  #city             
+    theme(axis.text = element_text(size = 20), axis.title = element_text(size = 22)) +
+    scale_x_continuous(breaks = pretty(analyze_color_leaf$Tavg_Summer)) +
+    scale_y_continuous(breaks = pretty(analyze_color_leaf$First_Yes_DOY)) +
+    theme(
+      axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1),
+      axis.title.x = element_text(margin = margin(t = 10)),
+      axis.title.y = element_text(margin = margin(r = 10)),
+      legend.title = element_text(size = 22),
+      legend.text = element_text(size = 18)
+    ) +
+    geom_smooth(method = "lm", se = FALSE, aes(group = group), formula = y ~ x) +  #city
+    #geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed", formula = y ~ x) +
+    stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., ..p.value.label.., sep = "~~~~")),
+                 formula = y ~ x,
+                 parse = TRUE,
+                 label.x = "right", label.y = "top",  
+                 size = 2,
+                 geom = "text",   
+                 hjust = 1,       
+                 vjust = -0.5     
+    ) +
+    
+    ggtitle("Summer temp - colored leaf") +
+    theme(plot.title = element_text(size = 22))
+
+plot_sca_c
+
+ggsave("~/phenology-urban/result/npn_meng/Fig2_scatter_color.jpg", plot_sca_c, width = 8, height = 6, units = "in")
+```
+
+
+
+adding the GDD
+
+
+

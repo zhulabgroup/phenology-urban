@@ -9,17 +9,19 @@ library(raster)
 library(ggplot2)
 
 bearer <- "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJlbWFpbF9hZGRyZXNzIjoiamlhbGl6QHVtaWNoLmVkdSIsImlzcyI6IkFQUyBPQXV0aDIgQXV0aGVudGljYXRvciIsImlhdCI6MTcwNjU4MDAwNywibmJmIjoxNzA2NTgwMDA3LCJleHAiOjE4NjQyNjAwMDcsInVpZCI6ImppYWxpejk4IiwidG9rZW5DcmVhdG9yIjoiamlhbGl6OTgifQ.00pMRaYU0YJBfodt70ptBeZyfiAoSeVLsryGmTI0sq0"
-roi_sf <- sf::read_sf('data/raw/NY/boundary/nybb_dissolved.shp')
-ny_boundary <- st_transform(roi_sf, crs = st_crs(4326))
+roi_sf <- sf::read_sf('data/raw/CONUS/boundary/us_boundarydissolve.shp')
+us_boundary <- st_transform(roi_sf, crs = st_crs(4326))
 
-alan_2018 <- bm_raster(roi_sf = us_boundary,
-                    product_id = "VNP46A4",
-                    date = 2018,
-                    bearer = bearer,
-                    output_location_type = "file",
-                    file_dir = "~/phenology-urban/data/raw/CONUS/ALAN",
-                    check_all_tiles_exist = FALSE,
-                    variable = "NearNadir_Composite_Snow_Free") # defult, different angle, snow cover
+for (y in 2017:2017){
+  bm_raster(roi_sf = us_boundary,
+            product_id = "VNP46A4",
+            date = y,
+            bearer = bearer,
+            output_location_type = "file",
+            file_dir = "~/phenology-urban/data/raw/CONUS/ALAN",
+            check_all_tiles_exist = FALSE,
+            variable = "NearNadir_Composite_Snow_Free") # defult, different angle, snow cover
+  }
 
 ```
 2. Map
@@ -90,7 +92,7 @@ if (download_Daymet){
 
 # open the netCDF variables
 tmax.nc <- terra::rast("~/phenology-urban/data/raw/CONUS/Daymet/tmax_monavg_2018_ncss.nc")
-tmin.nc <- terra::rast("~/phenology-urban/data/raw/CONUS/Daymet/tmin_daily_2018_ncss.nc")
+tmin.nc <- terra::rast("~/phenology-urban/data/raw/CONUS/Daymet/tmin_monavg_2018_ncss.nc")
 
 usboun_reproj <- sf::st_transform(us_boundary, crs = sf::st_crs(terra::crs(tmax.nc,proj = T)))
 
@@ -105,11 +107,16 @@ tmin_spring <- (tmin[[3]]+tmin[[4]]+tmin[[5]])/3
 tmax_summer <- (tmax[[6]]+tmax[[7]]+tmax[[8]])/3
 tmin_summer <- (tmin[[6]]+tmin[[7]]+tmin[[8]])/3
 
+tmax_autumn <- (tmax[[9]]+tmax[[10]]+tmax[[11]])/3
+tmin_autumn <- (tmin[[9]]+tmin[[10]]+tmin[[11]])/3
+
+
 tavg_ann <- (tmax[[1]] + tmin[[1]])/2
 tavg_spring <- (tmax_spring + tmin_spring)/2
 tavg_summer <- (tmax_summer + tmin_summer)/2
+tavg_autumn <- (tmax_autumn + tmin_autumn)/2
 
-writeRaster(tavg_summer, filename = "data/proc/daymet/conus/tavg_summer_2018.tif")
+writeRaster(tavg_autumn, filename = "data/proc/daymet/conus/tavg_autumn_2018.tif")
 ```
 
 4. Add temperature - 2018 Birch - landsat
@@ -203,11 +210,11 @@ neon_tree_alan_temp <- neon_tree_alan_temp %>%
     inner_join(up_doy, by = "id") %>%
     inner_join(down_doy, by = "id")
 
-saveRDS(neon_tree_alan_temp,"~/phenology-urban/result/neon_tree_alan_temp.rds")
+saveRDS(neon_tree_alan_temp,"~/phenology-urban/result/neon_tree_alan_temp1.rds")
 
 
-data <- readRDS("result/neon_tree_alan_temp.rds")
-data <- data[grep("Acer", data$species), ]
+data <- readRDS("result/neon_tree_alan_temp1.rds")
+acer_species <- data[grep("Acer", data$species), ]
 
 source("~/phenology-urban/script/plot_scatter.R")
 

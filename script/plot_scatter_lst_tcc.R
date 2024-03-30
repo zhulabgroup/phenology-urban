@@ -10,6 +10,7 @@ scatters_tcc_lst <- function(
   d <- data.table::data.table(x = value.tree, y = value.lst)
   d <- d[complete.cases(d)]
   d <- d[x > 0 & x <= 100]
+  d <- d[y > 0]
 
     # make bins
   # for (k in 0:100) d[(x >= min(d$x) + k) & (x < min(d$x) + k + 1), bin := (k + 1)]

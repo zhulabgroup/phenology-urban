@@ -4,8 +4,7 @@ tif_files <- list.files(path="~/phenology-urban/data/raw/NY/dem", pattern="\\.ti
 library(sf)
 polygons <- st_read("~/phenology-urban/data/raw/NY/NY_building_footprint/geo_export_56deb8a8-0463-4f00-8f45-99e751e3b8e1.shp")
 polygons$dem <- polygons$groundelev + polygons$heightroof
-polygons <- na.omit(polygons)
-
+building_filtered <- polygons[!is.na(polygons$dem) & polygons$dem != 0, ]
 
 
 
@@ -16,12 +15,9 @@ for (file in tif_files) {
   raster_resolution <- res(raster_data)
   
   raster_output <- raster(raster_extent, res = raster_resolution, crs = raster_proj)
-  rasterized <- rasterize(polygons, raster_output, field = "dem", fun = "count")
-  rasterized2 <- rasterize(polygons, raster_data, field = "dem", fun = "count", update=TRUE) 
+  outpath <- sub("be_", "bld_be_", file)
   
-  outpath <- sub("be_", "bld2_be_", file)
-  writeRaster(rasterized2, outpath, format = "GTiff")
-  
+  rasterized <- rasterize(polygons, raster_output, field = "dem", fun='last', update=TRUE, filename=outpath)
   
 }
 

@@ -132,8 +132,6 @@ h5close(hdf_file)
 ```
 
 
-6. Analyze the NPN/NEON data
-
 7. The relationship between lst and individual tree info
 ```{r cars}
 trees_df <- read_csv("~/phenology-batchplanet/alldata/tree/Tree_Inventory_NewYork.csv") %>%

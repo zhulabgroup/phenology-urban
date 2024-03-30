@@ -26,6 +26,7 @@ extract_temp_alan <- function(point_tree) {
   tavg_ann <- raster("data/proc/daymet/conus/tavg_ann_2018.tif")
   tavg_spring <- raster("data/proc/daymet/conus/tavg_spring_2018.tif")
   tavg_summer <- raster("data/proc/daymet/conus/tavg_summer_2018.tif")
+  tavg_autumn <- raster("data/proc/daymet/conus/tavg_autumn_2018.tif")
   
   
   #extract
@@ -44,7 +45,8 @@ extract_temp_alan <- function(point_tree) {
   extract_tavg_summer <- extract(tavg_summer, point_tree)
   point_tree$tavg_sum_2018 <- extract_tavg_summer
   
-  
+  extract_tavg_spring <- extract(tavg_autumn, point_tree)
+  point_tree$tavg_aut_2018 <- extract_tavg_spring
   
   # doy_taxa <- readRDS(str_c("~/phenology-batchplanet/alldata/PSdata/urban/doy/doy_NY_",taxa,".rds"))
   # down_doy <- doy_taxa %>%
@@ -61,8 +63,9 @@ extract_temp_alan <- function(point_tree) {
   point_tree <- point_tree %>%
     filter(!is.na(tavg_ann_2018) & is.finite(tavg_ann_2018)) %>%
     filter(!is.na(alan_2018))
-    # filter(!is.na(down_05_2018))
+  # filter(!is.na(down_05_2018))
   
   return(point_tree)
   
 }
+
