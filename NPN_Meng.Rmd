@@ -155,7 +155,7 @@ visualize Fig.2 - Bud break
 library(ggplot2)
 library(ggpmisc)
 
-bins_bud <- seq(floor(min(analyze_leaf_bud$Tavg_Spring)), ceiling(max(analyze_leaf_bud$Tavg_Spring)), by = 1) 
+bins_bud <- seq(floor(min(analyze_leaf_bud$Tavg_Spring)), ceiling(max(analyze_leaf_bud$Tavg_Spring)), by = 100) 
 # bins_color <- seq(floor(min(analyze_color_leaf$Tavg_Summer)), ceiling(max(analyze_color_leaf$Tavg_Summer)), by = 1)
 # analyze_color_leaf_bin <- analyze_color_leaf %>% mutate(summer_bin = cut(analyze_color_leaf$Tavg_Summer, breaks = bins_color))
 
@@ -219,7 +219,7 @@ plot_bin_c
 ggsave("~/phenology-urban/result/npn_meng/Fig2_color.jpg", plot_bin_c, width = 8, height = 6, units = "in")
 ```
 
-model Table1 Fig3 - Bud break (confusing about the )
+model Table1 Fig3 - Bud break (confusing about the bin)
 ```{r}
 library(lme4)
 
@@ -300,12 +300,12 @@ color <- ggplot(prediction_data, aes(x = alan, y = prediction, color = as.factor
 add scatter point
 ```{r}
 # bud 
-plot_sca <- ggplot(analyze_leaf_bud, aes(x = Tavg_Spring, y = First_Yes_DOY, color = group)) +    # city
+plot_sca <- ggplot(analyze_leaf_bud, aes(x = AGDD, y = First_Yes_DOY, color = group)) +    # city
     geom_point(alpha = 0.2,  stroke = NA) + 
     theme_classic() +
-    labs(x = "Temp", y = "DOY") +  #city             
+    labs(x = "AGDD", y = "DOY") +  #city             
     theme(axis.text = element_text(size = 20), axis.title = element_text(size = 22)) +
-    scale_x_continuous(breaks = pretty(analyze_leaf_bud$Tavg_Spring)) +
+    scale_x_continuous(breaks = pretty(analyze_leaf_bud$AGDD)) +
     scale_y_continuous(breaks = pretty(analyze_leaf_bud$First_Yes_DOY)) +
     theme(
       axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1),
@@ -326,7 +326,7 @@ plot_sca <- ggplot(analyze_leaf_bud, aes(x = Tavg_Spring, y = First_Yes_DOY, col
                  vjust = -0.5     
     ) +
     
-    ggtitle("Spring temp - bud break") +
+    ggtitle("AGDD - bud break") +
     theme(plot.title = element_text(size = 22))
 plot_sca
 
@@ -334,12 +334,12 @@ plot_sca
 
 
 # bud 
-plot_sca_c <- ggplot(analyze_color_leaf, aes(x = Tavg_Summer, y = First_Yes_DOY, color = group)) +    # city
+plot_sca_c <- ggplot(analyze_color_leaf, aes(x = AGDD, y = First_Yes_DOY, color = group)) +    # city
     geom_point(alpha = 0.2,  stroke = NA) + 
     theme_classic() +
-    labs(x = "Temp", y = "DOY") +  #city             
+    labs(x = "AGDD", y = "DOY") +  #city             
     theme(axis.text = element_text(size = 20), axis.title = element_text(size = 22)) +
-    scale_x_continuous(breaks = pretty(analyze_color_leaf$Tavg_Summer)) +
+    scale_x_continuous(breaks = pretty(analyze_color_leaf$AGDD)) +
     scale_y_continuous(breaks = pretty(analyze_color_leaf$First_Yes_DOY)) +
     theme(
       axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1),
@@ -360,15 +360,31 @@ plot_sca_c <- ggplot(analyze_color_leaf, aes(x = Tavg_Summer, y = First_Yes_DOY,
                  vjust = -0.5     
     ) +
     
-    ggtitle("Summer temp - colored leaf") +
+    ggtitle("AGDD - colored leaf") +
     theme(plot.title = element_text(size = 22))
 
 plot_sca_c
 
-# ggsave("~/phenology-urban/result/npn_meng/Fig2_scatter_color.jpg", plot_sca_c, width = 8, height = 6, units = "in")
+ggsave("~/phenology-urban/result/npn_meng/scatter_bud_agdd.jpg", plot_sca, width = 8, height = 6, units = "in")
 ```
 
 adding the GDD
 
+```{r}
+species_leaf_bud <- individual_leaf_bud_filter2 %>%
+  group_by(Site_ID, Latitude, Longitude, 
+           Genus, Species, First_Yes_Year, 
+           Tmin_Winter, Tmin_Spring, Tmin_Summer, Tmin_Fall, 
+           Tmax_Winter, Tmax_Spring, Tmax_Summer, Tmax_Fall) %>%
+  summarise(First_Yes_DOY = mean(First_Yes_DOY, na.rm = TRUE), AGDD = mean(AGDD, na.rm = TRUE))
 
+species_color_leaf <- individual_color_leaf_filter2 %>%
+  group_by(Site_ID, Latitude, Longitude, 
+           Genus, Species, First_Yes_Year, 
+           Tmin_Winter, Tmin_Spring, Tmin_Summer, Tmin_Fall, 
+           Tmax_Winter, Tmax_Spring, Tmax_Summer, Tmax_Fall) %>%
+  summarise(First_Yes_DOY = mean(First_Yes_DOY, na.rm = TRUE), AGDD = mean(AGDD, na.rm = TRUE))
+
+# same steps as temperature
+```
 
