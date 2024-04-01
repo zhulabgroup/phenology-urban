@@ -300,12 +300,12 @@ color <- ggplot(prediction_data, aes(x = alan, y = prediction, color = as.factor
 add scatter point
 ```{r}
 # bud 
-plot_sca <- ggplot(analyze_leaf_bud, aes(x = AGDD, y = First_Yes_DOY, color = group)) +    # city
+plot_sca <- ggplot(analyze_leaf_bud, aes(x = Tavg_Winter, y = First_Yes_DOY, color = group)) +    # city
     geom_point(alpha = 0.2,  stroke = NA) + 
     theme_classic() +
-    labs(x = "AGDD", y = "DOY") +  #city             
+    labs(x = "Temp", y = "DOY") +  #city             
     theme(axis.text = element_text(size = 20), axis.title = element_text(size = 22)) +
-    scale_x_continuous(breaks = pretty(analyze_leaf_bud$AGDD)) +
+    scale_x_continuous(breaks = pretty(analyze_leaf_bud$Tavg_Winter)) +
     scale_y_continuous(breaks = pretty(analyze_leaf_bud$First_Yes_DOY)) +
     theme(
       axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1),
@@ -326,7 +326,7 @@ plot_sca <- ggplot(analyze_leaf_bud, aes(x = AGDD, y = First_Yes_DOY, color = gr
                  vjust = -0.5     
     ) +
     
-    ggtitle("AGDD - bud break") +
+    ggtitle("Winter temp - bud break") +
     theme(plot.title = element_text(size = 22))
 plot_sca
 
@@ -365,7 +365,7 @@ plot_sca_c <- ggplot(analyze_color_leaf, aes(x = AGDD, y = First_Yes_DOY, color 
 
 plot_sca_c
 
-ggsave("~/phenology-urban/result/npn_meng/scatter_bud_agdd.jpg", plot_sca, width = 8, height = 6, units = "in")
+ggsave("~/phenology-urban/result/npn_meng/scatter_bud_winter.jpg", plot_sca, width = 8, height = 6, units = "in")
 ```
 
 adding the GDD
