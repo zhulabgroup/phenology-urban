@@ -1,5 +1,5 @@
-# Prepare
-insert data
+# 1. Prepare
+## 1.1 insert data
 ```{r}
 library(readr)
 library(dplyr)
@@ -8,7 +8,7 @@ individual_leaf_bud <- subset(individual_phenometrics_data, Phenophase_Descripti
 individual_color_leaf <- subset(individual_phenometrics_data, Phenophase_Description == "Colored leaves")
 ```
 
-average with sites/species/year (avg.individual)
+## 1.2 average with sites/species/year (avg.individual)
 ```{r}
 individual_leaf_bud_filter <- individual_leaf_bud %>%
   group_by(Individual_ID, First_Yes_Year) %>%
@@ -53,7 +53,7 @@ species_color_leaf <- individual_color_leaf_filter2 %>%
   summarise(First_Yes_DOY = mean(First_Yes_DOY, na.rm = TRUE))
 ```
 
-extract ALAN
+## 1.3 extract ALAN
 ```{r}
 library(sf)
 library(sp)
@@ -96,7 +96,7 @@ saveRDS(species_leaf_bud_site, "result/npn_meng/leaf_bud.rds")
 saveRDS(species_color_leaf_site, "result/npn_meng/color_leaf.rds")
 ```
 
-processing
+## 1.4 processing
 ```{r}
 species_leaf_bud <- readRDS("result/npn_meng/leaf_bud.rds")
 species_color_leaf <- readRDS("result/npn_meng/color_leaf.rds")
@@ -135,7 +135,7 @@ analyze_leaf_bud <- filter(species_leaf_bud, alan >= threshold | alan == 0) %>%
   mutate(Tavg_Winter = (Tmin_Winter + Tmax_Winter) / 2) %>% 
   mutate(Tavg_Spring = (Tmin_Spring + Tmax_Spring) / 2) %>% 
   mutate(Tavg_Summer = (Tmin_Summer + Tmax_Summer) / 2) %>% 
-  mutate(Tavg_Fall = (Tmin_Fall + Tmax_Fall) / 2) 
+  mutate(Tavg_Fall = (Tmin_Fall + Tmax_Fall) / 2)
 
 analyze_color_leaf <- filter(species_color_leaf, alan >= threshold | alan == 0) %>%
   mutate(group = case_when(
@@ -145,12 +145,15 @@ analyze_color_leaf <- filter(species_color_leaf, alan >= threshold | alan == 0) 
   mutate(Tavg_Winter = (Tmin_Winter + Tmax_Winter) / 2) %>% 
   mutate(Tavg_Spring = (Tmin_Spring + Tmax_Spring) / 2) %>% 
   mutate(Tavg_Summer = (Tmin_Summer + Tmax_Summer) / 2) %>% 
-  mutate(Tavg_Fall = (Tmin_Fall + Tmax_Fall) / 2)
+  mutate(Tavg_Fall = (Tmin_Fall + Tmax_Fall) / 2) %>%
+  filter(Genus  == "Quercus") %>%
+  filter(Species == "rubra")  # try others
 ```
 
 
-# Reproduce results from Meng
-visualize Fig.2 - Bud break
+# 2. Reproduce results from Meng
+
+## 2.1 visualize Fig.2 - Bud break
 ```{r}
 library(ggplot2)
 library(ggpmisc)
@@ -185,7 +188,7 @@ plot_bin
 ggsave("~/phenology-urban/result/npn_meng/Fig2_bud.jpg", plot_bin, width = 8, height = 6, units = "in")
 ```
 
-visualize Fig.2 - Colored leaf
+## 2.2 visualize Fig.2 - Colored leaf
 ```{r}
 library(ggplot2)
 library(ggpmisc)
@@ -219,13 +222,15 @@ plot_bin_c
 ggsave("~/phenology-urban/result/npn_meng/Fig2_color.jpg", plot_bin_c, width = 8, height = 6, units = "in")
 ```
 
-model Table1 Fig3 - Bud break (confusing about the bin)
+## 2.3 model Table1 Fig3 - Bud break (confusing about the bin)
 ```{r}
-library(lme4)
+library(lmerTest)
 
 mod <- lmer(First_Yes_DOY ~ Tavg_Spring + alan + Tavg_Spring*alan +(1 | Species) + (1 | First_Yes_Year), data = analyze_leaf_bud)
 summary(mod)
-
+library(stargazer)
+table <- stargazer(mod, type = 'html')
+writeLines(table, 'tablemod.html')
 # just the line for bud break model
 
 # Step 1: Calculate the quantiles of temperature
@@ -257,12 +262,15 @@ bud <- ggplot(prediction_data, aes(x = alan, y = prediction, color = as.factor(T
 # ggsave("~/phenology-urban/result/npn_meng/Fig3_model_bud.jpg", bud, width = 8, height = 6, units = "in")
 ```
 
-model Table1 Fig3 - Colored leaf
+## 2.4 model Table1 Fig3 - Colored leaf
 ```{r}
 
 mod2 <- lmer(First_Yes_DOY ~ Tavg_Summer + alan + Tavg_Summer*alan +(1 | Species) + (1 | First_Yes_Year), data = analyze_color_leaf)
 summary(mod2)
-
+class(mod2)
+library(stargazer)
+table <- stargazer(summary(mod2), type = 'html')
+writeLines(table, 'tablemod2.html')
 # just the line for colored leaf model
 
 # Step 1: Calculate the quantiles of temperature
@@ -296,11 +304,12 @@ color <- ggplot(prediction_data, aes(x = alan, y = prediction, color = as.factor
 ```
 
 
-# Additional steps
-add scatter point
+# 3. Additional steps
+
+## 3.1 add scatter point
 ```{r}
 # bud 
-plot_sca <- ggplot(analyze_leaf_bud, aes(x = Tavg_Winter, y = First_Yes_DOY, color = group)) +    # city
+plot_sca <- ggplot(analyze_leaf_bud, aes(x = Tavg_Spring, y = First_Yes_DOY, color = interaction(Genus, group))) +    # city
     geom_point(alpha = 0.2,  stroke = NA) + 
     theme_classic() +
     labs(x = "Temp", y = "DOY") +  #city             
@@ -314,7 +323,7 @@ plot_sca <- ggplot(analyze_leaf_bud, aes(x = Tavg_Winter, y = First_Yes_DOY, col
       legend.title = element_text(size = 22),
       legend.text = element_text(size = 18)
     ) +
-    geom_smooth(method = "lm", se = FALSE, aes(group = group), formula = y ~ x) +  #city
+    geom_smooth(method = "lm", se = FALSE, aes(group = interaction(Genus, group)), formula = y ~ x) +  #city
     #geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed", formula = y ~ x) +
     stat_poly_eq(aes(label = paste(..eq.label.., ..rr.label.., ..p.value.label.., sep = "~~~~")),
                  formula = y ~ x,
@@ -333,13 +342,14 @@ plot_sca
 # ggsave("~/phenology-urban/result/npn_meng/Fig2_scatter_bud.jpg", plot_sca, width = 8, height = 6, units = "in")
 
 
-# bud 
-plot_sca_c <- ggplot(analyze_color_leaf, aes(x = AGDD, y = First_Yes_DOY, color = group)) +    # city
+# color
+
+plot_sca_c <- ggplot(analyze_color_leaf, aes(x = Tavg_Summer, y = First_Yes_DOY, color = group)) +    # city
     geom_point(alpha = 0.2,  stroke = NA) + 
     theme_classic() +
-    labs(x = "AGDD", y = "DOY") +  #city             
+    labs(x = "Tavg_Summer", y = "DOY") +  #city             
     theme(axis.text = element_text(size = 20), axis.title = element_text(size = 22)) +
-    scale_x_continuous(breaks = pretty(analyze_color_leaf$AGDD)) +
+    scale_x_continuous(breaks = pretty(analyze_color_leaf$Tavg_Summer)) +
     scale_y_continuous(breaks = pretty(analyze_color_leaf$First_Yes_DOY)) +
     theme(
       axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1),
@@ -360,31 +370,64 @@ plot_sca_c <- ggplot(analyze_color_leaf, aes(x = AGDD, y = First_Yes_DOY, color 
                  vjust = -0.5     
     ) +
     
-    ggtitle("AGDD - colored leaf") +
+    ggtitle("Temp - colored leaf - Quercus rubra") +
     theme(plot.title = element_text(size = 22))
+
 
 plot_sca_c
 
-ggsave("~/phenology-urban/result/npn_meng/scatter_bud_winter.jpg", plot_sca, width = 8, height = 6, units = "in")
+ggsave("~/phenology-urban/result/npn_meng/Quercus_rubra_scatter_color_summer.jpg", plot_sca_c, width = 8, height = 6, units = "in")
 ```
 
-adding the GDD
+## 3.2 quantatively check the slope differece
+
 
 ```{r}
-species_leaf_bud <- individual_leaf_bud_filter2 %>%
-  group_by(Site_ID, Latitude, Longitude, 
-           Genus, Species, First_Yes_Year, 
-           Tmin_Winter, Tmin_Spring, Tmin_Summer, Tmin_Fall, 
-           Tmax_Winter, Tmax_Spring, Tmax_Summer, Tmax_Fall) %>%
-  summarise(First_Yes_DOY = mean(First_Yes_DOY, na.rm = TRUE), AGDD = mean(AGDD, na.rm = TRUE))
+# Install and load necessary packages
+library(nimble)
 
-species_color_leaf <- individual_color_leaf_filter2 %>%
-  group_by(Site_ID, Latitude, Longitude, 
-           Genus, Species, First_Yes_Year, 
-           Tmin_Winter, Tmin_Spring, Tmin_Summer, Tmin_Fall, 
-           Tmax_Winter, Tmax_Spring, Tmax_Summer, Tmax_Fall) %>%
-  summarise(First_Yes_DOY = mean(First_Yes_DOY, na.rm = TRUE), AGDD = mean(AGDD, na.rm = TRUE))
+# Define the model
+code <- nimbleCode({
+  # Prior distributions
+  beta0_1 ~ dnorm(0, 0.001) # Prior for intercept of first dataset
+  beta0_2 ~ dnorm(0, 0.001) # Prior for intercept of second dataset
+  beta1 ~ dnorm(0, 0.001) # Prior for slope of first dataset
+  delta ~ dnorm(0, 0.001) # Prior for difference between slopes
+  sigma_1_sq ~ dunif(0, 100) # Prior for variance of first dataset
+  sigma_2_sq ~ dunif(0, 100) # Prior for variance of second dataset
 
-# same steps as temperature
+  # Likelihood for first dataset
+  for(i in 1:n1) {
+    y1[i] ~ dnorm(beta0_1 + beta1 * x1[i], sqrt(sigma_1_sq))
+  }
+  
+  # Likelihood for second dataset
+  for(i in 1:n2) {
+    y2[i] ~ dnorm(beta0_2 + (beta1 + delta) * x2[i], sqrt(sigma_2_sq))
+  }
+})
+
+# Create NIMBLE model
+model <- nimbleModel(code, constants = c("x1", "y1", "n1", "x2", "y2", "n2", "sigma_1_sq", "sigma_2_sq"))
+
+# Define data
+data <- list(x1 = your_x1_data, y1 = your_y1_data, n1 = length(your_y1_data),
+             x2 = your_x2_data, y2 = your_y2_data, n2 = length(your_y2_data),
+             sigma_1_sq = your_sigma1_sq_value, sigma_2_sq = your_sigma2_sq_value)
+
+# Compile the model
+compiled_model <- compileNimble(model)
+
+# Run MCMC
+samples <- runMCMC(compiled_model, data = data, niter = 10000)
+
+# Summarize posterior
+posterior_summary <- summary(samples)
+
+# Plot posterior distribution of delta
+plot(posterior(samples, 'delta'))
 ```
+
+                                              
+
 

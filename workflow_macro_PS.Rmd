@@ -235,26 +235,43 @@ library(ggplot2)
 library(ggpmisc)
 library(stringr)
 
-source("~/phenology-urban/script/extract_doy_all_cities.R")
-acer_doy_df <- extract_doy_all_cities("Acer", x = 2018, threshold = 0.5)
+# source("~/phenology-urban/script/extract_doy_all_cities.R")
+# acer_doy_df <- extract_doy_all_cities("Acer", x = 2018, threshold = 0.5)
+# 
+# coordinates(acer_doy_df) <- c("lon", "lat")
+# all_city_tree <- st_as_sf(acer_doy_df)
+# all_city_tree <- st_set_crs(all_city_tree, "EPSG:4326")
+# 
+# 
+# source("~/phenology-urban/script/extract_temp_alan.R") #just 2018 data
+# all_city_alan_temp <- extract_temp_alan(all_city_tree)
 
-coordinates(acer_doy_df) <- c("lon", "lat")
-all_city_tree <- st_as_sf(acer_doy_df)
-all_city_tree <- st_set_crs(all_city_tree, "EPSG:4326")
+df_tree <- readRDS("~/phenology-batchplanet/alldata/tree/df_tree.rds")
 
+all_city_alan_temp <- readRDS("result/all_city_alan_temp.rds") %>%
+  left_join(df_tree, by = c("city" ="site", "id" = "id"))
+all_city_alan_temp$species <- strsplit(as.character(all_city_alan_temp$taxa), " ") %>%
+  sapply(function(x) paste(x[1:2], collapse = " "))
 
-source("~/phenology-urban/script/extract_temp_alan.R") #just 2018 data
-all_city_alan_temp <- extract_temp_alan(all_city_tree)
+species_frequency <- all_city_alan_temp %>%
+  group_by(species, city) %>%
+  summarise(frequency = n()) %>%
+  data.frame()
+filtered_data <- all_city_alan_temp %>%
+  left_join(species_frequency, by = c("species", "city")) %>%
+  filter(species != "Acer NA" & down >=182 & up<=182 & up>=0 & down <=365)%>% 
+  filter(frequency >= 30)%>% 
+  mutate(species = gsub("Acer x", "Acer x freemanii", species))
 
 source("~/phenology-urban/script/plot_scatter.R")
-p <- plot_function(taxa = "Acer", dataframe=all_city_alan_temp, all_city_alan_temp$tavg_ann_2018, all_city_alan_temp$up, "Tavg_2018", "green_up_doy")
+p <- plot_function(family = "Acer", dataframe=filtered_data, filtered_data$tavg_sum_2018, filtered_data$down, "Tsummer_2018", "green_down_doy")
 p
-ggsave("result/alan/ALAN_2018_green_up_doy_Acer_allcity2018.jpg", p, width = 8, height = 6, units = "in")
+ggsave("result/temperature/temp_2018_green_down_Acer_allcity_sum.jpg", p, width = 10, height = 6, units = "in")
 
 
-p <- make_group_display(point = all_city_alan_temp, trend = "up", temp = "tavg_ann_2018") 
-p
-plot(all_city_alan_temp)
+library(lmerTest)
+mod <- lmer(down ~ tavg_sum_2018  +(1 | species) + (1 | city), data = filtered_data)
+summary(mod)
 
 
 hist_temp <- ggplot(all_city_alan_temp, aes(x = tavg_spr_2018, color = city, fill = city)) +
