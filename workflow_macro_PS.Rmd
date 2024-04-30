@@ -84,8 +84,8 @@ if (download_Daymet){
   bbox <- as.vector(terra::ext(us_boundary))
   # download Daymet data
   download_daymet_ncss(location = bbox[c('ymax', 'xmin', 'ymin', 'xmax')],
-                       start = 2018, end = 2018,
-                       frequency = "monthly",
+                       start = 2023, end = 2022,
+                       frequency = "daily",
                        param = c("tmin","tmax"),
                        path=folder.raw)
 }

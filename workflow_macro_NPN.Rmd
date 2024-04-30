@@ -3,54 +3,54 @@
 ```{r}
 library(readr)
 library(dplyr)
-individual_phenometrics_data <- read_csv("~/phenology-urban/data/raw/CONUS/NPN_Meng/individual_phenometrics_data.csv")
-individual_leaf_bud <- subset(individual_phenometrics_data, Phenophase_Description == "Breaking leaf buds")
-individual_color_leaf <- subset(individual_phenometrics_data, Phenophase_Description == "Colored leaves")
+# individual_phenometrics_data <- read_csv("~/phenology-urban/data/raw/CONUS/NPN_Meng/individual_phenometrics_data.csv")
+# individual_leaf_bud <- subset(individual_phenometrics_data, Phenophase_Description == "Breaking leaf buds")
+# individual_color_leaf <- subset(individual_phenometrics_data, Phenophase_Description == "Colored leaves")
 ```
 
 ## 1.2 average with sites/species/year (avg.individual)
 ```{r}
-individual_leaf_bud_filter <- individual_leaf_bud %>%
-  group_by(Individual_ID, First_Yes_Year) %>%
-  summarise(First_Yes_DOY = min(First_Yes_DOY, na.rm = TRUE)) %>%
-  left_join(individual_leaf_bud, by = c("Individual_ID", "First_Yes_Year", "First_Yes_DOY"))%>%
-  filter(First_Yes_DOY <= 183)
-
-individual_color_leaf_filter <- individual_color_leaf %>%
-  group_by(Individual_ID, First_Yes_Year) %>%
-  summarise(First_Yes_DOY = min(First_Yes_DOY, na.rm = TRUE)) %>%
-  left_join(individual_color_leaf, by = c("Individual_ID", "First_Yes_Year", "First_Yes_DOY")) %>%
-  filter(First_Yes_DOY >= 182)
-
-# breaking leaf buds (species) >= 80
-individual_leaf_bud_filter2 <- individual_leaf_bud_filter %>%
-    group_by(Genus, Species) %>%
-    count() %>%
-    filter(n >= 80) %>%
-    inner_join(individual_leaf_bud_filter, by = c("Genus", "Species"))
-
-# colored leaves (species) >= 40
-individual_color_leaf_filter2 <- individual_color_leaf_filter %>%
-    group_by(Genus, Species) %>%
-    count() %>%
-    filter(n >= 40) %>%
-    inner_join(individual_color_leaf_filter, by = c("Genus", "Species"))
-
-# species-site-year average doy for leaf-bud
-species_leaf_bud <- individual_leaf_bud_filter2 %>%
-  group_by(Site_ID, Latitude, Longitude, 
-           Genus, Species, First_Yes_Year, 
-           Tmin_Winter, Tmin_Spring, Tmin_Summer, Tmin_Fall, 
-           Tmax_Winter, Tmax_Spring, Tmax_Summer, Tmax_Fall) %>%
-  summarise(First_Yes_DOY = mean(First_Yes_DOY, na.rm = TRUE))
-
-# species-site-year average doy for color_leaf
-species_color_leaf <- individual_color_leaf_filter2 %>%
-  group_by(Site_ID, Latitude, Longitude, 
-           Genus, Species, First_Yes_Year, 
-           Tmin_Winter, Tmin_Spring, Tmin_Summer, Tmin_Fall, 
-           Tmax_Winter, Tmax_Spring, Tmax_Summer, Tmax_Fall) %>%
-  summarise(First_Yes_DOY = mean(First_Yes_DOY, na.rm = TRUE))
+# individual_leaf_bud_filter <- individual_leaf_bud %>%
+#   group_by(Individual_ID, First_Yes_Year) %>%
+#   summarise(First_Yes_DOY = min(First_Yes_DOY, na.rm = TRUE)) %>%
+#   left_join(individual_leaf_bud, by = c("Individual_ID", "First_Yes_Year", "First_Yes_DOY"))%>%
+#   filter(First_Yes_DOY <= 183)
+# 
+# individual_color_leaf_filter <- individual_color_leaf %>%
+#   group_by(Individual_ID, First_Yes_Year) %>%
+#   summarise(First_Yes_DOY = min(First_Yes_DOY, na.rm = TRUE)) %>%
+#   left_join(individual_color_leaf, by = c("Individual_ID", "First_Yes_Year", "First_Yes_DOY")) %>%
+#   filter(First_Yes_DOY >= 182)
+# 
+# # breaking leaf buds (species) >= 80
+# individual_leaf_bud_filter2 <- individual_leaf_bud_filter %>%
+#     group_by(Genus, Species) %>%
+#     count() %>%
+#     filter(n >= 80) %>%
+#     inner_join(individual_leaf_bud_filter, by = c("Genus", "Species"))
+# 
+# # colored leaves (species) >= 40
+# individual_color_leaf_filter2 <- individual_color_leaf_filter %>%
+#     group_by(Genus, Species) %>%
+#     count() %>%
+#     filter(n >= 40) %>%
+#     inner_join(individual_color_leaf_filter, by = c("Genus", "Species"))
+# 
+# # species-site-year average doy for leaf-bud
+# species_leaf_bud <- individual_leaf_bud_filter2 %>%
+#   group_by(Site_ID, Latitude, Longitude, 
+#            Genus, Species, First_Yes_Year, 
+#            Tmin_Winter, Tmin_Spring, Tmin_Summer, Tmin_Fall, 
+#            Tmax_Winter, Tmax_Spring, Tmax_Summer, Tmax_Fall) %>%
+#   summarise(First_Yes_DOY = mean(First_Yes_DOY, na.rm = TRUE))
+# 
+# # species-site-year average doy for color_leaf
+# species_color_leaf <- individual_color_leaf_filter2 %>%
+#   group_by(Site_ID, Latitude, Longitude, 
+#            Genus, Species, First_Yes_Year, 
+#            Tmin_Winter, Tmin_Spring, Tmin_Summer, Tmin_Fall, 
+#            Tmax_Winter, Tmax_Spring, Tmax_Summer, Tmax_Fall) %>%
+#   summarise(First_Yes_DOY = mean(First_Yes_DOY, na.rm = TRUE))
 ```
 
 ## 1.3 extract ALAN
@@ -59,47 +59,47 @@ library(sf)
 library(sp)
 library(raster)
 library(stringr)
-
-coordinates(species_leaf_bud) <- c("Longitude", "Latitude")
-species_leaf_bud_site <- st_as_sf(species_leaf_bud) %>% st_set_crs("EPSG:4326")
-
-coordinates(species_color_leaf) <- c("Longitude", "Latitude")
-species_color_leaf_site <- st_as_sf(species_color_leaf) %>% st_set_crs("EPSG:4326")
-
-for (y in 2012:2016){
-  ## insert alan
-  raster_file <- str_c("~/phenology-urban/data/raw/CONUS/ALAN/VNP46A4_t",y,".tif")
-  alan_year <- raster(raster_file)
-  ## Remove very low values of NTL; can be considered noise
-  alan_year[alan_year <= 2] <- 0
-  ## Distribution is skewed, so log
-  alan_year <- log(alan_year + 1)
-  
-  extract_alan <- extract(alan_year, species_leaf_bud_site)
-  species_leaf_bud_site <- cbind(species_leaf_bud_site, setNames(list(extract_alan), paste0("alan_", y)))
-}
-
-for (y in 2012:2016){
-  ## insert alan
-  raster_file <- str_c("~/phenology-urban/data/raw/CONUS/ALAN/VNP46A4_t",y,".tif")
-  alan_year <- raster(raster_file)
-  ## Remove very low values of NTL; can be considered noise
-  alan_year[alan_year <= 2] <- 0
-  ## Distribution is skewed, so log
-  alan_year <- log(alan_year + 1)
-  
-  extract_alan <- extract(alan_year, species_color_leaf_site)
-  species_color_leaf_site <- cbind(species_color_leaf_site, setNames(list(extract_alan), paste0("alan_", y)))
-}
-
-saveRDS(species_leaf_bud_site, "result/npn_meng/leaf_bud.rds")
-saveRDS(species_color_leaf_site, "result/npn_meng/color_leaf.rds")
+# 
+# coordinates(species_leaf_bud) <- c("Longitude", "Latitude")
+# species_leaf_bud_site <- st_as_sf(species_leaf_bud) %>% st_set_crs("EPSG:4326")
+# 
+# coordinates(species_color_leaf) <- c("Longitude", "Latitude")
+# species_color_leaf_site <- st_as_sf(species_color_leaf) %>% st_set_crs("EPSG:4326")
+# 
+# for (y in 2012:2016){
+#   ## insert alan
+#   raster_file <- str_c("~/phenology-urban/data/raw/CONUS/ALAN/VNP46A4_t",y,".tif")
+#   alan_year <- raster(raster_file)
+#   ## Remove very low values of NTL; can be considered noise
+#   alan_year[alan_year <= 2] <- 0
+#   ## Distribution is skewed, so log
+#   alan_year <- log(alan_year + 1)
+#   
+#   extract_alan <- extract(alan_year, species_leaf_bud_site)
+#   species_leaf_bud_site <- cbind(species_leaf_bud_site, setNames(list(extract_alan), paste0("alan_", y)))
+# }
+# 
+# for (y in 2012:2016){
+#   ## insert alan
+#   raster_file <- str_c("~/phenology-urban/data/raw/CONUS/ALAN/VNP46A4_t",y,".tif")
+#   alan_year <- raster(raster_file)
+#   ## Remove very low values of NTL; can be considered noise
+#   alan_year[alan_year <= 2] <- 0
+#   ## Distribution is skewed, so log
+#   alan_year <- log(alan_year + 1)
+#   
+#   extract_alan <- extract(alan_year, species_color_leaf_site)
+#   species_color_leaf_site <- cbind(species_color_leaf_site, setNames(list(extract_alan), paste0("alan_", y)))
+# }
+# 
+# saveRDS(species_leaf_bud_site, "result/npn_meng/leaf_bud.rds")
+# saveRDS(species_color_leaf_site, "result/npn_meng/color_leaf.rds")
 ```
 
 ## 1.4 processing
 ```{r}
-species_leaf_bud <- readRDS("result/npn_meng/leaf_bud.rds")
-species_color_leaf <- readRDS("result/npn_meng/color_leaf.rds")
+species_leaf_bud <- readRDS("data/proc/conus/npn_meng/leaf_bud.rds")
+species_color_leaf <- readRDS("data/proc/conus/npn_meng/color_leaf.rds")
  
 species_leaf_bud <- species_leaf_bud %>%
   mutate(alan = case_when(
@@ -135,7 +135,8 @@ analyze_leaf_bud <- filter(species_leaf_bud, alan >= threshold | alan == 0) %>%
   mutate(Tavg_Winter = (Tmin_Winter + Tmax_Winter) / 2) %>% 
   mutate(Tavg_Spring = (Tmin_Spring + Tmax_Spring) / 2) %>% 
   mutate(Tavg_Summer = (Tmin_Summer + Tmax_Summer) / 2) %>% 
-  mutate(Tavg_Fall = (Tmin_Fall + Tmax_Fall) / 2)
+  mutate(Tavg_Fall = (Tmin_Fall + Tmax_Fall) / 2)%>%
+  filter(Genus  == "Acer")
 
 analyze_color_leaf <- filter(species_color_leaf, alan >= threshold | alan == 0) %>%
   mutate(group = case_when(
@@ -146,8 +147,7 @@ analyze_color_leaf <- filter(species_color_leaf, alan >= threshold | alan == 0) 
   mutate(Tavg_Spring = (Tmin_Spring + Tmax_Spring) / 2) %>% 
   mutate(Tavg_Summer = (Tmin_Summer + Tmax_Summer) / 2) %>% 
   mutate(Tavg_Fall = (Tmin_Fall + Tmax_Fall) / 2) %>%
-  filter(Genus  == "Quercus") %>%
-  filter(Species == "rubra")  # try others
+  filter(Genus  == "Betula")  # try others
 ```
 
 
@@ -304,12 +304,14 @@ color <- ggplot(prediction_data, aes(x = alan, y = prediction, color = as.factor
 ```
 
 
+
+
 # 3. Additional steps
 
 ## 3.1 add scatter point
 ```{r}
 # bud 
-plot_sca <- ggplot(analyze_leaf_bud, aes(x = Tavg_Spring, y = First_Yes_DOY, color = interaction(Genus, group))) +    # city
+plot_sca <- ggplot(analyze_leaf_bud, aes(x = Tavg_Spring, y = First_Yes_DOY, color = group)) +    # city
     geom_point(alpha = 0.2,  stroke = NA) + 
     theme_classic() +
     labs(x = "Temp", y = "DOY") +  #city             
@@ -370,7 +372,7 @@ plot_sca_c <- ggplot(analyze_color_leaf, aes(x = Tavg_Summer, y = First_Yes_DOY,
                  vjust = -0.5     
     ) +
     
-    ggtitle("Temp - colored leaf - Quercus rubra") +
+    ggtitle("Temp - colored leaf - Acer") +
     theme(plot.title = element_text(size = 22))
 
 
@@ -385,47 +387,39 @@ ggsave("~/phenology-urban/result/npn_meng/Quercus_rubra_scatter_color_summer.jpg
 ```{r}
 # Install and load necessary packages
 library(nimble)
+library(patchwork)
+library(purrr)
+source("script/stat_slope_delta.R")
 
-# Define the model
-code <- nimbleCode({
-  # Prior distributions
-  beta0_1 ~ dnorm(0, 0.001) # Prior for intercept of first dataset
-  beta0_2 ~ dnorm(0, 0.001) # Prior for intercept of second dataset
-  beta1 ~ dnorm(0, 0.001) # Prior for slope of first dataset
-  delta ~ dnorm(0, 0.001) # Prior for difference between slopes
-  sigma_1_sq ~ dunif(0, 100) # Prior for variance of first dataset
-  sigma_2_sq ~ dunif(0, 100) # Prior for variance of second dataset
+genus_counts <- table(species_color_leaf$Genus)
+large_genus <- names(genus_counts[genus_counts > 100])
 
-  # Likelihood for first dataset
-  for(i in 1:n1) {
-    y1[i] ~ dnorm(beta0_1 + beta1 * x1[i], sqrt(sigma_1_sq))
-  }
-  
-  # Likelihood for second dataset
-  for(i in 1:n2) {
-    y2[i] ~ dnorm(beta0_2 + (beta1 + delta) * x2[i], sqrt(sigma_2_sq))
-  }
+
+data_list <- map(large_genus, function(genus) {
+  species_color_leaf %>%
+    filter(alan >= threshold | alan == 0) %>%
+    mutate(group = case_when(
+      alan >= threshold ~ "ALAN",
+      alan == 0 ~ "No ALAN"
+    )) %>%
+    mutate(Tavg_Winter = (Tmin_Winter + Tmax_Winter) / 2,
+           Tavg_Spring = (Tmin_Spring + Tmax_Spring) / 2,
+           Tavg_Summer = (Tmin_Summer + Tmax_Summer) / 2,
+           Tavg_Fall = (Tmin_Fall + Tmax_Fall) / 2) %>%
+    filter(Genus == genus)
 })
 
-# Create NIMBLE model
-model <- nimbleModel(code, constants = c("x1", "y1", "n1", "x2", "y2", "n2", "sigma_1_sq", "sigma_2_sq"))
+plots <- lapply(seq_along(data_list), function(i) {
+  cat("Processing dataset", i, "of", length(data_list), "\n")  
+  data <- data_list[[i]] 
+  result <- stat_slope_delta(data) 
+  return(result) 
+})
 
-# Define data
-data <- list(x1 = your_x1_data, y1 = your_y1_data, n1 = length(your_y1_data),
-             x2 = your_x2_data, y2 = your_y2_data, n2 = length(your_y2_data),
-             sigma_1_sq = your_sigma1_sq_value, sigma_2_sq = your_sigma2_sq_value)
+combined_plot <- reduce(plots, `+`) + plot_layout(ncol = 1)
+print(combined_plot)
 
-# Compile the model
-compiled_model <- compileNimble(model)
-
-# Run MCMC
-samples <- runMCMC(compiled_model, data = data, niter = 10000)
-
-# Summarize posterior
-posterior_summary <- summary(samples)
-
-# Plot posterior distribution of delta
-plot(posterior(samples, 'delta'))
+ggsave("result/combined_plot.png", plot = combined_plot, width = 10, height = 12, dpi = 300)
 ```
 
                                               
