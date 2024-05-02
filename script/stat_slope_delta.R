@@ -25,9 +25,8 @@ stat_slope_delta <- function(dataset) {
   rural <- subset(dataset, group == "No ALAN")
   urban <- subset(dataset, group == "ALAN")
   
-  data <- list(x1 = rural$Tavg_Summer, y1 = rural$First_Yes_DOY, n1 = length(rural$First_Yes_DOY),
-               x2 = urban$Tavg_Summer, y2 = urban$First_Yes_DOY, n2 = length(urban$First_Yes_DOY)
-               )
+  data <- list(x1 = rural$Tmax_Summer, y1 = rural$First_Yes_DOY, n1 = nrow(rural),
+               x2 = urban$Tmax_Summer, y2 = urban$First_Yes_DOY, n2 = nrow(urban))
   
   model <- nimbleModel(code, data)
   
@@ -39,7 +38,7 @@ stat_slope_delta <- function(dataset) {
   compiled_mcmc <- compileNimble(mcmc, project = compiled_model, showCompilerOutput = TRUE) # project should be model/complied model?
 
   # Run the MCMC
-  samples <- runMCMC(compiled_mcmc, niter = 20000, nburnin = 5000, nchains = 3)
+  samples <- runMCMC(compiled_mcmc, niter = 30000, nburnin = 5000, nchains = 5)
   # mcmc_diagnose(samples)
   # nimble:::mcmc_diagnose(samples)
   
@@ -53,7 +52,8 @@ stat_slope_delta <- function(dataset) {
   delta_plot <- ggplot(delta_samples, aes(x = delta)) +
     geom_density(fill = "lightblue", color = "black") +  # Use geom_density for smoothed curve
     labs(title = dataset$Genus[1], x = "Delta", y = "Density") +
-    theme_classic()
+    theme_classic()+
+    geom_vline(xintercept = 0, linetype = "solid", color = "red") 
   delta_plot
   return(delta_plot)
   

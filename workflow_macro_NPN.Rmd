@@ -3,7 +3,17 @@
 ```{r}
 library(readr)
 library(dplyr)
-# individual_phenometrics_data <- read_csv("~/phenology-urban/data/raw/CONUS/NPN_Meng/individual_phenometrics_data.csv")
+library(sf)
+library(sp)
+library(raster)
+library(stringr)
+library(ggplot2)
+library(ggpmisc)
+library(nimble)
+library(patchwork)
+library(purrr)
+
+# individual_phenometrics_data <- read_csv("~/phenology-urban/data/raw/CONUS/NPN/NPN1722/individual_phenometrics_data.csv")
 # individual_leaf_bud <- subset(individual_phenometrics_data, Phenophase_Description == "Breaking leaf buds")
 # individual_color_leaf <- subset(individual_phenometrics_data, Phenophase_Description == "Colored leaves")
 ```
@@ -38,35 +48,30 @@ library(dplyr)
 # 
 # # species-site-year average doy for leaf-bud
 # species_leaf_bud <- individual_leaf_bud_filter2 %>%
-#   group_by(Site_ID, Latitude, Longitude, 
-#            Genus, Species, First_Yes_Year, 
-#            Tmin_Winter, Tmin_Spring, Tmin_Summer, Tmin_Fall, 
+#   group_by(Site_ID, Latitude, Longitude,
+#            Genus, Species, First_Yes_Year,
+#            Tmin_Winter, Tmin_Spring, Tmin_Summer, Tmin_Fall,
 #            Tmax_Winter, Tmax_Spring, Tmax_Summer, Tmax_Fall) %>%
 #   summarise(First_Yes_DOY = mean(First_Yes_DOY, na.rm = TRUE))
 # 
 # # species-site-year average doy for color_leaf
 # species_color_leaf <- individual_color_leaf_filter2 %>%
-#   group_by(Site_ID, Latitude, Longitude, 
-#            Genus, Species, First_Yes_Year, 
-#            Tmin_Winter, Tmin_Spring, Tmin_Summer, Tmin_Fall, 
+#   group_by(Site_ID, Latitude, Longitude,
+#            Genus, Species, First_Yes_Year,
+#            Tmin_Winter, Tmin_Spring, Tmin_Summer, Tmin_Fall,
 #            Tmax_Winter, Tmax_Spring, Tmax_Summer, Tmax_Fall) %>%
 #   summarise(First_Yes_DOY = mean(First_Yes_DOY, na.rm = TRUE))
 ```
 
 ## 1.3 extract ALAN
 ```{r}
-library(sf)
-library(sp)
-library(raster)
-library(stringr)
-# 
 # coordinates(species_leaf_bud) <- c("Longitude", "Latitude")
 # species_leaf_bud_site <- st_as_sf(species_leaf_bud) %>% st_set_crs("EPSG:4326")
 # 
 # coordinates(species_color_leaf) <- c("Longitude", "Latitude")
 # species_color_leaf_site <- st_as_sf(species_color_leaf) %>% st_set_crs("EPSG:4326")
 # 
-# for (y in 2012:2016){
+# for (y in 2017:2022){
 #   ## insert alan
 #   raster_file <- str_c("~/phenology-urban/data/raw/CONUS/ALAN/VNP46A4_t",y,".tif")
 #   alan_year <- raster(raster_file)
@@ -74,12 +79,12 @@ library(stringr)
 #   alan_year[alan_year <= 2] <- 0
 #   ## Distribution is skewed, so log
 #   alan_year <- log(alan_year + 1)
-#   
+# 
 #   extract_alan <- extract(alan_year, species_leaf_bud_site)
 #   species_leaf_bud_site <- cbind(species_leaf_bud_site, setNames(list(extract_alan), paste0("alan_", y)))
 # }
 # 
-# for (y in 2012:2016){
+# for (y in 2017:2022){
 #   ## insert alan
 #   raster_file <- str_c("~/phenology-urban/data/raw/CONUS/ALAN/VNP46A4_t",y,".tif")
 #   alan_year <- raster(raster_file)
@@ -87,20 +92,20 @@ library(stringr)
 #   alan_year[alan_year <= 2] <- 0
 #   ## Distribution is skewed, so log
 #   alan_year <- log(alan_year + 1)
-#   
+# 
 #   extract_alan <- extract(alan_year, species_color_leaf_site)
 #   species_color_leaf_site <- cbind(species_color_leaf_site, setNames(list(extract_alan), paste0("alan_", y)))
 # }
 # 
-# saveRDS(species_leaf_bud_site, "result/npn_meng/leaf_bud.rds")
-# saveRDS(species_color_leaf_site, "result/npn_meng/color_leaf.rds")
+# saveRDS(species_leaf_bud_site, "data/proc/conus/npn_meng/leaf_bud_1722.rds")
+# saveRDS(species_color_leaf_site, "data/proc/conus/npn_meng/color_leaf_1722.rds")
 ```
 
 ## 1.4 processing
 ```{r}
 species_leaf_bud <- readRDS("data/proc/conus/npn_meng/leaf_bud.rds")
 species_color_leaf <- readRDS("data/proc/conus/npn_meng/color_leaf.rds")
- 
+
 species_leaf_bud <- species_leaf_bud %>%
   mutate(alan = case_when(
     First_Yes_Year == 2011 ~ alan_2012,
@@ -109,7 +114,7 @@ species_leaf_bud <- species_leaf_bud %>%
     First_Yes_Year == 2014 ~ alan_2014,
     First_Yes_Year == 2015 ~ alan_2015,
     First_Yes_Year == 2016 ~ alan_2016,
-    TRUE ~ NA_real_ 
+    TRUE ~ NA_real_
   )) %>% na.omit()
 
 species_color_leaf <- species_color_leaf %>%
@@ -120,10 +125,10 @@ species_color_leaf <- species_color_leaf %>%
     First_Yes_Year == 2014 ~ alan_2014,
     First_Yes_Year == 2015 ~ alan_2015,
     First_Yes_Year == 2016 ~ alan_2016,
-    TRUE ~ NA_real_ 
+    TRUE ~ NA_real_
   )) %>% na.omit()
 
-# with ALAN: threshold at 75% with all sites from the papper (19.1 nW/cm2/sr)
+# with ALAN: threshold at 75% with all sites from the paper (19.1 nW/cm2/sr)
 # vagueness about the range
 threshold <- log(19.1 +1)
 
@@ -132,9 +137,9 @@ analyze_leaf_bud <- filter(species_leaf_bud, alan >= threshold | alan == 0) %>%
     alan >= threshold ~ "ALAN",
     alan == 0 ~ "No ALAN"
     )) %>%
-  mutate(Tavg_Winter = (Tmin_Winter + Tmax_Winter) / 2) %>% 
-  mutate(Tavg_Spring = (Tmin_Spring + Tmax_Spring) / 2) %>% 
-  mutate(Tavg_Summer = (Tmin_Summer + Tmax_Summer) / 2) %>% 
+  mutate(Tavg_Winter = (Tmin_Winter + Tmax_Winter) / 2) %>%
+  mutate(Tavg_Spring = (Tmin_Spring + Tmax_Spring) / 2) %>%
+  mutate(Tavg_Summer = (Tmin_Summer + Tmax_Summer) / 2) %>%
   mutate(Tavg_Fall = (Tmin_Fall + Tmax_Fall) / 2)%>%
   filter(Genus  == "Acer")
 
@@ -143,9 +148,9 @@ analyze_color_leaf <- filter(species_color_leaf, alan >= threshold | alan == 0) 
     alan >= threshold ~ "ALAN",
     alan == 0 ~ "No ALAN"
     )) %>%
-  mutate(Tavg_Winter = (Tmin_Winter + Tmax_Winter) / 2) %>% 
-  mutate(Tavg_Spring = (Tmin_Spring + Tmax_Spring) / 2) %>% 
-  mutate(Tavg_Summer = (Tmin_Summer + Tmax_Summer) / 2) %>% 
+  mutate(Tavg_Winter = (Tmin_Winter + Tmax_Winter) / 2) %>%
+  mutate(Tavg_Spring = (Tmin_Spring + Tmax_Spring) / 2) %>%
+  mutate(Tavg_Summer = (Tmin_Summer + Tmax_Summer) / 2) %>%
   mutate(Tavg_Fall = (Tmin_Fall + Tmax_Fall) / 2) %>%
   filter(Genus  == "Betula")  # try others
 ```
@@ -155,9 +160,6 @@ analyze_color_leaf <- filter(species_color_leaf, alan >= threshold | alan == 0) 
 
 ## 2.1 visualize Fig.2 - Bud break
 ```{r}
-library(ggplot2)
-library(ggpmisc)
-
 bins_bud <- seq(floor(min(analyze_leaf_bud$Tavg_Spring)), ceiling(max(analyze_leaf_bud$Tavg_Spring)), by = 100) 
 # bins_color <- seq(floor(min(analyze_color_leaf$Tavg_Summer)), ceiling(max(analyze_color_leaf$Tavg_Summer)), by = 1)
 # analyze_color_leaf_bin <- analyze_color_leaf %>% mutate(summer_bin = cut(analyze_color_leaf$Tavg_Summer, breaks = bins_color))
@@ -346,12 +348,12 @@ plot_sca
 
 # color
 
-plot_sca_c <- ggplot(analyze_color_leaf, aes(x = Tavg_Summer, y = First_Yes_DOY, color = group)) +    # city
+plot_sca_c <- ggplot(analyze_color_leaf, aes(x = Tmax_Summer, y = First_Yes_DOY, color = group)) +    # city
     geom_point(alpha = 0.2,  stroke = NA) + 
     theme_classic() +
-    labs(x = "Tavg_Summer", y = "DOY") +  #city             
+    labs(x = "Tmax_Summer", y = "DOY") +  #city             
     theme(axis.text = element_text(size = 20), axis.title = element_text(size = 22)) +
-    scale_x_continuous(breaks = pretty(analyze_color_leaf$Tavg_Summer)) +
+    scale_x_continuous(breaks = pretty(analyze_color_leaf$Tmax_Summer)) +
     scale_y_continuous(breaks = pretty(analyze_color_leaf$First_Yes_DOY)) +
     theme(
       axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1),
@@ -378,17 +380,16 @@ plot_sca_c <- ggplot(analyze_color_leaf, aes(x = Tavg_Summer, y = First_Yes_DOY,
 
 plot_sca_c
 
-ggsave("~/phenology-urban/result/npn_meng/Quercus_rubra_scatter_color_summer.jpg", plot_sca_c, width = 8, height = 6, units = "in")
+# ggsave("~/phenology-urban/result/npn_meng/Quercus_rubra_scatter_color_summer.jpg", plot_sca_c, width = 8, height = 6, units = "in")
 ```
+
 
 ## 3.2 quantatively check the slope differece
 
 
 ```{r}
 # Install and load necessary packages
-library(nimble)
-library(patchwork)
-library(purrr)
+
 source("script/stat_slope_delta.R")
 
 genus_counts <- table(species_color_leaf$Genus)
@@ -417,9 +418,9 @@ plots <- lapply(seq_along(data_list), function(i) {
 })
 
 combined_plot <- reduce(plots, `+`) + plot_layout(ncol = 1)
-print(combined_plot)
+combined_plot
 
-ggsave("result/combined_plot.png", plot = combined_plot, width = 10, height = 12, dpi = 300)
+ggsave("result/npn/each_species_delta_1722.png", plot = combined_plot, width = 10, height = 12, dpi = 300)
 ```
 
                                               

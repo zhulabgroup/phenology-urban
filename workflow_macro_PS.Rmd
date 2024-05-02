@@ -12,7 +12,7 @@ bearer <- "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJlbWFpbF9hZGRyZXNzIjoiamlhbGl6
 roi_sf <- sf::read_sf('data/raw/CONUS/boundary/us_boundarydissolve.shp')
 us_boundary <- st_transform(roi_sf, crs = st_crs(4326))
 
-for (y in 2017:2017){
+for (y in 2019:2022){
   bm_raster(roi_sf = us_boundary,
             product_id = "VNP46A4",
             date = y,
