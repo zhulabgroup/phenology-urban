@@ -19,26 +19,30 @@ stat_slope_delta <- function(dataset) {
       y2[i] ~ dnorm(beta0_2 + (beta1 + delta) * x2[i], sqrt(sigma_2_sq))
     }
   })
-
+  
   # Create NIMBLE model
   # Define data
+  inits <- list(delta = -20, beta0_1 = 200, beta0_2 = 200, beta1 = 2, sigma_1_sq = 0.1, sigma_2_sq = 0.1)
+  
   rural <- subset(dataset, group == "No ALAN")
   urban <- subset(dataset, group == "ALAN")
   
-  data <- list(x1 = rural$Tmax_Summer, y1 = rural$First_Yes_DOY, n1 = nrow(rural),
-               x2 = urban$Tmax_Summer, y2 = urban$First_Yes_DOY, n2 = nrow(urban))
+  data <- list(x1 = rural$Tavg_Summer, y1 = rural$First_Yes_DOY, n1 = nrow(rural),
+               x2 = urban$Tavg_Summer, y2 = urban$First_Yes_DOY, n2 = nrow(urban))
   
   model <- nimbleModel(code, data)
   
   # Configure and build the MCMC
   mcmc_config <- configureMCMC(model)
+  # mcmc_config$removeSamplers("delta")
+  # mcmc_config$addSampler("delta",type = "slice", control = list(adaptInterval = 100))
   mcmc <- buildMCMC(mcmc_config)
-    # Compile the MCMC
+  # Compile the MCMC
   compiled_model <- compileNimble(model)
   compiled_mcmc <- compileNimble(mcmc, project = compiled_model, showCompilerOutput = TRUE) # project should be model/complied model?
-
+  
   # Run the MCMC
-  samples <- runMCMC(compiled_mcmc, niter = 30000, nburnin = 5000, nchains = 5)
+  samples <- runMCMC(compiled_mcmc, niter = 700000, nburnin = 100000, nchains = 2, inits = inits, thin = 10)
   # mcmc_diagnose(samples)
   # nimble:::mcmc_diagnose(samples)
   
@@ -54,7 +58,18 @@ stat_slope_delta <- function(dataset) {
     labs(title = dataset$Genus[1], x = "Delta", y = "Density") +
     theme_classic()+
     geom_vline(xintercept = 0, linetype = "solid", color = "red") 
-  delta_plot
-  return(delta_plot)
   
+  
+  
+  # mcmcList <- mcmc.list(
+  #   lapply(1:2, function(i) as.mcmc(samples[[i]]))
+  # )
+  # heidel.diag(mcmcList)
+  
+  # result_list <- list(delta_plot = delta_plot,
+  #                     gelman_diag = gelman_diag,
+  #                     effective_size = effective_size,
+  #                     autocorr_diag = autocorr_diag)
+  
+  return(delta_plot)
 }

@@ -68,7 +68,7 @@ read_tree_inventory_HT <- function(indir, site) {
   )
 
   trees_df <- cbind(trees_df %>% dplyr::select(-X, -Y), coordinates(pts_reproj)) %>%
-    rename(lat = Y, lon = X)
+    rename(lat = "coords.x2", lon = "coords.x1")
 
   # Use taxize to match common name with scientific name
   if (!file.exists(str_c(indir, "Tree_Inventory_Houston/species_reference.csv"))) {

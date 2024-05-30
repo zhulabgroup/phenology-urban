@@ -45,7 +45,7 @@ us_boundary <- st_set_crs(us_boundary, "EPSG:4326")
 ##### Map
 p <- ggplot() +
   geom_tile(data = r_df,  aes(x = x, y = y,  fill = value_adj)) +
-  scale_fill_gradientn(colors = c("black", "yellow"), name = "Nighttime ALAN (2018, Betula)") +
+  scale_fill_gradient(colors = c("black", "yellow"), name = "Nighttime ALAN (2018, Betula)") +
   theme_minimal() +
   theme(plot.title = element_text(face = "bold", hjust = 0.5))
 
