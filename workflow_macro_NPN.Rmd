@@ -704,7 +704,7 @@ mod_all_sene_empi = bind_rows(sum_lmm_fix(mod_1, "Temp. only"),
          Temp. = Tavg_Summer, ALAN = alan,
          `Temp. : ALAN` = "Tavg_Summer:alan",
          `delta AIC` = delta, `Model weight` = w)
-
+# test
 
 ```
 
