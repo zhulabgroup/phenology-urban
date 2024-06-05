@@ -1,0 +1,119 @@
+```{r}
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(sf)
+library(data.table)
+library(daymetr)  # for getting Daymet data
+library(ncdf4)  # for processing .nc data
+library(janitor)  # for detecting cols with all records empty
+library(gstat)  # for interpolation
+library(sp)
+library(sf)
+library(raster)
+```
+
+# Just for Acer from 2011-2016
+
+1. Compare the climatic niche - Urban
+
+MAT Mean annual Temperature
+MTWM Mean temperature of the warmest month
+AP Annual precipitation
+PDQ Precipitation of the driest quarter
+
+```{r}
+# global species climate data! did not work, no overlapping in the species list
+# glob_db <- read.csv("C:/Users/Jiali/Documents/phenology-urban/data/raw/local_db/global_species_climate_Esperon2022.csv")
+# glob_acer_db <- glob_db %>% 
+#   select("species", "family","MAT") %>%
+#   na.omit() %>%
+#   mutate(across(c("MAT"), as.numeric)) %>%
+#   group_by(species) %>% 
+#   summarise_if(is.numeric,list(mean = ~mean(.,na.rm=T), median = ~median(.,na.rm=T), 
+#                                q05=~quantile(., probs=c(0.05), na.rm = T),q95=~quantile(., probs=c(0.95),na.rm = T))) %>%  filter(str_detect(species, "Acer"))
+
+# urban acer using NPN data
+species_color_leaf <- readRDS("C:/Users/Jiali/Documents/phenology-urban/data/raw/local_db/color_leaf.rds")
+
+species_color_leaf <- species_color_leaf %>%
+  mutate(alan = case_when(
+    First_Yes_Year == 2011 ~ alan_2012,
+    First_Yes_Year == 2012 ~ alan_2012,
+    First_Yes_Year == 2013 ~ alan_2013,
+    First_Yes_Year == 2014 ~ alan_2014,
+    First_Yes_Year == 2015 ~ alan_2015,
+    First_Yes_Year == 2016 ~ alan_2016
+  )) %>% na.omit()
+
+unique_alan <- species_color_leaf %>%
+  group_by(geometry, First_Yes_Year) %>%
+  summarize(alan_avg = mean(alan, na.rm = TRUE))
+threshold <- quantile(unique_alan$alan_avg, 0.75, na.rm = TRUE)[[1]]
+
+urban_acer_db <- filter(species_color_leaf, alan >= threshold) %>%
+  filter(Genus  == "Acer") %>%
+  mutate(MAT = (Tmin_Winter + Tmax_Winter + Tmin_Spring + Tmax_Spring + 
+                  Tmin_Summer + Tmax_Summer + Tmin_Fall + Tmax_Fall) / 8) %>%
+  select("Genus", "Species", "MAT") %>%
+  group_by(Genus, Species) %>% 
+  summarise_if(is.numeric,list(mean = ~mean(.,na.rm=T), median = ~median(.,na.rm=T), 
+                               q05=~quantile(., probs=c(0.05), na.rm = T),q95=~quantile(., probs=c(0.95),na.rm = T)))
+
+  
+```
+
+2. Compare the climatic niche - US native
+
+```{r}
+# US species climate data
+us_db <- read.delim("C:/Users/Jiali/Documents/phenology-urban/data/raw/local_db/US_occurrence.txt", header = TRUE, sep = "\t")
+us_acer_db <- us_db %>% dplyr::select("gbifID", "decimalLatitude", "decimalLongitude", "year","genus", "specificEpithet", "species") %>%
+  filter(year >= 1980)
+
+# find corresponding MAT
+# folder.raw <- '~/jializ/lab-data/phenology/phenology_urban/CONUS/Daymet/annual1980-2012/'
+# download_Daymet <- TRUE
+# us_boundary <- sf::read_sf('D:/01Research/00urban_phenology/02data/07_boundary/us_boundarydissolve.shp')
+# us_boundary <- st_set_crs(us_boundary, "EPSG:4326")
+# 
+# if (download_Daymet){
+#   # get LST extent
+#   bbox <- as.vector(terra::ext(us_boundary))
+#   # download Daymet data
+#   download_daymet_ncss(location = bbox[c('ymax', 'xmin', 'ymin', 'xmax')],
+#                        start = 2001, end = 2012,
+#                        frequency = "annual",
+#                        mosaic = "na",
+#                        param = c("tmin","tmax"),
+#                        path=folder.raw)
+# }
+
+
+read_and_average_nc <- function(year, lat, lon) {
+  tmin_file <- paste0(folder.raw, "tmin_annavg_", year, "_ncss.nc")
+  tmax_file <- paste0(folder.raw, "tmax_annavg_", year, "_ncss.nc")
+  tmin.nc <- terra::rast(tmin_file)
+  tmax.nc <- terra::rast(tmax_file)
+  usboun_reproj <- sf::st_transform(us_boundary, crs = sf::st_crs(terra::crs(tmax.nc,proj = T)))
+  
+  tmax <- terra::project(terra::mask (terra::crop(tmax.nc, terra::ext(usboun_reproj)),
+                                    usboun_reproj), terra::crs(us_boundary))
+  tmin <- terra::project(terra::mask (terra::crop(tmin.nc, terra::ext(usboun_reproj)), 
+                                    usboun_reproj), terra::crs(us_boundary))
+  
+  tavg_ann <- (tmax[[1]] + tmin[[1]])/2
+  point_value <- extract(tavg_ann, matrix(c(lon, lat), ncol = 2))
+  
+  return(point_value)
+}
+
+us_acer_db <- us_acer_db %>%
+  rowwise() %>%
+  mutate(MAT = read_and_average_nc(year, decimalLatitude, decimalLongitude))
+saveRDS(us_acer_db, "C:/Users/Jiali/Documents/phenology-urban/data/raw/local_db/us_acer_gbif.rds")
+
+```
+
+
+
