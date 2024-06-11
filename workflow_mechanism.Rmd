@@ -11,9 +11,10 @@ library(gstat)  # for interpolation
 library(sp)
 library(sf)
 library(raster)
+library(purrr)
 ```
 
-# Just for Acer from 2011-2016
+# climate niche difference: Just for Acer from 2011-2016
 
 1. Compare the climatic niche - Urban
 
@@ -111,9 +112,116 @@ read_and_average_nc <- function(year, lat, lon) {
 us_acer_db <- us_acer_db %>%
   rowwise() %>%
   mutate(MAT = read_and_average_nc(year, decimalLatitude, decimalLongitude))
-saveRDS(us_acer_db, "C:/Users/Jiali/Documents/phenology-urban/data/raw/local_db/us_acer_gbif.rds")
+# saveRDS(us_acer_db, "C:/Users/Jiali/Documents/phenology-urban/data/raw/local_db/us_acer_gbif.rds")
+
+
+```
+
+# drought stress
+
+1. prepare drought-related variable from TerraClimate dataset
+
+```{r}
+folder.raw <- "~/lab-data/climate/TerraClimate/annual_drought_2024update/"
+us_boundary <- sf::read_sf('~/phenology-urban/data/raw/CONUS/boundary/us_boundarydissolve.shp')
+us_boundary <- st_set_crs(us_boundary, "EPSG:4326")
+color_leaf <- readRDS("~/phenology-urban/data/raw/local_db/color_leaf.rds")
+
+color_leaf_sm <- color_leaf
+
+process_yearly_data <- function(color_leaf_sm, us_boundary, folder.raw, factor) {
+  for (year in unique(color_leaf_sm$First_Yes_Year)) {
+    file_path <- paste0(folder.raw, "TerraClimate_", factor, "_", year, ".nc")
+    file <- terra::rast(file_path)
+    usboun_reproj <- sf::st_transform(us_boundary, crs = sf::st_crs(terra::crs(file, proj = TRUE)))
+    yearly_data <- terra::project(terra::mask(terra::crop(file, terra::ext(usboun_reproj)), usboun_reproj), terra::crs(us_boundary))
+    spring_data_m <- (yearly_data[[3]] + yearly_data[[4]] + yearly_data[[5]]) / 3
+    summer_data_m <- (yearly_data[[6]] + yearly_data[[7]] + yearly_data[[8]]) / 3
+    fall_data_m <- (yearly_data[[9]] + yearly_data[[10]] + yearly_data[[11]]) / 3
+    spring_color <- extract(spring_data_m, color_leaf_sm)
+    summer_color <- extract(summer_data_m, color_leaf_sm)
+    fall_color <- extract(fall_data_m, color_leaf_sm)
+    color_leaf_sm <- cbind(color_leaf_sm, setNames(list(spring_color[,2]), paste0(factor, "_spring_", year)))
+    color_leaf_sm <- cbind(color_leaf_sm, setNames(list(summer_color[,2]), paste0(factor, "_summer_", year)))
+    color_leaf_sm <- cbind(color_leaf_sm, setNames(list(fall_color[,2]), paste0(factor, "_fall_", year)))
+  }
+  return(color_leaf_sm)
+}
+
+factors <- c("soil", "pet", "aet", "def")
+for (factor in factors) {
+  color_leaf_sm <- process_yearly_data(color_leaf_sm, us_boundary, folder.raw, factor)
+}
+folder.raw_vpd <- "~/lab-data/climate/TerraClimate/annual_2023_upadate/"
+color_leaf_sm <- process_yearly_data(color_leaf_sm, us_boundary, folder.raw_vpd, "vpd")
+
+
+get_value_for_year <- function(data, year, prefix, default_col = NA) {
+  year_col <- paste0(prefix, year)
+  if (year_col %in% names(data)) {
+    return(data[[year_col]])
+  } else if (!is.na(default_col)) {
+    return(data[[default_col]])
+  } else {
+    return(NA_real_)
+  }
+}
+color_leaf_sm_site <- color_leaf_sm %>%
+  rowwise() %>%
+  mutate(
+    spring_sm = get_value_for_year(cur_data(), First_Yes_Year, "soil_spring_"),
+    summer_sm = get_value_for_year(cur_data(), First_Yes_Year, "soil_summer_"),
+    fall_sm = get_value_for_year(cur_data(), First_Yes_Year, "soil_fall_"),
+    
+    spring_aet = get_value_for_year(cur_data(), First_Yes_Year, "aet_spring_"),
+    summer_aet = get_value_for_year(cur_data(), First_Yes_Year, "aet_summer_"),
+    fall_aet = get_value_for_year(cur_data(), First_Yes_Year, "aet_fall_"),
+    
+    spring_def = get_value_for_year(cur_data(), First_Yes_Year, "def_spring_"),
+    summer_def = get_value_for_year(cur_data(), First_Yes_Year, "def_summer_"),
+    fall_def = get_value_for_year(cur_data(), First_Yes_Year, "def_fall_"),
+    
+    spring_vpd = get_value_for_year(cur_data(), First_Yes_Year, "vpd_spring_"),
+    summer_vpd = get_value_for_year(cur_data(), First_Yes_Year, "vpd_summer_"),
+    fall_vpd = get_value_for_year(cur_data(), First_Yes_Year, "vpd_fall_"),
+    
+    spring_pet = get_value_for_year(cur_data(), First_Yes_Year, "pet_spring_"),
+    summer_pet = get_value_for_year(cur_data(), First_Yes_Year, "pet_summer_"),
+    fall_pet = get_value_for_year(cur_data(), First_Yes_Year, "pet_fall_"),
+    alan = get_value_for_year(cur_data(), First_Yes_Year, "alan_", default_col = "alan_2012")
+  ) %>%
+  ungroup() %>%
+  select("Site_ID","Genus","Species","First_Yes_Year","Tmin_Winter","Tmin_Spring","Tmin_Summer","Tmin_Fall","Tmax_Winter","Tmax_Spring","Tmax_Summer","Tmax_Fall","First_Yes_DOY","AGDD", "geometry", "spring_sm","summer_sm","fall_sm","spring_aet","summer_aet","fall_aet","spring_pet","summer_pet","fall_pet", "spring_vpd","summer_vpd","fall_vpd","spring_def","summer_def","fall_def","alan")
+
+unique_alan <- color_leaf_sm_site %>%
+  group_by(geometry, First_Yes_Year) %>%
+  summarize(alan_avg = mean(alan, na.rm = TRUE))
+threshold <- quantile(unique_alan$alan_avg, 0.75, na.rm = TRUE)[[1]]
+
+analyze_color_leaf <- filter(color_leaf_sm_site, alan >= threshold | alan == 0) %>%
+  mutate(group = case_when(
+    alan >= threshold ~ "ALAN",
+    alan == 0 ~ "No ALAN"
+    )) %>%
+  mutate(Tavg_Winter = (Tmin_Winter + Tmax_Winter) / 2) %>%
+  mutate(Tavg_Spring = (Tmin_Spring + Tmax_Spring) / 2) %>%
+  mutate(Tavg_Summer = (Tmin_Summer + Tmax_Summer) / 2) %>%
+  mutate(Tavg_Fall = (Tmin_Fall + Tmax_Fall) / 2)%>%
+  mutate(Tavg_Year = (Tmin_Winter + Tmax_Winter + Tmin_Spring + Tmax_Spring+ Tmin_Summer + Tmax_Summer + Tmin_Fall + Tmax_Fall) / 8)
+
+# saveRDS(analyze_color_leaf, "~/phenology-urban/data/proc/conus/npn/all_drivers/color_leaf_1116.rds")
+```
+
+2. Soil
+```{r}
+analyze_color_leaf <- readRDS("~/phenology-urban/data/proc/conus/npn/all_drivers/color_leaf_1116.rds") %>%
+  filter(Genus == "Acer")
+
+plot_sca_c <- analyze_stat_slopeCI(analyze_color_leaf, "Tmin_Summer", "First_Yes_DOY", "Temp - colored leaf")
+plot_sca_c
 
 ```
 
 
+3. Mean of Day/Night temp (pre-period)
 
