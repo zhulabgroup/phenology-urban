@@ -340,7 +340,7 @@ color <- ggplot(prediction_data, aes(x = alan, y = prediction, color = as.factor
 ## 3.1 compare the CI of slope
 ```{r}
 # bud
-source("stat_slope_CI.R")
+source("~/phenology-urban/script/stat_slope_CI.R")
 
 analyze_leaf_bud <- filter(species_leaf_bud, alan >= threshold | alan == 0)  %>%
   mutate(group = case_when(
