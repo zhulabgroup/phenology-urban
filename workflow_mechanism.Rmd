@@ -1,4 +1,5 @@
-```{r}
+# 0. Setup 
+```{r setup}
 library(dplyr)
 library(stringr)
 library(ggplot2)
@@ -19,6 +20,42 @@ library(tidyverse)
 library(mgcv)
 library(effects)
 library(phyr)
+```
+
+### basic drawing
+```{r}
+# draw the point in the us_coundary
+us_boundary <- sf::read_sf('D:/01Research/00urban_phenology/02data/07_boundary/us_boundarydissolve.shp')
+analyze_color_leaf <- readRDS("~/phenology-urban/data/proc/conus/npn/all_drivers/color_leaf_1116.rds") %>%na.omit()
+analyze_color_leaf_alan <- analyze_color_leaf %>% filter(group == "ALAN")
+analyze_color_leaf_noalan <- analyze_color_leaf %>% filter(group == "No ALAN")
+
+sen <- analyze_stat_slopeCI(analyze_color_leaf, "Tavg_Summer", "summer_sm", "")
+ggsave("D:/01Research/00urban_phenology/03 initial result/nsf2024/temp_sen.png", sen, width = 9, height = 6, units = "in")
+
+plot <- ggplot() +
+  geom_sf(data = us_boundary, fill = "transparent", color = "black") +
+  geom_sf(data = analyze_color_leaf_alan, size = 2, color = "indianred1") +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  labs(title = "Urban NPN sites based on ALAN intensity", x = "Longitude", y = "Latitude") +
+  theme(axis.text = element_text(size = 14), 
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 24))
+
+ggsave("D:/01Research/00urban_phenology/03 initial result/nsf2024/urban_npn.png", plot, width = 8, height = 6, units = "in")
+
+plot <- ggplot() +
+  geom_sf(data = us_boundary, fill = "transparent", color = "black") +
+  geom_sf(data = analyze_color_leaf_noalan, size = 2, color = "cadetblue1") +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  labs(title = "Natural NPN sites based on ALAN intensity", x = "Longitude", y = "Latitude") +
+  theme(axis.text = element_text(size = 14), 
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 24))
+
+ggsave("D:/01Research/00urban_phenology/03 initial result/nsf2024/rural_npn.png", plot, width = 8, height = 6, units = "in")
 ```
 
 # I. climate niche difference: Just for Acer from 2011-2016
@@ -311,7 +348,7 @@ analyze_color_leaf <- readRDS("~/phenology-urban/data/proc/conus/npn/all_drivers
 plot_partial_cor <- function(temp_col){
   
   analyze_color_leaf <-  analyze_color_leaf %>%
-    subset(select= c("First_Yes_DOY", temp_col, "alan", "summer_sm", "summer_vpd"))
+    subset(select= c("First_Yes_DOY", temp_col, "alan", "summer_vpd"))
   
   pcor_result <- pcor(analyze_color_leaf)
   partial_correlations <- pcor_result$estimate["First_Yes_DOY", ]
@@ -365,7 +402,7 @@ ggsave("~/phenology-urban/result/npn/11-16/all_species_par_cor_nogroup.png", com
 plot_partial_cor_group <- function(temp_col){
   
   analyze_color_leaf <-  analyze_color_leaf %>%
-    subset(select= c("First_Yes_DOY", temp_col, "summer_sm", "summer_vpd", "group"))
+    subset(select= c("First_Yes_DOY", temp_col, "summer_vpd", "group"))
   
   groups <- unique(analyze_color_leaf$group)
   colors <- c("No ALAN" = "cadetblue1", "ALAN" = "#ffa5a5")
@@ -374,7 +411,7 @@ plot_partial_cor_group <- function(temp_col){
   for (grp in groups) {
     group_data <- analyze_color_leaf %>%
       filter(group == grp) %>%
-       subset(select= c("First_Yes_DOY", temp_col, "summer_sm", "summer_vpd"))
+       subset(select= c("First_Yes_DOY", temp_col, "summer_vpd"))
     pcor_result <- pcor(group_data)
 
     partial_correlations <- pcor_result$estimate["First_Yes_DOY", ]
@@ -435,6 +472,37 @@ ggsave("~/phenology-urban/result/npn/11-16/all_species_par_cor_group.png", combi
 
 ## 3. Using model
 
+### 3.0 variable correlation - select for model
+```{r}
+analyze_color_leaf <- readRDS("~/phenology-urban/data/proc/conus/npn/all_drivers/color_leaf_1116.rds") %>%
+  as.data.frame() %>%
+  na.omit() %>%
+  subset(select= c("First_Yes_DOY", "Tavg_Summer", "alan", "summer_sm", "summer_vpd"))
+
+#calculate correlation and significance test
+correlation <- cor(analyze_color_leaf)
+p_values <- matrix(NA, ncol = ncol(df), nrow = ncol(df))
+for (i in 1:(ncol(df) - 1)) {
+    for (j in (i + 1):ncol(df)) {
+        result <- cor.test(df[[i]], df[[j]])
+        p_values[i, j] <- result$p.value
+    }
+}
+p_values <- ifelse(p_values < 0.05, "*", "")
+
+#calculate partial correlation and significance test
+p_correlation <- pcor(analyze_color_leaf)
+p_correlation_matrix <- p_correlation$estimate
+p_value_matrix <- p_correlation$p.value
+p_value_matrix <- ifelse(p_value_matrix < 0.05, "*", "")
+
+library(car)
+vif(lm(First_Yes_DOY ~ summer_sm + alan + Tavg_Summer, data = analyze_color_leaf))
+```
+
+
+
+### 3.1 model comaprison for urban/rural
 ```{r}
 # no-alan
 analyze_color_leaf <- readRDS("~/phenology-urban/data/proc/conus/npn/all_drivers/color_leaf_1116.rds") %>%
@@ -648,3 +716,223 @@ mod_all_sene_empi = bind_rows(sum_lmm_fix(mod_1_1, "Temp. only"),
          `delta AIC` = delta)
 ```
 
+### 3.3 model comaprison for urban/rural (vpd)
+```{r}
+# no-alan
+analyze_color_leaf <- readRDS("~/phenology-urban/data/proc/conus/npn/all_drivers/color_leaf_1116.rds") %>%
+  as.data.frame() %>%
+  na.omit() %>%
+  filter(group == "No ALAN")
+
+
+analyze_color_leaf$Tavg_Summer_scaled <- scale(analyze_color_leaf$Tavg_Summer)
+analyze_color_leaf$summer_vpd_scaled <- scale(analyze_color_leaf$summer_vpd)
+
+control = lme4::lmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 1e5))
+mod_1 = lmerTest::lmer(First_Yes_DOY ~ Tavg_Summer_scaled + 
+                        (1 | Genus) + (1 | First_Yes_Year) + 
+                        (0 + Tavg_Summer_scaled | Genus),
+                        data = analyze_color_leaf, control = control)
+summary(mod_1)
+
+# Warning in checkConv(attr(opt, "derivs"), opt$par, ctrl = control$checkConv  Model failed to converge with max|grad| = 0.00376962 (tol = 0.002, component 1)
+
+mod_2 = lmerTest::lmer(First_Yes_DOY ~ summer_vpd_scaled + 
+                         (1 | Genus) + (1|First_Yes_Year) + 
+                         (0 + summer_vpd_scaled | Genus),
+                       data = analyze_color_leaf, control = control)
+
+summary(mod_2)
+
+mod_3 = lmerTest::lmer(First_Yes_DOY ~ Tavg_Summer_scaled + summer_vpd_scaled + 
+                         (1 | Genus) + (1|First_Yes_Year) + 
+                         (0 + Tavg_Summer_scaled | Genus) +
+                         (0 + summer_vpd_scaled | Genus),
+                       data = analyze_color_leaf, control = control)
+summary(mod_3)
+# isSingular
+
+mod_4 = lmerTest::lmer(First_Yes_DOY ~ Tavg_Summer_scaled * summer_vpd_scaled + 
+                         (1 | Genus) + (1|First_Yes_Year) + 
+                         (0 + Tavg_Summer_scaled | Genus) +
+                         (0 + summer_vpd_scaled | Genus) +
+                         (0 + Tavg_Summer_scaled:summer_vpd_scaled | Genus),
+                       data = analyze_color_leaf, control = control)
+
+summary(mod_4)
+# isSingular
+
+MuMIn::r.squaredGLMM(mod_2) 
+
+xaic = AIC(mod_1, mod_2, mod_3, mod_4) %>% as.data.frame()
+xaic$delta = xaic$AIC - min(xaic$AIC)
+xaic$w = as.vector(MuMIn::Weights(AIC(mod_1, mod_2, mod_3, mod_4)))
+
+x = effects::effect("Tavg_Summer_scaled:summer_vpd_scaled", mod_4)
+plot(x, multiline = T)
+
+
+plot <- as_tibble(x) %>% 
+  ggplot(aes(x = Tavg_Summer_scaled, y = fit, group = summer_vpd_scaled, color  = summer_vpd_scaled)) +
+  geom_line() +
+  # geom_rug(data = dat_leaf_aggr, aes(x = log10(pop_km2 + 1)), alpha = 0.8, size = 0.15, inherit.aes = F) +
+  labs(x = "(Scaled) Summer Average Temperature (°C)",
+       y = "Colored leaf (day of year)",
+       color = "(Scaled) Soil moisture\n(vol%)") +
+  colorspace::scale_color_continuous_sequential(palette = "Viridis", n_interp = 4, rev = F) +
+  cowplot::theme_cowplot(font_size = 15) +
+  theme(legend.position = c(0.7, .85))
+
+plot2 <- as_tibble(x) %>% 
+  ggplot(aes(x = summer_vpd_scaled, y = fit, group = Tavg_Summer_scaled, color  = Tavg_Summer_scaled)) +
+  geom_line() +
+  # geom_rug(data = dat_leaf_aggr, aes(x = log10(pop_km2 + 1)), alpha = 0.8, size = 0.15, inherit.aes = F) +
+  labs(x = "(Scaled) Soil moisture (vol%)",
+       y = "Colored leaf (day of year)",
+       color = "(Scaled) Summer Average\nTemperature (°C)") +
+  colorspace::scale_color_continuous_sequential(palette = "Viridis", n_interp = 4, rev = F) +
+  cowplot::theme_cowplot(font_size = 15) +
+  theme(legend.position = c(0.7, .25))
+
+# table 1
+sum_lmm_fix = function(x, m){
+  broom.mixed::tidy(x, "fixed") %>% 
+    mutate(p = ifelse(p.value < 0.001, "***", 
+                      ifelse(p.value < 0.01, "**", 
+                             ifelse(p.value < 0.05, "*", ""))),
+           est = paste0(round(estimate, 3), p),
+           model = m) %>% 
+    dplyr::select(model, term, est)
+}
+
+mod_all_sene_empi = bind_rows(sum_lmm_fix(mod_1, "Temp. only"),
+                              sum_lmm_fix(mod_2, "VPD only"),
+                              sum_lmm_fix(mod_3, "Temp. + VPD"),
+                              sum_lmm_fix(mod_4, "Temp. × VPD")) %>% 
+  pivot_wider(id_cols = "model", names_from = "term", values_from = est) %>% 
+  bind_cols(xaic) %>% 
+  dplyr::select(-df) %>% 
+  rename(Intercept = "(Intercept)",
+         Temp. = Tavg_Summer_scaled, VPD = summer_vpd_scaled,
+         `Temp. : VPD` = "Tavg_Summer_scaled:summer_vpd_scaled",
+         `delta AIC` = delta, `Model weight` = w)
+# test
+```
+
+### 3.4 consider alan as a variable, not groupig factor (vpd)
+
+```{r}
+analyze_color_leaf <- readRDS("~/phenology-urban/data/proc/conus/npn/all_drivers/color_leaf_1116.rds") %>%
+  as.data.frame() %>%
+  na.omit()
+
+analyze_color_leaf$Tavg_Summer_scaled <- scale(analyze_color_leaf$Tavg_Summer)
+analyze_color_leaf$summer_vpd_scaled <- scale(analyze_color_leaf$summer_vpd)
+analyze_color_leaf$alan_scaled <- scale(analyze_color_leaf$alan)
+
+control = lme4::lmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 1e5))
+mod_1_1 = lmerTest::lmer(First_Yes_DOY ~ Tavg_Summer_scaled + 
+                        (1 | Genus) + (1 | First_Yes_Year) + 
+                        (0 + Tavg_Summer_scaled | Genus),
+                        data = analyze_color_leaf, control = control)
+summary(mod_1_1)
+
+mod_1_2 = lmerTest::lmer(First_Yes_DOY ~ summer_vpd_scaled + 
+                         (1 | Genus) + (1|First_Yes_Year) + 
+                         (0 + summer_vpd_scaled | Genus),
+                       data = analyze_color_leaf, control = control)
+summary(mod_1_2)
+
+mod_1_3 = lmerTest::lmer(First_Yes_DOY ~ alan_scaled + 
+                         (1 | Genus) + (1|First_Yes_Year) + 
+                         (0 + alan_scaled | Genus),
+                       data = analyze_color_leaf, control = control)
+summary(mod_1_3)
+
+
+
+mod_2_1 = lmerTest::lmer(First_Yes_DOY ~ Tavg_Summer_scaled * alan_scaled + 
+                         (1 | Genus) + (1|First_Yes_Year) + 
+                         (0 + Tavg_Summer_scaled | Genus) +
+                         (0 + alan_scaled | Genus) +
+                         (0 + Tavg_Summer_scaled:alan_scaled | Genus),
+                       data = analyze_color_leaf, control = control)
+
+summary(mod_2_1)
+
+mod_2_2 = lmerTest::lmer(First_Yes_DOY ~ Tavg_Summer_scaled * summer_vpd_scaled + 
+                         (1 | Genus) + (1|First_Yes_Year) + 
+                         (0 + Tavg_Summer_scaled | Genus) +
+                         (0 + summer_vpd_scaled | Genus) +
+                         (0 + Tavg_Summer_scaled:summer_vpd_scaled | Genus),
+                       data = analyze_color_leaf, control = control)
+
+summary(mod_2_2)
+
+mod_2_3 = lmerTest::lmer(First_Yes_DOY ~ alan_scaled * summer_vpd_scaled + 
+                         (1 | Genus) + (1|First_Yes_Year) + 
+                         (0 + alan_scaled | Genus) +
+                         (0 + summer_vpd_scaled | Genus) +
+                         (0 + alan_scaled:summer_vpd_scaled | Genus),
+                       data = analyze_color_leaf, control = control)
+
+summary(mod_2_3)
+
+mod_3_1 = lmerTest::lmer(First_Yes_DOY ~ Tavg_Summer_scaled + alan_scaled + summer_vpd_scaled + 
+                         (1 | Genus) + (1|First_Yes_Year) + 
+                         (0 + Tavg_Summer_scaled | Genus) +
+                         (0 + summer_vpd_scaled | Genus) +
+                         (0 + alan_scaled | Genus),
+                       data = analyze_color_leaf, control = control)
+
+summary(mod_3_1)
+
+mod_3_2 = lmerTest::lmer(First_Yes_DOY ~ Tavg_Summer_scaled * alan_scaled + summer_vpd_scaled + 
+                         (1 | Genus) + (1|First_Yes_Year) + 
+                         (0 + Tavg_Summer_scaled | Genus) +
+                         (0 + summer_vpd_scaled | Genus) +
+                         (0 + alan_scaled | Genus) +
+                         (0 + Tavg_Summer_scaled:alan_scaled | Genus),
+                       data = analyze_color_leaf, control = control)
+
+summary(mod_3_2)
+
+mod_3_3 = lmerTest::lmer(First_Yes_DOY ~ alan_scaled * summer_vpd_scaled + Tavg_Summer_scaled + 
+                         (1 | Genus) + (1|First_Yes_Year) + 
+                         (0 + Tavg_Summer_scaled | Genus) +
+                         (0 + summer_vpd_scaled | Genus) +
+                         (0 + alan_scaled | Genus) +
+                         (0 + alan_scaled:summer_vpd_scaled | Genus),
+                       data = analyze_color_leaf, control = control)
+
+mod_3_3 = lmerTest::lmer(First_Yes_DOY ~  Tavg_Summer_scaled * summer_vpd_scaled + alan_scaled + 
+                         (1 | Genus) + (1|First_Yes_Year) + 
+                         (0 + Tavg_Summer_scaled | Genus) +
+                         (0 + summer_vpd_scaled | Genus) +
+                         (0 + alan_scaled | Genus) +
+                         (0 + Tavg_Summer_scaled:summer_vpd_scaled | Genus),
+                       data = analyze_color_leaf, control = control)
+summary(mod_3_3)
+
+xaic = AIC(mod_1_1, mod_1_2, mod_1_3,mod_2_1, mod_2_2, mod_2_3, mod_3_1, mod_3_2, mod_3_3) %>% as.data.frame()
+xaic$delta = xaic$AIC - min(xaic$AIC)
+
+mod_all_sene_empi = bind_rows(sum_lmm_fix(mod_1_1, "Temp. only"),
+                              sum_lmm_fix(mod_1_2, "VPD only"),
+                              sum_lmm_fix(mod_1_3, "ALAN only"),
+                              sum_lmm_fix(mod_2_1, "Temp. × ALAN"),
+                              sum_lmm_fix(mod_2_2, "Temp. × VPD"),
+                              sum_lmm_fix(mod_2_3, "ALAN × VPD"),
+                              sum_lmm_fix(mod_3_1, "Temp. + VPD + ALAN"),
+                              sum_lmm_fix(mod_3_2, "Temp. × ALAN + VPD"),
+                              sum_lmm_fix(mod_3_3, "ALAN × VPD + Temp.")) %>% 
+  pivot_wider(id_cols = "model", names_from = "term", values_from = est) %>% 
+  bind_cols(xaic) %>% 
+  dplyr::select(-df) %>% 
+  rename(Intercept = "(Intercept)",
+         Temp. = Tavg_Summer_scaled, VPD = summer_vpd_scaled, ALAN = alan_scaled, 
+         `Temp. : VPD` = "Tavg_Summer_scaled:summer_vpd_scaled",
+         `Temp. : ALAN` = "Tavg_Summer_scaled:alan_scaled",
+         `VPD : ALAN` = "alan_scaled:summer_vpd_scaled",
+         `delta AIC` = delta)
+```
