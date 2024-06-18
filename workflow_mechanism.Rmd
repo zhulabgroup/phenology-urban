@@ -25,37 +25,43 @@ library(phyr)
 ### basic drawing
 ```{r}
 # draw the point in the us_coundary
-us_boundary <- sf::read_sf('D:/01Research/00urban_phenology/02data/07_boundary/us_boundarydissolve.shp')
-analyze_color_leaf <- readRDS("~/phenology-urban/data/proc/conus/npn/all_drivers/color_leaf_1116.rds") %>%na.omit()
+us_boundary <- sf::read_sf('~/phenology-urban/data/raw/CONUS/boundary/us_boundarydissolve.shp')
+analyze_color_leaf <- readRDS("~/phenology-urban/data/proc/conus/npn/all_drivers/color_leaf_1116.rds") %>% na.omit()
 analyze_color_leaf_alan <- analyze_color_leaf %>% filter(group == "ALAN")
 analyze_color_leaf_noalan <- analyze_color_leaf %>% filter(group == "No ALAN")
 
-sen <- analyze_stat_slopeCI(analyze_color_leaf, "Tavg_Summer", "summer_sm", "")
-ggsave("D:/01Research/00urban_phenology/03 initial result/nsf2024/temp_sen.png", sen, width = 9, height = 6, units = "in")
+sen <- analyze_stat_slopeCI(analyze_color_leaf, "Tavg_Summer", "First_Yes_DOY", "")
+ggsave("~/phenology-urban/result/nsf2024/temp_sen.png", sen, width = 7.5, height = 6, units = "in")
+
+analyze_color_leaf <- readRDS("~/phenology-urban/data/proc/conus/npn/all_drivers/color_leaf_1116.rds") %>% filter(Genus =="Fagus")
+sen <- analyze_stat_slopeCI(analyze_color_leaf, "Tavg_Summer", "First_Yes_DOY", "Fagus")
+ggsave("~/phenology-urban/result/nsf2024/Fagus.png", sen, width = 6, height = 6, units = "in")
 
 plot <- ggplot() +
-  geom_sf(data = us_boundary, fill = "transparent", color = "black") +
-  geom_sf(data = analyze_color_leaf_alan, size = 2, color = "indianred1") +
+  geom_sf(data = us_boundary, fill = "white", color = "black") +
+  geom_sf(data = analyze_color_leaf_alan, size = 2, color = "#EE9572") +
   theme_minimal() +
   theme(legend.position = "bottom") +
   labs(title = "Urban NPN sites based on ALAN intensity", x = "Longitude", y = "Latitude") +
   theme(axis.text = element_text(size = 14), 
         axis.title = element_text(size = 16),
-        plot.title = element_text(size = 24))
+        plot.title = element_text(size = 24),
+        plot.background = element_rect(fill = "transparent", color = NA))
 
-ggsave("D:/01Research/00urban_phenology/03 initial result/nsf2024/urban_npn.png", plot, width = 8, height = 6, units = "in")
+ggsave("~/phenology-urban/result/nsf2024/urban_npn.png", plot, width = 8, height = 6, units = "in")
 
 plot <- ggplot() +
-  geom_sf(data = us_boundary, fill = "transparent", color = "black") +
-  geom_sf(data = analyze_color_leaf_noalan, size = 2, color = "cadetblue1") +
+  geom_sf(data = us_boundary, fill = "white", color = "black") +
+  geom_sf(data = analyze_color_leaf_noalan, size = 2, color = "#00B2EE") +
   theme_minimal() +
   theme(legend.position = "bottom") +
   labs(title = "Natural NPN sites based on ALAN intensity", x = "Longitude", y = "Latitude") +
   theme(axis.text = element_text(size = 14), 
         axis.title = element_text(size = 16),
-        plot.title = element_text(size = 24))
+        plot.title = element_text(size = 24),
+        plot.background = element_rect(fill = "transparent", color = NA))
 
-ggsave("D:/01Research/00urban_phenology/03 initial result/nsf2024/rural_npn.png", plot, width = 8, height = 6, units = "in")
+ggsave("~/phenology-urban/result/nsf2024/rural_npn.png", plot, width = 8, height = 6, units = "in")
 ```
 
 # I. climate niche difference: Just for Acer from 2011-2016
@@ -112,14 +118,17 @@ urban_acer_db <- filter(species_color_leaf, alan >= threshold) %>%
 
 ```{r}
 # US species climate data
-us_db <- read.delim("C:/Users/Jiali/Documents/phenology-urban/data/raw/local_db/US_occurrence.txt", header = TRUE, sep = "\t")
-us_acer_db <- us_db %>% dplyr::select("gbifID", "decimalLatitude", "decimalLongitude", "year","genus", "specificEpithet", "species") %>%
-  filter(year >= 1980)
+us_db <- read.delim("~/phenology-urban/data/raw/CONUS/GBIF/Acer_20240617_1980_2024/occurrence.txt",sep = "\t",header = TRUE, quote = "", fileEncoding = "UTF-8",stringsAsFactors = FALSE) %>%
+  distinct() %>%
+  filter(!is.na(species) & species != "") %>%
+  filter(species = "")
+
+us_acer_db <- us_db %>% dplyr::select("gbifID", "decimalLatitude", "decimalLongitude", "year","genus", "specificEpithet", "species")  
 
 # find corresponding MAT
-# folder.raw <- '~/jializ/lab-data/phenology/phenology_urban/CONUS/Daymet/annual1980-2012/'
+# folder.raw <- 'data/raw/CONUS/Daymet/annual1980-2023/'
 # download_Daymet <- TRUE
-# us_boundary <- sf::read_sf('D:/01Research/00urban_phenology/02data/07_boundary/us_boundarydissolve.shp')
+# us_boundary <- sf::read_sf('~/phenology-urban/data/raw/CONUS/boundary/us_boundarydissolve.shp')
 # us_boundary <- st_set_crs(us_boundary, "EPSG:4326")
 # 
 # if (download_Daymet){
@@ -127,7 +136,7 @@ us_acer_db <- us_db %>% dplyr::select("gbifID", "decimalLatitude", "decimalLongi
 #   bbox <- as.vector(terra::ext(us_boundary))
 #   # download Daymet data
 #   download_daymet_ncss(location = bbox[c('ymax', 'xmin', 'ymin', 'xmax')],
-#                        start = 2001, end = 2012,
+#                        start = 2013, end = 2023,
 #                        frequency = "annual",
 #                        mosaic = "na",
 #                        param = c("tmin","tmax"),
@@ -148,15 +157,15 @@ read_and_average_nc <- function(year, lat, lon) {
                                     usboun_reproj), terra::crs(us_boundary))
   
   tavg_ann <- (tmax[[1]] + tmin[[1]])/2
-  point_value <- extract(tavg_ann, matrix(c(lon, lat), ncol = 2))
+  point_value <- terra::extract(tavg_ann, matrix(c(lon, lat), ncol = 2))
   
   return(point_value)
 }
 
 us_acer_db <- us_acer_db %>%
   rowwise() %>%
-  mutate(MAT = read_and_average_nc(year, decimalLatitude, decimalLongitude))
-# saveRDS(us_acer_db, "C:/Users/Jiali/Documents/phenology-urban/data/raw/local_db/us_acer_gbif.rds")
+  mutate(MAT = read_and_average_nc(year, as.numeric(decimalLatitude), as.numeric(decimalLongitude)))
+saveRDS(us_acer_db, "~/phenology-urban/data/raw/CONUS/GBIF/us_acer_gbif.rds")
 
 
 ```
