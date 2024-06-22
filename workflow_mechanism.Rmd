@@ -30,7 +30,7 @@ analyze_color_leaf <- readRDS("~/phenology-urban/data/proc/conus/npn/all_drivers
 analyze_color_leaf_alan <- analyze_color_leaf %>% filter(group == "ALAN")
 analyze_color_leaf_noalan <- analyze_color_leaf %>% filter(group == "No ALAN")
 
-sen <- analyze_stat_slopeCI(analyze_color_leaf, "Tavg_Summer", "First_Yes_DOY", "")
+sen <- analyze_stat_slopeCI(analyze_color_leaf, "summer_sm", "First_Yes_DOY", "")
 ggsave("~/phenology-urban/result/nsf2024/temp_sen.png", sen, width = 7.5, height = 6, units = "in")
 
 analyze_color_leaf <- readRDS("~/phenology-urban/data/proc/conus/npn/all_drivers/color_leaf_1116.rds") %>% filter(Genus =="Fagus")
@@ -66,7 +66,7 @@ ggsave("~/phenology-urban/result/nsf2024/rural_npn.png", plot, width = 8, height
 
 # I. climate niche difference: Just for Acer from 2011-2016
 
-1. Compare the climatic niche - Urban
+## 1. Compare the climatic niche - Urban
 
 MAT Mean annual Temperature
 MTWM Mean temperature of the warmest month
@@ -85,47 +85,28 @@ PDQ Precipitation of the driest quarter
 #                                q05=~quantile(., probs=c(0.05), na.rm = T),q95=~quantile(., probs=c(0.95),na.rm = T))) %>%  filter(str_detect(species, "Acer"))
 
 # urban acer using NPN data
-species_color_leaf <- readRDS("C:/Users/Jiali/Documents/phenology-urban/data/raw/local_db/color_leaf.rds")
-
-species_color_leaf <- species_color_leaf %>%
-  mutate(alan = case_when(
-    First_Yes_Year == 2011 ~ alan_2012,
-    First_Yes_Year == 2012 ~ alan_2012,
-    First_Yes_Year == 2013 ~ alan_2013,
-    First_Yes_Year == 2014 ~ alan_2014,
-    First_Yes_Year == 2015 ~ alan_2015,
-    First_Yes_Year == 2016 ~ alan_2016
-  )) %>% na.omit()
-
-unique_alan <- species_color_leaf %>%
-  group_by(geometry, First_Yes_Year) %>%
-  summarize(alan_avg = mean(alan, na.rm = TRUE))
-threshold <- quantile(unique_alan$alan_avg, 0.75, na.rm = TRUE)[[1]]
-
-urban_acer_db <- filter(species_color_leaf, alan >= threshold) %>%
+analyze_color_leaf <- readRDS("~/phenology-urban/data/proc/conus/npn/all_drivers/color_leaf_1116.rds") %>%
   filter(Genus  == "Acer") %>%
-  mutate(MAT = (Tmin_Winter + Tmax_Winter + Tmin_Spring + Tmax_Spring + 
-                  Tmin_Summer + Tmax_Summer + Tmin_Fall + Tmax_Fall) / 8) %>%
-  select("Genus", "Species", "MAT") %>%
+  filter(group == "ALAN") %>%
+  dplyr::select("Genus", "Species", "Tavg_Year") %>%
   group_by(Genus, Species) %>% 
   summarise_if(is.numeric,list(mean = ~mean(.,na.rm=T), median = ~median(.,na.rm=T), 
                                q05=~quantile(., probs=c(0.05), na.rm = T),q95=~quantile(., probs=c(0.95),na.rm = T)))
-
   
 ```
 
-2. Compare the climatic niche - US native
+## 2. Compare the climatic niche - US native
 
 ```{r}
 # US species climate data
 us_db <- read.delim("~/phenology-urban/data/raw/CONUS/GBIF/Acer_20240617_1980_2024/occurrence.txt",sep = "\t",header = TRUE, quote = "", fileEncoding = "UTF-8",stringsAsFactors = FALSE) %>%
   distinct() %>%
-  filter(!is.na(species) & species != "") %>%
-  filter(species = "")
+  filter(year <= 2023) %>%
+  filter(specificEpithet == "rubrum")
+  filter(!is.na(species) & species != "")%>%
+  dplyr::select("gbifID", "decimalLatitude", "decimalLongitude", "year","genus", "specificEpithet", "species")  
 
-us_acer_db <- us_db %>% dplyr::select("gbifID", "decimalLatitude", "decimalLongitude", "year","genus", "specificEpithet", "species")  
-
-# find corresponding MAT
+## find corresponding MAT
 # folder.raw <- 'data/raw/CONUS/Daymet/annual1980-2023/'
 # download_Daymet <- TRUE
 # us_boundary <- sf::read_sf('~/phenology-urban/data/raw/CONUS/boundary/us_boundarydissolve.shp')
@@ -143,32 +124,127 @@ us_acer_db <- us_db %>% dplyr::select("gbifID", "decimalLatitude", "decimalLongi
 #                        path=folder.raw)
 # }
 
+folder_processed <- "~/phenology-urban/data/proc/daymet/conus/"
+output_file <- "~/phenology-urban/data/raw/CONUS/GBIF/us_rubrum_gbif.rds"
 
-read_and_average_nc <- function(year, lat, lon) {
-  tmin_file <- paste0(folder.raw, "tmin_annavg_", year, "_ncss.nc")
-  tmax_file <- paste0(folder.raw, "tmax_annavg_", year, "_ncss.nc")
-  tmin.nc <- terra::rast(tmin_file)
-  tmax.nc <- terra::rast(tmax_file)
-  usboun_reproj <- sf::st_transform(us_boundary, crs = sf::st_crs(terra::crs(tmax.nc,proj = T)))
-  
-  tmax <- terra::project(terra::mask (terra::crop(tmax.nc, terra::ext(usboun_reproj)),
-                                    usboun_reproj), terra::crs(us_boundary))
-  tmin <- terra::project(terra::mask (terra::crop(tmin.nc, terra::ext(usboun_reproj)), 
-                                    usboun_reproj), terra::crs(us_boundary))
-  
-  tavg_ann <- (tmax[[1]] + tmin[[1]])/2
+read_stored_tavg_tif <- function(year, lat, lon) {
+  tavg_file <- paste0(folder_processed, "tavg_ann_", year, ".tif")
+  tavg_ann <- terra::rast(tavg_file)
   point_value <- terra::extract(tavg_ann, matrix(c(lon, lat), ncol = 2))
-  
   return(point_value)
 }
 
-us_acer_db <- us_acer_db %>%
-  rowwise() %>%
-  mutate(MAT = read_and_average_nc(year, as.numeric(decimalLatitude), as.numeric(decimalLongitude)))
-saveRDS(us_acer_db, "~/phenology-urban/data/raw/CONUS/GBIF/us_acer_gbif.rds")
+total_rows <- nrow(us_db)
+if (file.exists(output_file)) {
+  processed_data <- readRDS(output_file)
+  start_row <- nrow(processed_data) + 1
+} else {
+  processed_data <- tibble()
+  start_row <- 1
+}
 
+for (i in start_row:total_rows) {
+  row <- us_db[i, ]
+  MAT <- read_stored_tavg_tif(as.numeric(row$year), as.numeric(row$decimalLatitude), as.numeric(row$decimalLongitude))
+  row$MAT <- MAT
+  
+  processed_data <- bind_rows(processed_data, row)
+
+  saveRDS(processed_data, output_file)
+  cat("Processed", i, "of", total_rows, "rows.\n")
+}
+
+saveRDS(processed_data, output_file)
+
+plot <- ggplot(us_saccharum_gbif, aes(x = unlist(MAT))) +
+    geom_density(fill = "blue", alpha = 0.5) +
+    labs(title = "Acer saccharum", x = "MAT", y = "Density") +
+    theme_minimal()
+
+us_saccharum_gbif_sp <- us_saccharum_gbif %>%
+  filter(species == "Acer saccharum") %>%
+  st_as_sf(coords = c("decimalLongitude", "decimalLatitude"), crs = 4326)
+
+plot <- ggplot() +
+  geom_sf(data = us_boundary, fill = "white", color = "black") +
+  geom_sf(data = analyze_color_leaf_rural, size = 2, color = "#00B2EE") +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  labs(title = "Acer saccharum in NPN-Rural site", x = "Longitude", y = "Latitude") +
+  theme(axis.text = element_text(size = 14), 
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 24),
+        plot.background = element_rect(fill = "transparent", color = NA))
 
 ```
+## 3. make comparison
+```{r}
+us_saccharum_gbif$MAT <- unlist(us_saccharum_gbif$MAT)
+
+us_saccharum_range <- us_saccharum_gbif  %>% 
+  dplyr::select("specificEpithet", "MAT") %>%
+  group_by(us_saccharum_gbif$specificEpithet) %>% 
+  summarise_if(is.numeric,list(mean = ~mean(.,na.rm=T), median = ~median(.,na.rm=T), 
+                               q05=~quantile(., probs=c(0.05), na.rm = T),q95=~quantile(., probs=c(0.95),na.rm = T)))
+
+analyze_color_leaf_urban <- readRDS("~/phenology-urban/data/proc/conus/npn/all_drivers/color_leaf_1116.rds") %>%
+  filter(group == "ALAN") %>%
+  filter(Species == "saccharum")
+  dplyr::select("Tavg_Year")%>%
+  rename(value = Tavg_Year) %>%
+  mutate(source = "urban")
+
+analyze_color_leaf_rural <- readRDS("~/phenology-urban/data/proc/conus/npn/all_drivers/color_leaf_1116.rds") %>%
+  filter(group == "No ALAN") %>%
+  filter(Species == "saccharum") %>%
+  dplyr::select("Tavg_Year")%>%
+  rename(value = Tavg_Year) %>%
+  mutate(source = "rural")
+
+saccharum_subset <- us_saccharum_gbif %>%
+  dplyr::select("MAT") %>%
+  rename(value = MAT) %>%
+  mutate(source = "saccharum")
+
+combined_data <- bind_rows(analyze_color_leaf_urban, analyze_color_leaf_rural,  saccharum_subset)
+
+histogram_plot <- ggplot(combined_data, aes(x = as.numeric(value), fill = source, color = source)) +
+  geom_density(alpha = 0.1) +
+  scale_fill_manual(values = c("blue", "red", "green")) +
+  scale_color_manual(values = c("darkblue", "darkred", "darkgreen")) +
+  labs(title = "Histograms",
+       x = "Value",
+       y = "Frequency",
+       fill = "Source") +
+  theme_minimal()
+
+# 显示图形
+print(histogram_plot)
+```
+
+## 4.GUTI
+```{r}
+occurance <- read.csv("C:/Users/Jiali/Documents/phenology-urban/data/raw/local_db/guti/occurance.csv") %>% na.omit()
+city <- read.csv("C:/Users/Jiali/Documents/phenology-urban/data/raw/local_db/guti/add_city.csv")
+us_db <- occurance%>%
+  filter(Occurance == 1) %>%
+  filter(Country == "United States of America") %>%
+  left_join(city, by = c("Cities" = "City")) %>%
+  filter(str_detect(Country.y, "USA")) %>%
+  st_as_sf(coords = c("Longitude","Latitude"), crs = 4326)
+
+plot <- ggplot() +
+  geom_sf(data = us_boundary, fill = "white", color = "black") +
+  geom_sf(data = us_db, size = 2, color = "#00B2EE") +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  labs(title = "Acer saccharum in GUTI", x = "Longitude", y = "Latitude") +
+  theme(axis.text = element_text(size = 14), 
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 24),
+        plot.background = element_rect(fill = "transparent", color = NA))
+```
+
 
 
 # II. drought stress
@@ -192,9 +268,9 @@ process_yearly_data <- function(color_leaf_sm, us_boundary, folder.raw, factor) 
     spring_data_m <- (yearly_data[[3]] + yearly_data[[4]] + yearly_data[[5]]) / 3
     summer_data_m <- (yearly_data[[6]] + yearly_data[[7]] + yearly_data[[8]]) / 3
     fall_data_m <- (yearly_data[[9]] + yearly_data[[10]] + yearly_data[[11]]) / 3
-    spring_color <- extract(spring_data_m, color_leaf_sm)
-    summer_color <- extract(summer_data_m, color_leaf_sm)
-    fall_color <- extract(fall_data_m, color_leaf_sm)
+    spring_color <- terra::extract(spring_data_m, color_leaf_sm)
+    summer_color <- terra::extract(summer_data_m, color_leaf_sm)
+    fall_color <- terra::extract(fall_data_m, color_leaf_sm)
     color_leaf_sm <- cbind(color_leaf_sm, setNames(list(spring_color[,2]), paste0(factor, "_spring_", year)))
     color_leaf_sm <- cbind(color_leaf_sm, setNames(list(summer_color[,2]), paste0(factor, "_summer_", year)))
     color_leaf_sm <- cbind(color_leaf_sm, setNames(list(fall_color[,2]), paste0(factor, "_fall_", year)))
@@ -204,8 +280,9 @@ process_yearly_data <- function(color_leaf_sm, us_boundary, folder.raw, factor) 
 
 factors <- c("soil", "pet", "aet", "def")
 for (factor in factors) {
-  color_leaf_sm <- process_yearly_data(color_leaf_sm, us_boundary, folder.raw, factor)
+  color_leaf_sm <- process_yearly_data(color_leaf, us_boundary, folder.raw, "soil")
 }
+
 folder.raw_vpd <- "~/lab-data/climate/TerraClimate/annual_2023_upadate/"
 color_leaf_sm <- process_yearly_data(color_leaf_sm, us_boundary, folder.raw_vpd, "vpd")
 
@@ -220,6 +297,8 @@ get_value_for_year <- function(data, year, prefix, default_col = NA) {
     return(NA_real_)
   }
 }
+
+cols_to_check <- c("First_Yes_Year", "Tmin_Winter", "Tmin_Spring", "Tmin_Summer", "Tmin_Fall", "Tmax_Winter", "Tmax_Spring", "Tmax_Summer", "Tmax_Fall")
 color_leaf_sm_site <- color_leaf_sm %>%
   rowwise() %>%
   mutate(
@@ -227,35 +306,39 @@ color_leaf_sm_site <- color_leaf_sm %>%
     summer_sm = get_value_for_year(cur_data(), First_Yes_Year, "soil_summer_"),
     fall_sm = get_value_for_year(cur_data(), First_Yes_Year, "soil_fall_"),
     
-    spring_aet = get_value_for_year(cur_data(), First_Yes_Year, "aet_spring_"),
-    summer_aet = get_value_for_year(cur_data(), First_Yes_Year, "aet_summer_"),
-    fall_aet = get_value_for_year(cur_data(), First_Yes_Year, "aet_fall_"),
-    
-    spring_def = get_value_for_year(cur_data(), First_Yes_Year, "def_spring_"),
-    summer_def = get_value_for_year(cur_data(), First_Yes_Year, "def_summer_"),
-    fall_def = get_value_for_year(cur_data(), First_Yes_Year, "def_fall_"),
+    # spring_aet = get_value_for_year(cur_data(), First_Yes_Year, "aet_spring_"),
+    # summer_aet = get_value_for_year(cur_data(), First_Yes_Year, "aet_summer_"),
+    # fall_aet = get_value_for_year(cur_data(), First_Yes_Year, "aet_fall_"),
+    # 
+    # spring_def = get_value_for_year(cur_data(), First_Yes_Year, "def_spring_"),
+    # summer_def = get_value_for_year(cur_data(), First_Yes_Year, "def_summer_"),
+    # fall_def = get_value_for_year(cur_data(), First_Yes_Year, "def_fall_"),
     
     spring_vpd = get_value_for_year(cur_data(), First_Yes_Year, "vpd_spring_"),
     summer_vpd = get_value_for_year(cur_data(), First_Yes_Year, "vpd_summer_"),
     fall_vpd = get_value_for_year(cur_data(), First_Yes_Year, "vpd_fall_"),
     
-    spring_pet = get_value_for_year(cur_data(), First_Yes_Year, "pet_spring_"),
-    summer_pet = get_value_for_year(cur_data(), First_Yes_Year, "pet_summer_"),
-    fall_pet = get_value_for_year(cur_data(), First_Yes_Year, "pet_fall_"),
+    # spring_pet = get_value_for_year(cur_data(), First_Yes_Year, "pet_spring_"),
+    # summer_pet = get_value_for_year(cur_data(), First_Yes_Year, "pet_summer_"),
+    # fall_pet = get_value_for_year(cur_data(), First_Yes_Year, "pet_fall_"),
     alan = get_value_for_year(cur_data(), First_Yes_Year, "alan_", default_col = "alan_2012")
   ) %>%
   ungroup() %>%
-  select("Site_ID","Genus","Species","First_Yes_Year","Tmin_Winter","Tmin_Spring","Tmin_Summer","Tmin_Fall","Tmax_Winter","Tmax_Spring","Tmax_Summer","Tmax_Fall","First_Yes_DOY","AGDD", "geometry", "spring_sm","summer_sm","fall_sm","spring_aet","summer_aet","fall_aet","spring_pet","summer_pet","fall_pet", "spring_vpd","summer_vpd","fall_vpd","spring_def","summer_def","fall_def","alan")
+  filter_at(vars(one_of(cols_to_check)), all_vars(. != -9999)) %>%
+  dplyr::select("Site_ID","Genus","Species","First_Yes_Year","Tmin_Winter","Tmin_Spring","Tmin_Summer","Tmin_Fall","Tmax_Winter","Tmax_Spring","Tmax_Summer","Tmax_Fall","First_Yes_DOY", "geometry", "spring_vpd","summer_vpd","fall_vpd","spring_sm","summer_sm","fall_sm",
+#         "spring_aet","summer_aet","fall_aet","spring_pet","summer_pet","fall_pet", "spring_def","summer_def","fall_def",
+         "alan")
 
 unique_alan <- color_leaf_sm_site %>%
   group_by(geometry, First_Yes_Year) %>%
   summarize(alan_avg = mean(alan, na.rm = TRUE))
 threshold <- quantile(unique_alan$alan_avg, 0.75, na.rm = TRUE)[[1]]
 
-analyze_color_leaf <- filter(color_leaf_sm_site, alan >= threshold | alan == 0) %>%
+analyze_color_leaf <- color_leaf_sm_site %>%
   mutate(group = case_when(
     alan >= threshold ~ "ALAN",
-    alan == 0 ~ "No ALAN"
+    alan == 0 ~ "No ALAN",
+    TRUE ~ "Other"
     )) %>%
   mutate(Tavg_Winter = (Tmin_Winter + Tmax_Winter) / 2) %>%
   mutate(Tavg_Spring = (Tmin_Spring + Tmax_Spring) / 2) %>%
@@ -274,6 +357,8 @@ analyze_color_leaf <- readRDS("~/phenology-urban/data/proc/conus/npn/all_drivers
   as.data.frame() %>%
   na.omit() %>%
   filter(Genus == "Quercus")
+
+colors <- c("No ALAN" = "#00B2EE", "ALAN" = "#EE9572")
 
 get_slopeCI <- function(data, temp_col, doy_col) {
   model_group1 <- lm(as.formula(paste(doy_col, "~", temp_col)), data = data, subset = group == "No ALAN")
@@ -302,6 +387,7 @@ get_slopeCI <- function(data, temp_col, doy_col) {
     labs(title = temp_col,
          x = "Slope",
          y = "Group") +
+    scale_color_manual(values = colors) +
     scale_y_discrete(labels = NULL) + 
     theme_classic() +
     theme(aspect.ratio = 1/5)
@@ -314,7 +400,7 @@ result2 <- get_slopeCI(analyze_color_leaf, "Tavg_Summer", "First_Yes_DOY")
 result3 <- get_slopeCI(analyze_color_leaf, "Tmin_Summer", "First_Yes_DOY")
 combine <- plot_grid(result1,result2,result3, ncol = 1)
 combine
-ggsave("~/phenology-urban/result/npn/11-16/all_species_CI_Quercus.png", combine, width = 8, height = 6, units = "in")
+ggsave("~/phenology-urban/result/npn/12-22/all_species_CI.png", combine, width = 8, height = 6, units = "in")
 # what should be controlled if I got 2 canditate variable
 ```
 
@@ -349,7 +435,7 @@ ggsave("~/phenology-urban/result/npn/11-16/all_species_drought2.png", combine, w
 ```{r}
 
 # Partial correlation 
-analyze_color_leaf <- readRDS("~/phenology-urban/data/proc/conus/npn/all_drivers/color_leaf_1116.rds") %>%
+analyze_color_leaf <- analyze_color_leaf %>%
   as.data.frame() %>%
   na.omit()
 
@@ -357,7 +443,7 @@ analyze_color_leaf <- readRDS("~/phenology-urban/data/proc/conus/npn/all_drivers
 plot_partial_cor <- function(temp_col){
   
   analyze_color_leaf <-  analyze_color_leaf %>%
-    subset(select= c("First_Yes_DOY", temp_col, "alan", "summer_vpd"))
+    subset(select= c("First_Yes_DOY", temp_col, "alan", "summer_sm"))
   
   pcor_result <- pcor(analyze_color_leaf)
   partial_correlations <- pcor_result$estimate["First_Yes_DOY", ]
@@ -401,7 +487,7 @@ tmax <- plot_partial_cor("Tmax_Summer")
 
 combine <- plot_grid(tmin,tavg, tmax, nrow = 1,  align = 'v')
 combine
-ggsave("~/phenology-urban/result/npn/11-16/all_species_par_cor_nogroup.png", combine, width = 8, height = 6, units = "in")
+ggsave("~/phenology-urban/result/npn/12-22/all_species_par_cor_nogroup.png", combine, width = 8, height = 6, units = "in")
 ```
 
 ### 2.4 Partial Cor - group
@@ -411,16 +497,16 @@ ggsave("~/phenology-urban/result/npn/11-16/all_species_par_cor_nogroup.png", com
 plot_partial_cor_group <- function(temp_col){
   
   analyze_color_leaf <-  analyze_color_leaf %>%
-    subset(select= c("First_Yes_DOY", temp_col, "summer_vpd", "group"))
+    subset(select= c("First_Yes_DOY", temp_col, "summer_sm", "group"))
   
   groups <- unique(analyze_color_leaf$group)
-  colors <- c("No ALAN" = "cadetblue1", "ALAN" = "#ffa5a5")
+  colors <- c("No ALAN" = "#00B2EE", "ALAN" = "#EE9572")
   plot_list <- list()
   
   for (grp in groups) {
     group_data <- analyze_color_leaf %>%
       filter(group == grp) %>%
-       subset(select= c("First_Yes_DOY", temp_col, "summer_vpd"))
+       subset(select= c("First_Yes_DOY", temp_col, "summer_sm"))
     pcor_result <- pcor(group_data)
 
     partial_correlations <- pcor_result$estimate["First_Yes_DOY", ]
@@ -475,7 +561,7 @@ tmax <- plot_partial_cor_group("Tmax_Summer")
 
 combine <- plot_grid(tmin,tavg, tmax, nrow = 1,  align = 'v')
 combine
-ggsave("~/phenology-urban/result/npn/11-16/all_species_par_cor_group.png", combine, width = 14, height = 6, units = "in")
+ggsave("~/phenology-urban/result/npn/12-22/all_species_par_cor_group.png", combine, width = 14, height = 6, units = "in")
 ```
 
 
@@ -489,7 +575,7 @@ analyze_color_leaf <- readRDS("~/phenology-urban/data/proc/conus/npn/all_drivers
   subset(select= c("First_Yes_DOY", "Tavg_Summer", "alan", "summer_sm", "summer_vpd"))
 
 #calculate correlation and significance test
-correlation <- cor(analyze_color_leaf)
+df <- cor(analyze_color_leaf)
 p_values <- matrix(NA, ncol = ncol(df), nrow = ncol(df))
 for (i in 1:(ncol(df) - 1)) {
     for (j in (i + 1):ncol(df)) {
@@ -507,6 +593,25 @@ p_value_matrix <- ifelse(p_value_matrix < 0.05, "*", "")
 
 library(car)
 vif(lm(First_Yes_DOY ~ summer_sm + alan + Tavg_Summer, data = analyze_color_leaf))
+
+analyze_color_leaf2 <- analyze_color_leaf %>%
+  mutate(temp_bin = cut(Tavg_Summer, breaks = seq(floor(min(Tavg_Summer)), ceiling(max(Tavg_Summer)), by = 2)))
+boxplot <- ggplot(analyze_color_leaf2, aes(x = temp_bin, y = summer_vpd, fill = group)) +
+  geom_boxplot(alpha = 0.7) +
+  labs(title = "Soil Moisture Distribution by Temperature Bins and Group",
+       x = "Temperature Bin (2°C)",
+       y = "Soil Moisture",
+       fill = "Group") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+boxplot + geom_signif(
+  comparisons = list(c("Urban", "Rural")),
+  map_signif_level = TRUE,
+  step_increase = 0.1,
+  test = "t.test"
+)
+
+
 ```
 
 
@@ -517,7 +622,17 @@ vif(lm(First_Yes_DOY ~ summer_sm + alan + Tavg_Summer, data = analyze_color_leaf
 analyze_color_leaf <- readRDS("~/phenology-urban/data/proc/conus/npn/all_drivers/color_leaf_1116.rds") %>%
   as.data.frame() %>%
   na.omit() %>%
-  filter(group == "ALAN")
+  filter(group == "ALAN" | group == "No ALAN")
+
+plot <- ggplot(analyze_color_leaf, aes(x = Tavg_Summer, y = First_Yes_DOY, color = summer_sm)) +
+  geom_point(alpha = 0.2) +
+  geom_smooth(method = "lm", aes(group = group), formula = y ~ x, se = FALSE) +
+  facet_wrap(~ group) +
+  labs(title = "Interaction of Temperature and Soil Moisture on DOY",
+       x = "Average Summer Temperature",
+       y = "First Yes DOY",
+       color = "Soil Moisture") +
+  theme_minimal()
 
 
 analyze_color_leaf$Tavg_Summer_scaled <- scale(analyze_color_leaf$Tavg_Summer)
@@ -618,6 +733,7 @@ mod_all_sene_empi = bind_rows(sum_lmm_fix(mod_1, "Temp. only"),
 
 ```{r}
 analyze_color_leaf <- readRDS("~/phenology-urban/data/proc/conus/npn/all_drivers/color_leaf_1116.rds") %>%
+  filter(group == "No ALAN" |group == "ALAN") %>%
   as.data.frame() %>%
   na.omit()
 
