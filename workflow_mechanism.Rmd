@@ -245,6 +245,24 @@ plot <- ggplot() +
         plot.background = element_rect(fill = "transparent", color = NA))
 ```
 
+## 5. Little's Map
+```{r}
+Little_datatable <- read_csv("~/lab-data/phenology/USTreeAtlas/Little_datatable.csv")
+acersacr <- sf::read_sf('~/lab-data/phenology/USTreeAtlas/shp/acersacr/acersacr.shp')
+if (is.na(st_crs(acersacr))) {
+  st_crs(acersacr) <- 4326  # Assuming WGS84
+}
+
+common_crs <- 4326  # Assuming WGS84
+
+us_boundary <- st_transform(us_boundary, common_crs)
+acersacr <- st_transform(acersacr, common_crs)
+
+plot <- ggplot() +
+  geom_sf(data = us_boundary, fill = "white", color = "black") +
+  geom_sf(data = acersacr, fill = "blue", color = "black")
+plot
+```
 
 
 # II. drought stress
