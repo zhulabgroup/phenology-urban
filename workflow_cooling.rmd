@@ -10,6 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
 library(stringr)
 library(ggplot2)
+library(ggpmisc)
 library(sf)
 library(data.table)
 library(daymetr)  # for getting Daymet data
@@ -54,21 +55,195 @@ scatters_tcc_lst(tree= rs_tcc, lst = rs_lst,
   
 ```
 
-# 2. read in campaigns data for NYC
+# 2. read in campaigns data for NYC, other variable, save dataset
 ```{r}
 # Upper 2021-07-24
-Upper_point_af <- sf::read_sf('~/phenology-urban/data/raw/NY/Heat_Map_Camp/bronx-man/af_trav.shp')
+nyc_boundary <- sf::read_sf('~/phenology-urban/data/raw/NY/boundary/nybb_dissolved.shp')
+nyc_boundary <- st_transform(nyc_boundary, crs = 4326)
+
+Upper_point_af <- sf::read_sf('~/phenology-urban/data/raw/NY/Heat_Map_Camp/bronx-man/af_trav.shp') %>%
+  mutate(datetime = as.POSIXct(datetime, format = "%Y-%m-%d %H:%M:%S"))
 upper_ndvi <- terra::rast("~/phenology-urban/data/raw/NY/ndvi/upper_nyc_20210724.tif")
 upper_af_ndvi <- terra::extract(upper_ndvi, Upper_point_af)
-Upper_point_af <- cbind(Upper_point_af, setNames(list(upper_af_ndvi[,2]), "ndvi"))
+Upper_point_af <- cbind(Upper_point_af, setNames(list(upper_af_ndvi[,2]), "ndvi"))%>%
+  mutate(temp_c = (temp_f - 32) * 5 / 9)
 
 # Lower Brooklyn 2022-07-30
 Lower_point_af <- sf::read_sf('~/phenology-urban/data/raw/NY/Heat_Map_Camp/brooklyn/af_trav.shp') %>%
-  mutate(datetime = as.POSIXct("2022-07-20 15:30:00", format="%Y-%m-%d %H:%M:%S"))
+  mutate(datetime = as.POSIXct("2022-07-20 15:30:00", format="%Y-%m-%d %H:%M:%S")) %>%
+  mutate(trav_id = "af")
 lower_ndvi <- terra::rast("~/phenology-urban/data/raw/NY/ndvi/lower_nyc_20210730.tif")
 lower_af_ndvi <- terra::extract(lower_ndvi, Lower_point_af)
-Lower_point_af <- cbind(Lower_point_af, setNames(list(lower_af_ndvi[,2]), "ndvi"))
-  
+Lower_point_af <- cbind(Lower_point_af, setNames(list(lower_af_ndvi[,2]), "ndvi"))%>%
+  mutate(temp_c = (temp_f - 32) * 5 / 9)
+
+# set the buffer, compute the surrounding ndvi_avg
+window_size <- 51
+focal_ndvi <- focal(upper_ndvi, w = matrix(1, window_size, window_size), fun = mean, na.rm = TRUE)
+ndvi_means <- terra::extract(focal_ndvi, Upper_point_af)
+Upper_point_af <- cbind(Upper_point_af, setNames(list(ndvi_means[,2]), paste0("ndvi_", window_size)))
+focal_ndvi <- focal(lower_ndvi, w = matrix(1, window_size, window_size), fun = mean, na.rm = TRUE)
+ndvi_means <- terra::extract(focal_ndvi, Lower_point_af)
+Lower_point_af <- cbind(Lower_point_af, setNames(list(ndvi_means[,2]), paste0("ndvi_", window_size)))
+
+
+# macro-climate
+# for upper 2021-07-24
+
+# daily extreme
+up_daily_tmax <- terra::rast("~/phenology-urban/data/raw/NY/Daymet/tmax_daily_2021_ncss.nc")
+nycboun_reproj <- sf::st_transform(nyc_boundary, crs = sf::st_crs(terra::crs(up_daily_tmax,proj = T)))
+up_daily_tmax <- terra::project(terra::mask (terra::crop(up_daily_tmax, terra::ext(nycboun_reproj)),
+                                    nycboun_reproj), terra::crs(nyc_boundary))
+up_daily_tmax_sp <- up_daily_tmax[[yday("2021-07-24")]]
+writeRaster(up_daily_tmax_sp, filename = "data/proc/daymet/nyc/tmax_daily_upper.tif")
+
+
+# summer average
+tmax.nc <- terra::rast("~/phenology-urban/data/raw/NY/Daymet/tmax_monavg_2021_ncss.nc")
+tmin.nc <- terra::rast("~/phenology-urban/data/raw/NY/Daymet/tmin_monavg_2021_ncss.nc")
+nycboun_reproj <- sf::st_transform(nyc_boundary, crs = sf::st_crs(terra::crs(tmax.nc,proj = T)))
+tmax <- terra::project(terra::mask (terra::crop(tmax.nc, terra::ext(nycboun_reproj)),
+                                    nycboun_reproj), terra::crs(nyc_boundary))
+tmin <- terra::project(terra::mask (terra::crop(tmin.nc, terra::ext(nycboun_reproj)), 
+                                    nycboun_reproj), terra::crs(nyc_boundary))
+tmax_summer <- (tmax[[6]]+tmax[[7]]+tmax[[8]])/3
+tmin_summer <- (tmin[[6]]+tmin[[7]]+tmin[[8]])/3
+tavg_summer <- (tmax_summer + tmin_summer)/2
+writeRaster(tavg_summer, filename = "data/proc/daymet/nyc/tavg_summer_upper.tif")
+
+# for lower 2022-07-30
+# daily extreme
+low_daily_tmax <- terra::rast("~/phenology-urban/data/raw/NY/Daymet/tmax_daily_2022_ncss.nc")
+nycboun_reproj <- sf::st_transform(nyc_boundary, crs = sf::st_crs(terra::crs(low_daily_tmax,proj = T)))
+low_daily_tmax <- terra::project(terra::mask (terra::crop(low_daily_tmax, terra::ext(nycboun_reproj)),
+                                    nycboun_reproj), terra::crs(nyc_boundary))
+low_daily_tmax_sp <- low_daily_tmax[[yday("2022-07-30")]]
+writeRaster(low_daily_tmax_sp, filename = "data/proc/daymet/nyc/tmax_daily_lower.tif")
+
+# summer average
+tmax.nc <- terra::rast("~/phenology-urban/data/raw/NY/Daymet/tmax_monavg_2022_ncss.nc")
+tmin.nc <- terra::rast("~/phenology-urban/data/raw/NY/Daymet/tmin_monavg_2022_ncss.nc")
+nycboun_reproj <- sf::st_transform(nyc_boundary, crs = sf::st_crs(terra::crs(tmax.nc,proj = T)))
+tmax <- terra::project(terra::mask (terra::crop(tmax.nc, terra::ext(nycboun_reproj)),
+                                    nycboun_reproj), terra::crs(nyc_boundary))
+tmin <- terra::project(terra::mask (terra::crop(tmin.nc, terra::ext(nycboun_reproj)), 
+                                    nycboun_reproj), terra::crs(nyc_boundary))
+tmax_summer <- (tmax[[6]]+tmax[[7]]+tmax[[8]])/3
+tmin_summer <- (tmin[[6]]+tmin[[7]]+tmin[[8]])/3
+tavg_summer <- (tmax_summer + tmin_summer)/2
+writeRaster(tavg_summer, filename = "data/proc/daymet/nyc/tavg_summer_lower.tif")
+
+
+# add to sf
+up_daily_macro<- terra::rast("data/proc/daymet/nyc/tmax_daily_upper.tif") %>%
+  terra::extract(Upper_point_af)
+Upper_point_af <- cbind(Upper_point_af, setNames(list(up_daily_macro[,2]), "daymet_tmax_daily"))
+
+up_summer_macro <- terra::rast("data/proc/daymet/nyc/tavg_summer_upper.tif") %>%
+  terra::extract(Upper_point_af)
+Upper_point_af <- cbind(Upper_point_af, setNames(list(up_summer_macro[,2]), "daymet_tavg_summer"))
+
+low_daily_macro <- terra::rast("data/proc/daymet/nyc/tmax_daily_lower.tif") %>%
+  terra::extract(Lower_point_af)
+Lower_point_af <- cbind(Lower_point_af, setNames(list(low_daily_macro[,2]), "daymet_tmax_daily"))
+
+low_summer_macro <- terra::rast("data/proc/daymet/nyc/tavg_summer_lower.tif") %>%
+  terra::extract(Lower_point_af)
+Lower_point_af <- cbind(Lower_point_af, setNames(list(low_summer_macro[,2]), "daymet_tavg_summer"))
+
+
+# extract the NCLD-2021
+# 21-24 developed, open, low - high density
+# 41 deciduous forest, 42, evergreen
+# 52 shrub
+# 71 grass
+# 81 pasture
+
+up_ncld <- terra::rast("data/raw/NY/nlcd_tcc/clipped/ncld_nyc_2021.tif") %>%
+  terra::extract(Upper_point_af)
+Upper_point_af <- cbind(Upper_point_af, setNames(list(as.factor(up_ncld[,2])), "lc_ncld"))
+
+low_ncld <- terra::rast("data/raw/NY/nlcd_tcc/clipped/ncld_nyc_2021.tif") %>%
+  terra::extract(Lower_point_af)
+Lower_point_af <- cbind(Lower_point_af, setNames(list(as.factor(low_ncld[,2])), "lc_ncld"))
+
+Upper_point_af <- Upper_point_af %>%  mutate(location = "upper")
+Lower_point_af <- Lower_point_af %>%  mutate(location = "lower")
+
+# different macro-climate? can not add them up (extract daily)
+all_nyc <- bind_rows(Upper_point_af, Lower_point_af) %>%
+  dplyr::select("datetime", "temp_c", "rh", "hi_f", "trav_id", "ndvi", "ndvi_11", "ndvi_31", "ndvi_51", "daymet_tmax_daily", "daymet_tavg_summer", "lc_ncld", "location")
+saveRDS(all_nyc, file="data/proc/nyc/all_variables.rds")
+```
+
+
+# 3. Some visualization
+```{r}
+# histogram
+plot <- ggplot(all_nyc, aes(x = unlist(daymet_tavg_summer))) +
+    geom_density(fill = "blue", alpha = 0.5) +
+    labs(title = "Temperature at NYC mobile transect points in NIHHIS-CAPA Urban Heat Island mapping campaigns", 
+         x = "Temperature (°C)", y = "Density") +
+    theme_minimal()
+
+# location
+plot <- ggplot() +
+  geom_sf(data = nyc_boundary, fill = "white", color = "black") +
+  geom_sf(data = all_nyc, size = 0.1, aes(color = daymet_tavg_summer)) +
+  scale_color_gradient(low = "yellow", high = "red") +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  labs(title = "Temperature at NYC mobile transect points", x = "Longitude", y = "Latitude") +
+  theme(axis.text = element_text(size = 14), 
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 24),
+        plot.background = element_rect(fill = "transparent", color = NA))
+
+# relationship for temp~ndvi 
+plot <- ggplot(Upper_point_af, aes(x = ndvi, y = ndvi_31)) +
+  #geom_point(color = rgb(0.25, 0.5, 0.75, 1), size = 0.5) +
+  geom_hex(bins = 60, color = NA) +  
+  scale_fill_gradient(low = "lightblue", high = "darkblue") +
+  theme_classic() +
+  labs(x = "NDVI_local", y = "Temperature", fill = "Point Count") +
+  theme(axis.text = element_text(size = 20), axis.title = element_text(size = 22)) +
+  scale_x_continuous(breaks = pretty(Upper_point_af$ndvi)) +
+  scale_y_continuous(breaks = pretty(Upper_point_af$ndvi_31)) +
+  theme(
+    axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(margin = margin(r = 10)),
+    legend.title = element_text(size = 22),
+    legend.text = element_text(size = 18)
+  ) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue", formula = y~x) +
+  stat_poly_eq(aes(label = paste(after_stat(eq.label), after_stat(rr.label), 
+                                 after_stat(p.value.label), sep = "~~~~")),
+               formula = y ~ x,
+               parse = TRUE,
+               label.x = "right", label.y = 0.9,
+               size = 6, color = "blue")
+```
+
+# 4. Try causal inference method
+
+NCLD-2021
+  21-24 developed, open, low - high density
+  41 deciduous forest, 42, evergreen
+  52 shrub
+  71 grass
+  81 pasture
+
+```{r}
+# Classic correlation/regression 
+
+
+# Propensity score
+
+
+# SEM
+
 
 ```
 
