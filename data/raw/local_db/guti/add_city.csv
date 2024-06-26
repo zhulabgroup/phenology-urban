@@ -1,0 +1,408 @@
+﻿Country,City,Continent,Longitude,Latitude
+Austria,Vienna,Europe,16.36868962,48.20855604
+Belgium,Namur,Europe,4.872972453,50.45792199
+Croatia,Zagreb,Europe,15.97912629,45.80021901
+Czechia,Prague,Europe,14.33299126,50.06582946
+Denmark,Aarhus,Europe,10.18697033,56.1568166
+Denmark,Copenhagen,Europe,12.55226851,55.67916509
+Finland,Helsinki,Europe,24.98710253,60.21627935
+France,Bordeaux,Europe,-0.592380544,44.85406222
+France,Grenoble,Europe,5.727084713,45.17683541
+France,Lyon,Europe,4.869653945,45.74814176
+France,Montpellier,Europe,3.865883125,43.61310972
+France,Mulhouse,Europe,7.329239935,47.75367414
+France,Paris,Europe,2.34791336,48.85406404
+Georgia,Tbilisi,Europe,44.809083,41.718291
+Germany,Berlin,Europe,13.29696211,52.60112724
+Germany,Frankfurt am Main,Europe,8.653201301,50.12959434
+Germany,Hamburg,Europe,10.05399928,53.5361432
+Greece,Arta,Europe,20.99358883,39.15518129
+Greece,Igoumenitsa,Europe,20.26297037,39.50456447
+Greece,Ioannina,Europe,20.85050143,39.66609259
+Greece,Preveza,Europe,20.74975246,38.96145034
+Greenland,Nuuk,Europe,-51.694996,64.181248
+Hungary,Budapest,Europe,19.077457,47.50105
+Iceland,Reykjavik,Europe,-21.942404,64.146953
+Ireland,Cork,Europe,-8.383053091,51.88701742
+Ireland,Dublin,Europe,-6.242545222,53.36071239
+Ireland,Fingal County,Europe,-6.252177163,53.43447599
+Ireland,Wexford,Europe,-6.554084346,52.48771666
+Italy,Bologna,Europe,11.34718015,44.50100312
+Italy,Florence,Europe,11.24094992,43.77776425
+Italy,Merano,Europe,11.15825061,46.66887143
+Italy,Pavia,Europe,9.163658851,45.19202266
+Italy,Prato,Europe,11.08688311,43.87633681
+Italy,Turin,Europe,7.663663993,45.06472331
+Netherlands,Assen,Europe,6.55736088,53.00260834
+Netherlands,Buren,Europe,5.414675792,51.9309337
+Netherlands,Doetinchem,Europe,6.294792168,51.96208395
+Netherlands,Waalwijk,Europe,5.04372605,51.6820209
+Norway,Oslo,Europe,10.74488487,59.92422486
+Norway,Trondheim,Europe,10.40036844,63.42999302
+Poland,Warsaw,Europe,21.00931574,52.21632651
+Portugal,Lisbon,Europe,-9.153969827,38.73940634
+Russia,Murmansk,Europe,33.08164,68.962293
+Russia,St Petersburg,Europe,30.18869327,59.86300938
+Slovak Republic,Bratislava,Europe,17.103591,48.150289
+Spain,Barcelona,Europe,2.164101697,41.41039127
+Spain,Caceres,Europe,-6.378263009,39.47043495
+Spain,Costa Brava,Europe,3.115021146,42.24392724
+Spain,Valencia,Europe,-1.267310659,39.71971519
+Sweden,Helsingborg,Europe,12.7418542,56.08776948
+Sweden,Malmö,Europe,13.01199611,55.58370075
+Sweden,Stockholm,Europe,18.074807,59.332165
+Switzerland,Basel,Europe,7.602189256,47.56015972
+Switzerland,Bern,Europe,7.434464247,46.94813978
+Switzerland,Geneva,Europe,6.146204826,46.20909065
+Switzerland,Zurich,Europe,8.529590477,47.38224285
+UK,Belfast,Europe,-5.944207569,54.58825631
+UK,Birmingham,Europe,-1.885732931,52.47288448
+UK,Bristol,Europe,-2.592797431,51.46077288
+UK,Camden,Europe,-0.156027495,51.54593296
+UK,London,Europe,-0.116743743,51.51394983
+UK,Sidmouth,Europe,-3.237183382,50.68535253
+UK,Trafford,Europe,-2.332699713,53.42500803
+UK,York,Europe,-1.083088943,53.96275848
+Ukraine,Izmail,Europe,28.834892,45.340927
+,,,,
+Argentina,Bahia Blanca,South America,-62.264615,-38.718514
+Argentina,Buenos Aires,South America,-58.4569353,-34.61341512
+Argentina,Difunta Correa,South America,-67.982464,-31.735447
+Argentina,Mendoza,South America,-68.846071,-32.889097
+Argentina,Partido del Pilar,South America,-58.89068417,-34.4534712
+Argentina,Puerto Iguazú,South America,-54.577132,-25.59688
+Argentina,Santiago del Estero,South America,-64.259939,-27.787519
+Argentina,Vallecito,South America,-67.982256,-31.734218
+Bermuda,Hamilton,Central America,-64.784875,32.295523
+Brazil,Alagoinha,South America,-36.77583333,-8.0000000
+Brazil,Assis,South America,-50.41723346,-22.65518617
+Brazil,Bahia,South America,-38.509391,-13.0023
+Brazil,Bauru,South America,-49.054914,-22.329043
+Brazil,Belo Horizonte,South America,-46.604676,-20.733725
+Brazil,Brasilia,South America,-47.87091,-15.764479
+Brazil,Cafeara,South America,-51.71611111,-22.7925
+Brazil,Fortaleza,South America,-38.532702,-3.737698
+Brazil,Goiandira,South America,-48.086892,-18.136337
+Brazil,Guarapuava,South America,-51.463727,-25.383013
+Brazil,Jacarei,South America,-45.968865,-23.302975
+Brazil,Jatai,South America,-51.725911,-17.885752
+Brazil,Mariopolis,South America,-52.555649,-26.356416
+Brazil,Não-Me-Toque,South America,-52.820043,-28.460968
+Brazil,Paraiba,South America,-35.716035,-6.971062
+Brazil,"Curitiba, Paraná",South America,-49.237358,-25.44834
+Brazil,Ponta Grossa,South America,-50.159675,-25.09467
+Brazil,Porto Alegre,South America,-51.162278,-30.01892
+Brazil,Rio de Janeiro,South America,-43.3004252,-22.92386568
+Brazil,Santa Maria,South America,-53.815007,-29.695168
+Brazil,Vicosa,South America,-42.869148,-20.760972
+Chile,Porvenir,South America,-70.368983,-53.294769
+Chile,Puerto Natales,South America,-72.506508,-51.72649
+Chile,Punta Arenas,South America,-70.90751,-53.162763
+Chile,Santiago de Chile,South America,-70.61083765,-33.44830079
+Chile,Valdivia,South America,-73.25563143,-39.81225267
+Colombia,Bogotá,South America,-74.092011,4.645529
+Colombia,Ibague City,South America,-75.237249,4.440013
+Colombia,Leticia,South America,-69.943298,-4.20914
+Colombia,Manizales,South America,-75.5001261,5.062696909
+Colombia,Medellin,South America,-75.57937426,6.237148474
+Colombia,Valle del Cauca (Norte del Valle),South America,-76.09559391,4.458577359
+Colombia,Pereira,South America,-75.71708282,4.806518863
+Costa Rica,San Jose,Central America,-84.09106841,9.933152412
+Ecuador,Quito,South America,-78.467623,-0.176294
+Mexico,Guadalcázar ,Central America,-100.4080393,22.64772333
+Mexico,Linares,Central America,-99.5609465,24.85771128
+Mexico,Merida,Central America,-89.619142,20.972079
+Mexico,Monterrey,Central America,-100.2837019,25.68413322
+Mexico,Morelia,Central America,-101.2045982,19.70151906
+Mexico,Mexico City,Central America,-99.19037931,19.38870992
+Nicaragua,León,Central America,-86.873511,12.432151
+Panama,Bella Vista,Central America,-79.52542722,8.984179438
+Panama,Betania,Central America,-79.52940001,9.011920775
+Panama,Calidonia,Central America,-79.53496307,8.968873732
+Panama,San Felipe,Central America,-79.53416095,8.952095922
+Panama,San Francisco,Central America,-79.50771054,8.9876559
+Panama,Santa Ana,Central America,-79.54259748,8.955027391
+Peru,Cusco,South America,-71.966372,-13.53202
+Peru,Lima,South America,-77.018675,-12.045387
+Peru,Piura,South America,-80.598538,-5.181813
+Puerto Rico,El Paraiso,Central America,-86.55112,13.859815
+Puerto Rico,San Juan,Central America,-66.032509,18.407697
+Venezuela,Maracaibo,Central America,-71.675117,10.6402
+,,,,
+Canada (Alberta),Edmonton,North America,-113.5124933,53.52354459
+Canada (Ontario),Durham,North America,-79.02949048,43.86113334
+Canada (Ontario),Guelph,North America,-80.24394278,43.53888635
+Canada (Ontario),Kawartha Lakes,North America,-78.74431144,44.35446326
+Canada (British Columbia),Kelowna,North America,-119.4564271,49.88111623
+Canada (Quebec),Montreal,North America,-73.61854664,45.51133426
+Canada (British Columbia),New Westminster,North America,-122.9064186,49.21892577
+Canada (Ontario),Niagara Falls,North America,-79.23978329,43.17359468
+Canada (Ontario),Oakville,North America,-79.70487371,43.45049678
+Canada (Ontario),Ottawa,North America,-75.70143218,45.38757713
+Canada (Quebec),Quebec City,North America,-71.28562038,46.82156616
+Canada (Ontario),Toronto,North America,-79.40077418,43.72045637
+Canada (British Columbia),Vancouver,North America,-123.1074209,49.24739025
+Canada (British Columbia),Victoria,North America,-123.3586717,48.42475105
+Canada (Ontario),Waterloo,North America,-80.54184355,43.47660426
+Canada (Manitoba),Winnipeg,North America,-97.14259765,49.88001364
+USA (California),Alameda County,North America,-122.1049078,37.6876094
+USA (Pennsylvania),Albion,North America,-80.36884632,41.8935672
+USA (Pennsylvania),Allentown,North America,-75.49552558,40.5997752
+USA (Massachusetts),Amherst,North America,-72.51635853,42.38643034
+USA (California),Anaheim,North America,-117.9949671,33.82753047
+USA (Pennsylvania),Annville,North America,-76.51730107,40.32929879
+USA (California),Arleta,North America,-118.4315735,34.2442845
+USA (Massachusetts),Arlington,North America,-71.16310077,42.41741293
+USA (Pennsylvania),Athens,North America,-76.52193186,41.96827226
+USA (Georgia),Augusta,North America,-82.00598062,33.47289253
+USA (Colorado),Aurora,North America,-104.8122844,39.69471719
+USA (Texas),Austin,North America,-97.74468302,30.27160309
+USA (California),Balboa,North America,-118.5079503,34.19181011
+USA (California),Baldwin Park,North America,-117.9789362,34.08017034
+USA (Vermont),Barre City,North America,-72.50111898,44.19812823
+USA (California),Bellflower,North America,-118.120621,33.89004107
+USA (California),Berkeley,North America,-122.2734897,37.87184781
+USA (Idaho),Boise,North America,-116.2099006,43.61991539
+USA (Massachusetts),Boston,North America,-71.08802764,42.34180436
+USA (Colorado),Boulder,North America,-105.2617853,40.02187187
+USA (Pennsylvania),Brackenridge,North America,-79.74524332,40.61220427
+USA (Vermont),Brattleboro,North America,-72.56513037,42.85297401
+USA (Vermont),Bristol,North America,-73.08128659,44.13674462
+USA (New York),Buffalo,North America,-78.85184713,42.91130456
+USA (Vermont),Burlington,North America,-73.20430643,44.47381174
+USA (Massachussetts),Cambridge,North America,-71.11454693,42.37442039
+USA (Florida),Cape Coral,North America,-81.97991667,26.61840184
+USA (Pennsylvania),Carlisle,North America,-77.09348938,40.23831431
+USA (Nevada),Carson City,North America,-119.7679178,39.16781402
+USA (California),Ceres,North America,-120.9600173,37.59346256
+USA (Illinois),Champaign,North America,-88.27070977,40.10774216
+USA (South Carolina),Charleston,North America,-79.95625674,32.79615716
+USA (Vermont),Charlotte,North America,-73.25394618,44.31969621
+USA (Massachusetts),Chelsea,North America,-71.03292328,42.39547327
+USA (Vermont),Chester,North America,-72.59783292,43.26587014
+USA (Illinois),Chicago,North America,-87.64754483,41.84399943
+USA (California),Claremont,North America,-117.7185667,34.11264596
+USA (California),Clarks Green,North America,-75.69855741,41.49722738
+USA (Pennsylvania),Clarks Summit,North America,-75.70624654,41.49135661
+USA (Vermont),Colchester,North America,-73.20484496,44.53910759
+USA (Ohio),Columbus,North America,-82.99926777,40.01002708
+USA (California),Colton,North America,-117.3303185,34.05073542
+USA (California),Compton,North America,-118.2349249,33.89271982
+USA (Pennsylvania),Connellsville,North America,-79.58618204,40.01775027
+USA (Pennsylvania),Cumru Township,North America,-75.91831684,40.27677545
+USA (Iowa),Davenport,North America,-90.58172747,41.53950069
+USA (Ohio),Delaware,North America,-75.55533761,39.7505392
+USA (Colorado),Denver,North America,-104.9520427,39.7282684
+USA (Michigan),Detroit,North America,-83.15370153,42.38568095
+USA (North Carolina),Durham,North America,-78.90419474,36.0023579
+USA (California),East Palo Alto,North America,-122.1374127,37.47381668
+USA (Pennsylvania),Edgewood,North America,-79.88587661,40.4317644
+USA (California),El Centro,North America,-115.5638461,32.78368827
+USA (California),El Monte,North America,-118.0529024,34.15295452
+USA (California),El Sobrante,North America,-122.3027534,37.96326097
+USA (California),Encinitas,North America,-117.2737302,33.03978554
+USA (Pennsylvania),Ephrata,North America,-76.18613594,40.17853055
+USA (Pennsylvania),Erie,North America,-80.13945861,42.08342494
+USA (Vermont),Essex,North America,-73.09071838,44.49927859
+USA (Pennsylvania),Ferguson,North America,-77.88643059,40.73409451
+USA (California),Fresno,North America,-119.7934532,36.73057111
+USA (Pennsylvania),Greencastle,North America,-77.72535826,39.79003225
+USA (Maryland),Greensboro,North America,-75.80544502,38.97444465
+USA (Pennsylvania),Grove City,North America,-80.08330056,41.16106789
+USA (Pennsylvania),Harrisburg,North America,-76.87588042,40.27127419
+USA (Pennsylvania),Harrison,North America,-79.74097511,40.6165639
+USA (Vermont),Hartford,North America,-72.37143942,43.66255084
+USA (New York),Hastings-on-Hudson,North America,-73.87627815,40.99340853
+USA (New York),Helena,North America,-112.0329146,46.59661336
+USA (Pennsylvania),Hershey,North America,-76.65376493,40.28285835
+USA (Vermont),Hinesburg,North America,-73.10921547,44.33331985
+USA (Vermont),Hyde Park,North America,-72.61751717,44.59372421
+USA (California),Inglewood,North America,-118.3559875,33.93891389
+USA (New York),Ithaca,North America,-76.49087313,42.46574371
+USA (Vermont),Johnson,North America,-72.68152108,44.6346454
+USA (Kansas),Kansas City,North America,-94.599939,39.062989
+USA (California),La Puente,North America,-117.9551013,34.03354615
+USA (California),Lake Balboa,North America,-118.5031365,34.194785
+USA (Pennsylvania),Lancaster,North America,-76.31202367,40.04479592
+USA (Pennsylvania),Laporte,North America,-76.49478468,41.4230933
+USA (Nevada),Las Vegas (Clark County),North America,-115.1535836,36.10236564
+USA (Pennsylvania),Latrobe,North America,-79.37912024,40.31043498
+USA (Pennsylvania),Leechburg,North America,-79.60256413,40.62955205
+USA (Pennsylvania),Lemoyne,North America,-76.89453039,40.2441468
+USA (California),Los Angeles,North America,-118.3142219,34.0471941
+USA (Vermont),Lyndon,North America,-72.00142439,44.53609523
+USA (California),Madera,North America,-119.799054,36.59871596
+USA (Wisconsin),Madison,North America,-89.4069445,43.07253641
+USA (California),Marysville,North America,-121.5786514,39.11728986
+USA (Pennsylvania),Meadville,North America,-80.12758026,41.63201509
+USA (Pennsylvania),Mechanicsburg,North America,-77.05848908,40.25228048
+USA (Pennsylvania),Mercersburg,North America,-77.90371531,39.82768751
+USA (Vermont),Middlebury,North America,-73.15291445,44.00524478
+USA (Pennsylvania),Milford,North America,-74.80390882,41.32628631
+USA (California),Milpitas,North America,-121.9053559,37.40781422
+USA (Vermont),Milton,North America,-73.11656677,44.62990655
+USA (Minnesota),Minneapolis,North America,-93.27115438,44.9551159
+USA (California),Mission Hills,North America,-118.4711372,34.2728741
+USA (California),Modesto,North America,-120.9922144,37.66295816
+USA (Vermont),Montpelier,North America,-72.58383864,44.25629562
+USA (Pennsylvania),Hummelstown,North America,-76.71187971,40.24467895
+USA (Pennsylvania),Muncy,North America,-76.78791261,41.20318243
+USA (California),National City,North America,-117.1032506,32.67178842
+USA (Pennsylvania),Natrona Heights,North America,-79.73172211,40.62246606
+USA (Pennsylvania),New Cumberland,North America,-76.87541471,40.22816543
+USA (Pennsylvania),New Kensington,North America,-79.75651026,40.5711435
+USA (Pennsylvania),New Kingstown,North America,-77.08663529,40.23263277
+USA (Lousiana),New Orleans,North America,-90.061068,29.94969
+USA (New York),New York,North America,-73.95878458,40.7066686
+USA (New York),Newburgh,North America,-74.020766,41.505071
+USA (Rhode Island),Newport,North America,-71.29755141,41.55076917
+USA (Vermont),Newport City,North America,-72.20776841,44.93645194
+USA (Pennsylvania),North East,North America,-79.84859232,42.12048139
+USA (California),North Hills,North America,-118.4643083,34.24536667
+USA (California),North Hollywood,North America,-118.3849875,34.19404084
+USA (Vermont),Northfield,North America,-72.65913377,44.14860522
+USA (New York),Nyack,North America,-73.922411,41.093858
+USA (California),Oakland,North America,-122.2324708,37.78821663
+USA (Pennsylvania),Oakmont,North America,-79.84605521,40.52400224
+USA (Oklahoma),Oklahoma City,North America,-97.515613,35.467985
+USA (California),Olivehurst,North America,-121.5682378,39.09289568
+USA (California),Ontario,North America,-117.634713,34.06399435
+USA (Pennsylvania),Orwigsburg,North America,-76.10064053,40.65500424
+USA (California),Pacoima,North America,-118.419382,34.26548465
+USA (California),Palo Alto,North America,-122.1367176,37.43349115
+USA (California),Panorama City,North America,-118.42874,34.22479
+USA (California),Paramount,North America,-118.1580815,33.90335428
+USA (California),Pasadena,North America,-118.1320602,34.15347934
+USA (California),Patterson,North America,-121.1472547,37.468703
+USA (Pennsylvania),Penn Hills,North America,-79.82455681,40.467771
+USA (Pennsylvania),Philadelphia,North America,-75.24451813,40.01070184
+USA (Arizona),Phoenix,North America,-112.071764,33.51243106
+USA (California),Pinole,North America,-122.2799675,37.9862893
+USA (Pennsylvania),Pittsburgh,North America,-79.90566779,40.43502043
+USA (Vermont),Plainfield,North America,-72.42670139,44.27708655
+USA (New York),Port Chester,North America,-73.66777169,41.00814736
+USA (Oregon),Portland,North America,-122.6378915,45.52565442
+USA (Pennsylvania),Pottsville,North America,-76.20666165,40.68073915
+USA (California),Rancho Cucamonga,North America,-117.5410613,34.10588597
+USA (California),Rancho Santa Fe,North America,-117.1909945,33.0154126
+USA (Vermont),Randolph,North America,-72.66023264,43.93230485
+USA (Pennsylvania),Reading,North America,-75.92322123,40.35418862
+USA (California),Redlands,North America,-117.1854116,34.0807557
+USA (Wisconsin),Reedsburg,North America,-90.003581,43.532659
+USA (California),Rialto,North America,-117.3577849,34.12639328
+USA (California),Richmond,North America,-122.285091,37.90362899
+USA (California),Riverside,North America,-117.394905,33.92760118
+USA (Vermont),Rockingham,North America,-72.46089293,43.13862793
+USA (California),Sacramento,North America,-121.4682715,38.5690802
+USA (California),San Bernardino,North America,-117.3185257,34.17995525
+USA (California),San Diego,North America,-117.1474079,32.73058577
+USA (California),San Fernando,North America,-118.44649,34.28002212
+USA (California),San Francisco,North America,-122.4341493,37.76140266
+USA (California),San Jose,North America,-121.8686668,37.34196873
+USA (California),San Leandro,North America,-122.2179175,37.77981629
+USA (California),San Pablo,North America,-122.343703,37.97526377
+USA (California),San Pedro,North America,-118.29588,33.72769102
+USA (California),Santa Monica,North America,-118.4831845,34.02277156
+USA (Florida),Sarasota,North America,-82.54382658,27.33591009
+USA (Washington),Seattle,North America,-122.3326535,47.63148866
+USA (Pennsylvania),Sharon,North America,-80.49918075,41.22848822
+USA (Vermont),Shelburne,North America,-73.2266512,44.38450725
+USA (California),Sherman Oaks,North America,-118.4552637,34.16866433
+USA (South Dakota),Sioux Falls,North America,-96.72862264,43.53300667
+USA (Alaska),Sitka,North America,-135.32967,57.053154
+USA (Vermont),South Burlington,North America,-73.180904,44.43106723
+USA (California),South El Monte,North America,-118.0589219,34.03494226
+USA (Pennsylvania),South Middleton Township,North America,-77.13682469,40.14108197
+USA (Washington),Spokane,North America,-117.414343,47.66809572
+USA (Vermont),Springfield,North America,-72.47876013,43.29409568
+USA (Vermont),St. Albans City,North America,-73.0822638,44.81203953
+USA (Vermont),St. Albans Town,North America,-73.0999001,44.80963786
+USA (Pennsylvania),State College,North America,-77.85948919,40.79191291
+USA (California),Stockton,North America,-121.25299,37.95742975
+USA (Vermont),Stowe,North America,-72.68513196,44.46346322
+USA (California),Sun Valley,North America,-118.3579761,34.2129599
+USA (California),Sunland,North America,-118.316651,34.268571
+USA (Vermont),Swanton,North America,-73.12243073,44.91974369
+USA (Pennsylvania),Swissvale,North America,-79.89214304,40.42538681
+USA (California),Sylmar,North America,-118.4236256,34.30254894
+USA (Florida),Tampa,North America,-82.43551021,28.02226923
+USA (Vermont),Thetford,North America,-72.22951946,43.81756547
+USA (California),Tracy,North America,-121.4309305,37.75104546
+USA (California),Van Nuys,North America,-118.4656574,34.1913542
+USA (Vermont),Vergennes,North America,-73.25308018,44.16765272
+USA (Pennsylvania),Verona,North America,-79.83557371,40.48258798
+USA (Pennsylvania),Warren,North America,-79.15393822,41.84559903
+USA (DC),Washington DC,North America,-77.01427128,38.91493775
+USA (Vermont),Waterbury,North America,-72.75311367,44.33830014
+USA (Massachusetts),Watertown,North America,-71.17847102,42.37258514
+USA (Pennsylvania),Waynesburg,North America,-80.18836295,39.89868047
+USA (California),West Sacramento,North America,-121.5589821,38.57087722
+USA (Vermont),Westminster,North America,-72.45152655,43.12421262
+USA (Pennsylvania),Wilkinsburg,North America,-79.87883373,40.44395254
+USA (California),Wilmington,North America,-118.2704569,33.79442934
+USA (Vermont),Windsor,North America,-72.38928836,43.47965554
+USA (Vermont),Winooski,North America,-73.18327153,44.49397519
+USA (Pennsylvania),Wormleysburg,North America,-76.89707971,40.25101412
+USA (Pennsylvania),York,North America,-76.73771405,39.96434298
+,,,,
+China,Beijing,Asia,116.4149901,39.91777379
+China,Changsha,Asia,112.97087,28.19874
+China,Chengdu,Asia,104.06667,30.66667
+China,Chongqing,Asia,106.06667,29.56278
+China,Guangzhou,Asia,113.256895,23.121226
+China,Guiyang,Asia,106.71667,26.58333
+China,Haikou,Asia,110.221145,19.929296
+China,Hangzhou,Asia,120.16142,30.29365
+China,Hefei,Asia,117.28083,31.86389
+China,Hong Kong,Asia,114.1489722,22.35323002
+China,Kunming,Asia,102.71833,25.03889
+China,Nanchang,Asia,115.88333,28.68333
+China,Nanjing,Asia,118.77778,32.29365
+China,Shanghai,Asia,121.45806,31.22222
+China,Wuhan,Asia,114.26667,30.58333
+India,Bangalore,Asia,77.59413166,12.98076352
+India,Bhopal,Asia,77.41083333,23.19
+India,Chandigarh,Asia,76.778513,30.737736
+India,Chennai,Asia,80.275453,13.061869
+India,New Delhi,Asia,77.19045502,28.62686492
+Indonesia,Bandung,Asia,107.619962,-6.917965
+Iran,Ahvaz,Asia,49.0413,31.436
+Iran,Ardabil,Asia,48.3,38.2537
+Iran,Isfahan,Asia,51.668,32.6546
+Iran,Mashhad,Asia,59.6168,36.2605
+Iran,Rasht,Asia,49.5924,37.2809
+Iran,Sari,Asia,52.5319,36.2262
+Iran,Shiraz,Asia,52.5837,29.5918
+Iran,Tabriz,Asia,46.2738,38.0962
+Iran,Tehran,Asia,51.390696,35.6915035
+Iran,Urmia,Asia,45.0786,37.5498
+Israel,Karmiel,Asia,35.29314707,32.91214599
+Israel,Tel Aviv,Asia,34.79092378,32.08939971
+Japan,Tokyo,Asia,139.725782,35.730683
+Malaysia,Kuala Lumpur,Asia,101.7001723,3.160031
+Malaysia,Putrajaya,Asia,101.723212,2.937592
+Oman,Madinat al Qaboos,Asia,58.454315,23.601224
+Oman,Muscat,Asia,58.403763,23.600262
+Oman,Nizwa,Asia,57.530699,22.926347
+Oman,Qurm,Asia,58.495694,23.629598
+Oman,Ruwi,Asia,58.541462,23.598936
+Oman,Salalah,Asia,54.116576,17.013644
+Oman,Seeb,Asia,58.165205,23.596542
+Pakistan,Karachi,Asia,67.011666,24.858908
+Palestine,Gaza,Asia,34.468098,31.502022
+Saudi Arabia,Dammam,Asia,50.093925,26.431242
+South Korea,Seoul,Asia,126.980016,37.573659
+Singapore,Singapore,Asia,103.868266,1.35449
+Taiwan,Taipei,Asia,121.556749,25.035325
+Thailand,Bangkok,Asia,100.511226,13.752068
+Turkey,Antalya,Asia,30.712482,36.894944
+Turkey,Karşıyaka,Asia,27.102556,38.466542
+Turkey,Trabzon,Asia,39.718176,41.004625
+Turkey,Bartin,Asia,32.334514,41.637475
+United Arabic Emirates,Al Ain,Asia,55.701766,24.210772
+United Arabic Emirates,Dubai,Asia,55.28035,25.216542
+,,,,
+Botswana,Gabarone,Africa,25.920899,-24.627071
+Egypt,Cairo,Africa,31.238721,30.045963
+Ethiopia,Addis Ababa,Africa,38.759519,9.061429
+Ghana,Kumasi,Africa,-1.616336,6.665865

@@ -28,6 +28,7 @@ library(tidyverse)
 library(mgcv)
 library(effects)
 library(phyr)
+library(stars)
 ```
 
 # 1. The relationship between tcc and lst 2013-2021
@@ -63,7 +64,7 @@ nyc_boundary <- st_transform(nyc_boundary, crs = 4326)
 
 Upper_point_af <- sf::read_sf('~/phenology-urban/data/raw/NY/Heat_Map_Camp/bronx-man/af_trav.shp') %>%
   mutate(datetime = as.POSIXct(datetime, format = "%Y-%m-%d %H:%M:%S"))
-upper_ndvi <- terra::rast("~/phenology-urban/data/raw/NY/ndvi/upper_nyc_20210724.tif")
+upper_ndvi <- read_stars("C:/Users/Jiali/Downloads/upper_nyc_20210724.tif")
 upper_af_ndvi <- terra::extract(upper_ndvi, Upper_point_af)
 Upper_point_af <- cbind(Upper_point_af, setNames(list(upper_af_ndvi[,2]), "ndvi"))%>%
   mutate(temp_c = (temp_f - 32) * 5 / 9)
@@ -72,7 +73,7 @@ Upper_point_af <- cbind(Upper_point_af, setNames(list(upper_af_ndvi[,2]), "ndvi"
 Lower_point_af <- sf::read_sf('~/phenology-urban/data/raw/NY/Heat_Map_Camp/brooklyn/af_trav.shp') %>%
   mutate(datetime = as.POSIXct("2022-07-20 15:30:00", format="%Y-%m-%d %H:%M:%S")) %>%
   mutate(trav_id = "af")
-lower_ndvi <- terra::rast("~/phenology-urban/data/raw/NY/ndvi/lower_nyc_20210730.tif")
+lower_ndvi <- read_stars("C:/Users/Jiali/Downloads/lower_nyc_20210730.tif")
 lower_af_ndvi <- terra::extract(lower_ndvi, Lower_point_af)
 Lower_point_af <- cbind(Lower_point_af, setNames(list(lower_af_ndvi[,2]), "ndvi"))%>%
   mutate(temp_c = (temp_f - 32) * 5 / 9)
@@ -181,15 +182,17 @@ saveRDS(all_nyc, file="data/proc/nyc/all_variables.rds")
 # 3. Some visualization
 ```{r}
 # histogram
-plot <- ggplot(all_nyc, aes(x = unlist(daymet_tavg_summer))) +
-    geom_density(fill = "blue", alpha = 0.5) +
-    labs(title = "Temperature at NYC mobile transect points in NIHHIS-CAPA Urban Heat Island mapping campaigns", 
+plot <- ggplot(all_nyc, aes(x = unlist(temp_c), fill = location)) +
+  scale_fill_manual(values = c("#00B2EE","#EE9572"), labels = c("Brooklyn & Lower Manhattan", "Bronx & Manhattan")) +
+    geom_density(alpha = 0.5) +
+    labs(title = "Temperature at NYC mobile transect points", 
          x = "Temperature (°C)", y = "Density") +
     theme_minimal()
 
 # location
+ncld <- read_stars("C:/Users/Jiali/Downloads/ncld_nyc_2021.tif")
 plot <- ggplot() +
-  geom_sf(data = nyc_boundary, fill = "white", color = "black") +
+  #geom_stars(data = lower_ndvi) +
   geom_sf(data = all_nyc, size = 0.1, aes(color = daymet_tavg_summer)) +
   scale_color_gradient(low = "yellow", high = "red") +
   theme_minimal() +
@@ -199,6 +202,49 @@ plot <- ggplot() +
         axis.title = element_text(size = 16),
         plot.title = element_text(size = 24),
         plot.background = element_rect(fill = "transparent", color = NA))
+
+
+# relationship for temp~lc
+nlcd_colors <- c(
+  "11" = "#476ba1", # Open Water
+  "12" = "#d1def8", # Perennial Ice/Snow
+  "21" = "#decaca", # Developed, Open Space
+  "22" = "#d99482", # Developed, Low Intensity
+  "23" = "#ee0000", # Developed, Medium Intensity
+  "24" = "#ab0000", # Developed, High Intensity
+  "31" = "#b3aea3", # Barren Land (Rock/Sand/Clay)
+  "41" = "#68ab5f", # Deciduous Forest
+  "42" = "#1c6330", # Evergreen Forest
+  "43" = "#b5ca8f", # Mixed Forest
+  "51" = "#a68c30", # Dwarf Scrub*
+  "52" = "#ccba7d", # Shrub/Scrub
+  "71" = "#e2e2c4", # Grassland/Herbaceous
+  "72" = "#c9d6ad", # Sedge/Herbaceous*
+  "73" = "#99c147", # Lichens*
+  "74" = "#80ba9e", # Moss*
+  "81" = "#dbd83d", # Pasture/Hay
+  "82" = "#ab7028", # Cultivated Crops
+  "90" = "#bad8ea", # Woody Wetlands
+  "95" = "#70a3ba"  # Emergent Herbaceous Wetlands
+)
+filtered_data <- all_nyc %>% filter(lc_ncld != 0)
+plot <- ggplot(filtered_data, aes(x = factor(lc_ncld), y = daymet_tavg_summer, fill = factor(lc_ncld))) +
+  geom_boxplot() +
+  scale_fill_manual(values = nlcd_colors) +
+  labs(x = "Land Cover (lc_ncld)", y = "Temperature (°C)", title = "Daymet Summer Tavg by Land Cover") +
+  theme_minimal() +
+  theme(legend.position = "none")  # Optionally remove legend if not needed
+ggplot(filtered_data, aes(sample = temp_c)) +
+  stat_qq() +
+  stat_qq_line() +
+  facet_wrap(~ lc_ncld)
+# Shapiro-Wilk
+shapiro_results <- filtered_data %>%
+  group_by(lc_ncld) %>%
+  summarise(p_value = shapiro.test(temp_c)$p.value)
+
+print(shapiro_results)
+
 
 # relationship for temp~ndvi 
 plot <- ggplot(Upper_point_af, aes(x = ndvi, y = ndvi_31)) +
