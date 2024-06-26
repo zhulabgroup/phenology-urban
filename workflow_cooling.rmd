@@ -29,6 +29,7 @@ library(mgcv)
 library(effects)
 library(phyr)
 library(stars)
+library(twang)
 ```
 
 # 1. The relationship between tcc and lst 2013-2021
@@ -79,7 +80,7 @@ Lower_point_af <- cbind(Lower_point_af, setNames(list(lower_af_ndvi[,2]), "ndvi"
   mutate(temp_c = (temp_f - 32) * 5 / 9)
 
 # set the buffer, compute the surrounding ndvi_avg
-window_size <- 51
+window_size <- 11
 focal_ndvi <- focal(upper_ndvi, w = matrix(1, window_size, window_size), fun = mean, na.rm = TRUE)
 ndvi_means <- terra::extract(focal_ndvi, Upper_point_af)
 Upper_point_af <- cbind(Upper_point_af, setNames(list(ndvi_means[,2]), paste0("ndvi_", window_size)))
@@ -227,35 +228,55 @@ nlcd_colors <- c(
   "90" = "#bad8ea", # Woody Wetlands
   "95" = "#70a3ba"  # Emergent Herbaceous Wetlands
 )
-filtered_data <- all_nyc %>% filter(lc_ncld != 0)
-plot <- ggplot(filtered_data, aes(x = factor(lc_ncld), y = daymet_tavg_summer, fill = factor(lc_ncld))) +
+
+filtered_data <- all_nyc %>% filter(lc_ncld != "0") %>% na.omit() %>%
+  filter(location == "upper")
+lc_count <- data.frame(table(filtered_data$lc_ncld))
+
+plot <- ggplot(lc_count, aes(x = factor(Var1), y = Freq, fill = factor(Var1))) +
+  geom_bar(stat = "identity", width = 0.7) +
+  geom_text(aes(label = Freq), vjust = -0.3, size = 5) +
+  scale_fill_manual(values = nlcd_colors) +
+  labs(title = "Land Cover Types Distribution", x = "Land Cover Type", y = "Count") +
+  theme_minimal() +
+  theme(
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 14),
+    plot.title = element_text(size = 16),
+    legend.position = "none"
+  )
+
+plot <- ggplot(filtered_data, aes(x = factor(lc_ncld), y = temp_c, fill = factor(lc_ncld))) +
   geom_boxplot() +
   scale_fill_manual(values = nlcd_colors) +
-  labs(x = "Land Cover (lc_ncld)", y = "Temperature (°C)", title = "Daymet Summer Tavg by Land Cover") +
+  labs(x = "Land Cover (lc_ncld)", y = "Temperature (°C)", title = "Transect Temp by Land Cover") +
   theme_minimal() +
   theme(legend.position = "none")  # Optionally remove legend if not needed
-ggplot(filtered_data, aes(sample = temp_c)) +
+
+# qq plot
+plot <- ggplot(filtered_data, aes(sample = daymet_tmax_daily)) +
   stat_qq() +
   stat_qq_line() +
   facet_wrap(~ lc_ncld)
 # Shapiro-Wilk
-shapiro_results <- filtered_data %>%
+filtered_data <- filtered_data %>%
+  filter(lc_ncld %in% c("21", "22", "23", "24", "41", "42")) %>%
   group_by(lc_ncld) %>%
   summarise(p_value = shapiro.test(temp_c)$p.value)
 
-print(shapiro_results)
+print(filtered_data)
 
 
 # relationship for temp~ndvi 
-plot <- ggplot(Upper_point_af, aes(x = ndvi, y = ndvi_31)) +
+plot <- ggplot(filtered_data, aes(x = daymet_tmax_daily, y = temp_c)) +
   #geom_point(color = rgb(0.25, 0.5, 0.75, 1), size = 0.5) +
   geom_hex(bins = 60, color = NA) +  
   scale_fill_gradient(low = "lightblue", high = "darkblue") +
   theme_classic() +
   labs(x = "NDVI_local", y = "Temperature", fill = "Point Count") +
   theme(axis.text = element_text(size = 20), axis.title = element_text(size = 22)) +
-  scale_x_continuous(breaks = pretty(Upper_point_af$ndvi)) +
-  scale_y_continuous(breaks = pretty(Upper_point_af$ndvi_31)) +
+  scale_x_continuous(breaks = pretty(filtered_data$ndvi)) +
+  scale_y_continuous(breaks = pretty(filtered_data$temp_c)) +
   theme(
     axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1),
     axis.title.x = element_text(margin = margin(t = 10)),
@@ -272,7 +293,7 @@ plot <- ggplot(Upper_point_af, aes(x = ndvi, y = ndvi_31)) +
                size = 6, color = "blue")
 ```
 
-# 4. Try causal inference method
+# 4. Try causal inference method - only local
 
 NCLD-2021
   21-24 developed, open, low - high density
@@ -281,15 +302,180 @@ NCLD-2021
   71 grass
   81 pasture
 
+## 4.1. Classic correlation/regression
 ```{r}
-# Classic correlation/regression 
+filtered_data <- all_nyc %>% filter(lc_ncld != "0") %>%
+  na.omit() %>%
+  filter(location == "lower")
 
+# Classic correlation/regression - only local
+olsreg <- lm(temp_c ~ ndvi +daymet_tavg_summer + daymet_tmax_daily + lc_ncld, data = filtered_data) 
+#               
+vif(olsreg)
+summary_olsreg <- summary(olsreg)
+coefficients <- summary_olsreg$coefficients
+coefficients_df <- as.data.frame(coefficients)
+coefficients_df$Term <- rownames(coefficients_df)
+names(coefficients_df) <- c("Estimate", "Std.Error", "t.value", "p.value", "Term")
+coefficients_df <- coefficients_df[!(coefficients_df$Term %in% c("(Intercept)")), ]
+coefficients_df$Significance <- cut(coefficients_df$p.value,
+                                    breaks = c(-Inf, 0.001, 0.01, 0.05, 0.1, Inf),
+                                    labels = c("***", "**", "*", ".", ""))
+
+plot <- ggplot(coefficients_df, aes(x = Term, y = Estimate)) +
+  geom_bar(stat = "identity", aes(fill = Significance), width = 0.7) +
+  geom_errorbar(aes(ymin = Estimate - Std.Error, ymax = Estimate + Std.Error), width = 0.2) +
+  geom_text(aes(label = round(Estimate, 2), y = ifelse(Estimate > 0,
+                                                       (Estimate + sign(Estimate) * Std.Error +0.3),
+                (Estimate + sign(Estimate) * Std.Error - 0.3))), size = 4) +
+  coord_flip() +
+  scale_fill_manual(values = c("***"="goldenrod1","**"="goldenrod1", "*" = "goldenrod1")) +
+  labs(title = "Coefficients of the Linear Model",
+       x = "Variable",
+       y = "Estimate of coefficient",
+       fill = "Significance") +
+  theme_minimal() +
+  theme(axis.text = element_text(size = 12),
+        axis.title = element_text(size = 14),
+        plot.title = element_text(size = 16),
+        legend.position = "none")
+print(plot)
+```
+
+## 4.2. Partial correlation
+```{r}
+# Partial correlation - only local
+#function of temperature
+
+#locate the row with NA
+
+filtered_data_pca <-  filtered_data %>%
+  as.data.frame() %>%
+  subset(select= c("temp_c", "ndvi", "ndvi_11", "ndvi_31", "ndvi_51", "daymet_tmax_daily", "daymet_tavg_summer")) %>%
+  na.omit()
+
+pcor_result <- cor(filtered_data_pca)
+partial_correlations <- pcor_result$estimate["temp_c", ]
+partial_correlations <- partial_correlations[-1]
+
+p_values <- pcor_result$p.value["temp_c", ]
+p_values <- p_values[-1]
+
+plot_data <- data.frame(
+  Variable = names(partial_correlations),
+  PartialCorrelation = partial_correlations,
+  Significance = p_values
+)
+
+plot_data$SignificanceLabel <- ifelse(plot_data$Significance < 0.01, "**",
+                                      ifelse(plot_data$Significance < 0.05, "*",
+                                             ifelse(plot_data$Significance < 0.1, "^", "")))
+
+plot <- ggplot(plot_data, aes(x = Variable, y = PartialCorrelation)) +
+  geom_bar(stat = "identity", aes(fill = SignificanceLabel) ) +
+  coord_flip() +
+  scale_fill_manual(values = c("goldenrod1", "grey"))+
+  geom_text(aes(x = Variable, y = ifelse(PartialCorrelation > 0,(PartialCorrelation+0.03),(PartialCorrelation - 0.03)),
+            label = round(PartialCorrelation, 2)), color = "black", size = 4) +
+  labs(x = "", y = "Partial Correlation") +
+  theme_classic() +
+  theme(legend.position = "none") +
+  theme(
+  legend.position = "none",
+  axis.text = element_text(size = 14),
+  axis.title = element_text(size = 14),
+  plot.title = element_text(size = 16)
+)
+
+
+
+correlations <- cor(filtered_data_pca, use = "complete.obs")[, "temp_c"]
+correlations <- correlations[-1]
+
+# 计算p值
+n <- nrow(filtered_data_pca)
+t_values <- correlations / sqrt((1 - correlations^2) / (n - 2))
+p_values <- 2 * pt(-abs(t_values), df = n - 2)
+
+# 准备数据进行绘图
+plot_data <- data.frame(
+  Variable = names(correlations),
+  Correlation = correlations,
+  P_value = p_values
+)
+
+plot_data$SignificanceLabel <- ifelse(plot_data$P_value < 0.01, "**",
+                                      ifelse(plot_data$P_value < 0.05, "*",
+                                             ifelse(plot_data$P_value < 0.1, "^", "")))
+
+# 绘图
+plot <- ggplot(plot_data, aes(x = Variable, y = Correlation)) +
+  geom_bar(stat = "identity", aes(fill = SignificanceLabel), width = 0.7) +
+  coord_flip() +
+  scale_fill_manual(values = c("**" = "goldenrod1", "*" = "goldenrod1")) +
+  geom_text(aes(x = Variable, y = ifelse(Correlation > 0, (Correlation + 0.03), (Correlation - 0.03)),
+                label = round(Correlation, 2)), color = "black", size = 4) +
+  labs(x = "", y = "Correlation") +
+  theme_classic() +
+  theme(
+    legend.position = "none",
+    axis.text = element_text(size = 14),
+    axis.title = element_text(size = 14),
+    plot.title = element_text(size = 16)
+  )
+
+# 显示图形
+print(plot)
+```
+
+## 4.3. Propensity score matching - local
+```{r}
+data <- filtered_data %>%
+  as.data.frame() %>%
+  subset(select= c("temp_c", "ndvi", "daymet_tmax_daily","lc_ncld"))
+
+# data_with_dummies <- model.matrix(~ lc_ncld + daymet_tmax_daily + daymet_tavg_summer, data) %>%
+#   as.data.frame() %>%
+#   bind_cols(data %>% dplyr::select(temp_c, ndvi)) %>%
+#   dplyr::select(-`(Intercept)`)%>%
+#   dplyr::select(-`lc_ncld0`) %>%
+#   dplyr::select(-`daymet_tavg_summer`)
+
+# Subseting the data
+set.seed(123)
+sampled_data <- data %>%
+  sample_n(4000)
 
 # Propensity score
+ps_model <- ps(
+  formula = ndvi ~ .,
+  data = sampled_data,
+  estimand = "ATE",
+  n.trees = 3000,
+  interaction.depth = 3,
+  shrinkage = 0.01,
+  perm.test.iters = 0,
+  stop.method = "ks.max",
+  verbose = FALSE
+)
+sampled_data$weights <- ps_model$w
 
+effect_model <- lm(temp_c ~ ndvi, data = sampled_data, weights = weights)
+summary(effect_model)
 
-# SEM
+ggplot(data_with_dummies, aes(x = ndvi, y = temp_c)) +
+  geom_point(aes(weight = weights), alpha = 0.5) +
+  geom_smooth(method = "lm", aes(weight = weights), color = "blue") +
+  labs(title = "Relationship between NDVI and Temperature", x = "NDVI", y = "Temperature (°C)") +
+  theme_minimal()
+```
+
+## 4.4. SEM - only local
+```{r}
+# 
 
 
 ```
 
+
+## 4.5. Spatial spillover
