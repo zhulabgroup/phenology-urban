@@ -5,7 +5,7 @@ date: "2023-10-09"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
+```{r, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
 library(stringr)
@@ -32,7 +32,7 @@ library(stars)
 library(twang)
 library(MatchIt)
 library(lavaan)
-library(semPlot)
+library(car)
 ```
 
 # 1. The relationship between tcc and lst 2013-2021
@@ -282,14 +282,14 @@ print(filtered_data)
 
 
 # relationship for temp~ndvi 
-plot <- ggplot(filtered_data, aes(x = daymet_tmax_daily, y = temp_c)) +
+plot <- ggplot(filtered_data, aes(x = tcc_nlcd, y = temp_c)) +
   #geom_point(color = rgb(0.25, 0.5, 0.75, 1), size = 0.5) +
   geom_hex(bins = 60, color = NA) +  
   scale_fill_gradient(low = "lightblue", high = "darkblue") +
   theme_classic() +
-  labs(x = "NDVI_local", y = "Temperature", fill = "Point Count") +
+  labs(x = "Tree Canopy Coverage %", y = "Temperature", fill = "Point Count") +
   theme(axis.text = element_text(size = 20), axis.title = element_text(size = 22)) +
-  scale_x_continuous(breaks = pretty(filtered_data$ndvi)) +
+  scale_x_continuous(breaks = pretty(filtered_data$tcc_nlcd)) +
   scale_y_continuous(breaks = pretty(filtered_data$temp_c)) +
   theme(
     axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1),
@@ -323,8 +323,8 @@ filtered_data <- all_nyc %>% filter(lc_ncld != "0") %>%
   filter(location == "lower")
 
 # Classic correlation/regression - only local
-olsreg <- lm(temp_c ~ ndvi +daymet_tavg_summer + daymet_tmax_daily + lc_ncld, data = filtered_data) 
-#               
+olsreg <- lm(temp_c ~ ndvi_bi + daymet_tmax_daily + lc_ncld, data = filtered_data) 
+# could change to ndvi               
 vif(olsreg)
 summary_olsreg <- summary(olsreg)
 coefficients <- summary_olsreg$coefficients
@@ -444,7 +444,7 @@ print(plot)
 
 ## 4.3. Propensity score matching - local
 ```{r}
-data <- filtered_data %>%
+filtered_data <- filtered_data %>%
   as.data.frame() %>%
   subset(select= c("temp_c", "ndvi", "daymet_tmax_daily","daymet_tavg_summer", "lc_ncld", "tcc_nlcd")) %>%
   mutate(ndvi_bi = case_when(
