@@ -30,6 +30,9 @@ library(effects)
 library(phyr)
 library(stars)
 library(twang)
+library(MatchIt)
+library(lavaan)
+library(semPlot)
 ```
 
 # 1. The relationship between tcc and lst 2013-2021
@@ -176,7 +179,18 @@ Lower_point_af <- Lower_point_af %>%  mutate(location = "lower")
 # different macro-climate? can not add them up (extract daily)
 all_nyc <- bind_rows(Upper_point_af, Lower_point_af) %>%
   dplyr::select("datetime", "temp_c", "rh", "hi_f", "trav_id", "ndvi", "ndvi_11", "ndvi_31", "ndvi_51", "daymet_tmax_daily", "daymet_tavg_summer", "lc_ncld", "location")
-saveRDS(all_nyc, file="data/proc/nyc/all_variables.rds")
+
+# tcc (coverage at 30m, 2021 available)
+tcc <- terra::rast("data/raw/NY/nlcd_tcc/clipped/nlcd_tcc_NY_2021.tif") %>%
+  terra::project("+proj=longlat +datum=WGS84 +no_defs")%>% 
+  terra::extract(all_nyc)
+all_nyc <- cbind(all_nyc, setNames(list(tcc[,2]), "tcc_nlcd"))
+
+rs_tcc <- raster(stringr::str_c(""))
+
+# saveRDS(all_nyc, file="data/proc/nyc/all_variables.rds")
+
+# look for the threshold for NDVI
 ```
 
 
@@ -432,15 +446,56 @@ print(plot)
 ```{r}
 data <- filtered_data %>%
   as.data.frame() %>%
-  subset(select= c("temp_c", "ndvi", "daymet_tmax_daily","lc_ncld"))
+  subset(select= c("temp_c", "ndvi", "daymet_tmax_daily","daymet_tavg_summer", "lc_ncld", "tcc_nlcd")) %>%
+  mutate(ndvi_bi = case_when(
+    ndvi < 0.2 ~ 0,
+    ndvi >= 0.2 ~ 1))
 
-# data_with_dummies <- model.matrix(~ lc_ncld + daymet_tmax_daily + daymet_tavg_summer, data) %>%
-#   as.data.frame() %>%
-#   bind_cols(data %>% dplyr::select(temp_c, ndvi)) %>%
-#   dplyr::select(-`(Intercept)`)%>%
-#   dplyr::select(-`lc_ncld0`) %>%
-#   dplyr::select(-`daymet_tavg_summer`)
+# Get binary
 
+matching <- matchit(ndvi_bi ~ lc_ncld + daymet_tmax_daily , method = "optimal", data = data, 
+                    distance = "glm", link = "probit", discard = "both", ratio = 1)
+summary(matching$model)[[12]]
+pscore_data_matched = match.data(matching) 
+head(arrange(pscore_data_matched, subclass))
+summary(matching)
+
+t.test(subset(data, ndvi_bi == 1)$temp_c, subset(data, ndvi_bi == 0)$temp_c)
+t.test(subset(pscore_data_matched, ndvi_bi == 1)$temp_c, subset(pscore_data_matched, ndvi_bi == 0)$temp_c) 
+
+
+# use dummy  same result
+data_with_dummies <- model.matrix(~ lc_ncld + daymet_tmax_daily + daymet_tavg_summer + ndvi_bi, data) %>%
+  as.data.frame() %>%
+  bind_cols(data %>% dplyr::select(temp_c, ndvi)) %>%
+  dplyr::select(-`(Intercept)`)%>%
+  dplyr::select(-`lc_ncld0`)
+
+matching <- matchit(ndvi_bi ~ lc_ncld22 + lc_ncld23 + lc_ncld24 + lc_ncld41 + lc_ncld42 +
+                      lc_ncld52 + lc_ncld71 + lc_ncld81 + daymet_tmax_daily, 
+                    method = "nearest", data = data_with_dummies, 
+                    distance = "glm", link = "probit", discard = "both")
+summary(matching$model)[[12]]
+pscore_data_matched = match.data(matching) 
+head(arrange(pscore_data_matched, subclass))
+summary(matching)
+
+t.test(subset(data, ndvi_bi == 1)$temp_c, subset(data, ndvi_bi == 0)$temp_c)
+t.test(subset(pscore_data_matched, ndvi_bi == 1)$temp_c, subset(pscore_data_matched, ndvi_bi == 0)$temp_c) 
+
+# add tcc
+matching <- matchit(ndvi_bi ~ lc_ncld + daymet_tmax_daily + daymet_tavg_summer + tcc_nlcd, method = "nearest", data = data, 
+                    distance = "glm", link = "probit", discard = "both")
+summary(matching$model)[[12]]
+pscore_data_matched = match.data(matching) 
+head(arrange(pscore_data_matched, subclass))
+summary(matching)
+
+t.test(subset(data, ndvi_bi == 1)$temp_c, subset(data, ndvi_bi == 0)$temp_c)
+t.test(subset(pscore_data_matched, ndvi_bi == 1)$temp_c, subset(pscore_data_matched, ndvi_bi == 0)$temp_c) 
+
+
+# Continuous
 # Subseting the data
 set.seed(123)
 sampled_data <- data %>%
@@ -472,7 +527,25 @@ ggplot(data_with_dummies, aes(x = ndvi, y = temp_c)) +
 
 ## 4.4. SEM - only local
 ```{r}
-# 
+data <- filtered_data %>%
+  as.data.frame() %>%
+  subset(select= c("temp_c", "ndvi", "daymet_tmax_daily","lc_ncld"))
+
+data_with_dummies <- model.matrix(~ lc_ncld + daymet_tmax_daily, data) %>%
+  as.data.frame() %>%
+  bind_cols(data %>% dplyr::select(temp_c, ndvi)) %>%
+  dplyr::select(-`(Intercept)`)%>%
+  dplyr::select(-`lc_ncld0`)
+
+sem_model <- '
+  temp_c ~ ndvi + daymet_tmax_daily + lc_ncld
+  ndvi ~ lc_ncld22 + lc_ncld23 + lc_ncld24 + lc_ncld41 + lc_ncld42 + lc_ncld52 + lc_ncld71 + lc_ncld81
+  daymet_tmax_daily ~ lc_ncld22 + lc_ncld23 + lc_ncld24 + lc_ncld41 + lc_ncld42 + lc_ncld52 + lc_ncld71 + lc_ncld81
+'
+
+fit <- sem(sem_model, data = data_with_dummies)
+summary(fit, standardized = TRUE)
+semPaths(fit, "std", layout = "tree", edge.label.cex = 1.2, sizeMan = 5, sizeLat = 6)
 
 
 ```
