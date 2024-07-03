@@ -70,13 +70,13 @@ library(sp)
 library(sf)
 library(raster)
 
-folder.raw <- '~/phenology-urban/data/raw/CONUS/Daymet/test'
+folder.raw <- '~/phenology-urban/data/proc/conus/cooling/2019/daymet/'
 
 download_Daymet <- TRUE
 
 
 
-us_boundary <- sf::read_sf('data/raw/CONUS/boundary/us_boundarydissolve.shp')
+us_boundary <- sf::read_sf('~/phenology-urban/data/proc/conus/cooling/2019/bounding_boxes.shp')
 us_boundary <- st_set_crs(us_boundary, "EPSG:4326")
 
 if (download_Daymet){
@@ -84,9 +84,9 @@ if (download_Daymet){
   bbox <- as.vector(terra::ext(us_boundary))
   # download Daymet data
   download_daymet_ncss(location = bbox[c('ymax', 'xmin', 'ymin', 'xmax')],
-                       start = 2023, end = 2022,
+                       start = 2019, end = 2019,
                        frequency = "daily",
-                       param = c("tmin","tmax"),
+                       param = "tmax",
                        path=folder.raw)
 }
 

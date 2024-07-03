@@ -24,7 +24,7 @@ for (i in 1:6){
   }
 }
 
-for (node in 55:59){
+for (node in 1:59){
   target_file <- osf_retrieve_node(id_list[node]) %>%
     osf_ls_files()
   if (any(str_detect(target_file$name, "All Data"))){

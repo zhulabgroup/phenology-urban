@@ -5,7 +5,7 @@ date: "2023-10-09"
 output: html_document
 ---
 
-```{r, include=FALSE}
+```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
 library(stringr)
@@ -67,7 +67,7 @@ nyc_boundary <- sf::read_sf('~/phenology-urban/data/raw/NY/boundary/nybb_dissolv
 nyc_boundary <- st_transform(nyc_boundary, crs = 4326)
 
 Upper_point_af <- sf::read_sf('~/phenology-urban/data/raw/NY/Heat_Map_Camp/bronx-man/af_trav.shp') %>%
-  mutate(datetime = as.POSIXct(datetime, format = "%Y-%m-%d %H:%M:%S"))
+  mutate(datetime = as.POSIXct(time_n, format = "%Y-%m-%d %H:%M:%S"))
 upper_ndvi <- read_stars("C:/Users/Jiali/Downloads/upper_nyc_20210724.tif")
 upper_af_ndvi <- terra::extract(upper_ndvi, Upper_point_af)
 Upper_point_af <- cbind(Upper_point_af, setNames(list(upper_af_ndvi[,2]), "ndvi"))%>%
@@ -656,6 +656,124 @@ semPaths(fit, "std", layout = "tree", edge.label.cex = 1.2, sizeMan = 5, sizeLat
 
 
 ```
+
+# 5 More data in 2019
+
+```{r}
+folder_path <- "~/Downloads/osfstorage-archive"
+shp_files <- list.files(path = folder_path, pattern = "\\.shp$", recursive = TRUE, full.names = TRUE)
+pm_af_shp_files <- shp_files[grepl("pm|af|afternoon", basename(shp_files), ignore.case = TRUE)]
+
+row_move <- c(5, 6,7, 13, 16, 18)
+pm_af_shp_files <- pm_af_shp_files[-row_move]
+
+# combine the data, just location and temp
+combined_coords <- NULL
+for (i in seq_along(pm_af_shp_files)) {
+  shp_data <- sf::st_read(pm_af_shp_files[i])
+  coords <- sf::st_coordinates(shp_data)
+  coords_sf <- sf::st_as_sf(data.frame(coords), coords = c("X", "Y"), crs = sf::st_crs(shp_data))
+  combined_coords <- rbind(combined_coords, coords_sf)
+}
+
+us_boundary <- sf::read_sf('~/phenology-urban/data/raw/phenology_urban/CONUS/boundary/us_boundarydissolve.shp')
+plot <- ggplot() +
+  geom_sf(data = us_boundary, fill = "transparent", color = "black") +
+  geom_sf(data = all_temp, size = 3, color = "red") +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  labs(title = "Temperature at mobile transect points, 2019 campaign cities", x = "Longitude", y = "Latitude") +
+  theme(axis.text = element_text(size = 14), 
+        axis.title = element_text(size = 16),
+        plot.title = element_text(size = 24),
+        plot.background = element_rect(fill = "transparent", color = NA))
+
+
+shp_data_boise <- sf::st_read(pm_af_shp_files[1]) %>%
+  mutate(date = "140819") %>%
+  mutate(place = str_match(pm_af_shp_files[1], "osfstorage-archive/([^/]+)/")[,2]) %>%
+  dplyr::select(T_C, date, place) %>%
+  rename(t_c = T_C)
+shp_data_nampa <- sf::st_read(pm_af_shp_files[2]) %>%
+  mutate(date = "140819") %>%
+  mutate(place = str_match(pm_af_shp_files[2], "osfstorage-archive/([^/]+)/")[,2]) %>%
+  dplyr::select(T_C, date, place) %>%
+  rename(t_c = T_C)
+shp_data_boston <- sf::st_read(pm_af_shp_files[3]) %>%
+  mutate(date = "290719") %>%
+  mutate(place = str_match(pm_af_shp_files[3], "osfstorage-archive/([^/]+)/")[,2]) %>%
+  dplyr::select(T_C, date, place) %>%
+  rename(t_c = T_C)
+
+all_temp_date <- rbind(shp_data_boise, shp_data_nampa, shp_data_boston)
+for (i in 4:13) {
+  shp_data <- sf::st_read(pm_af_shp_files[i]) %>%
+    mutate(place = str_match(pm_af_shp_files[i], "osfstorage-archive/([^/]+)/")[,2]) %>%
+    dplyr::select(t_c, date, place)
+  all_temp_date <- rbind(all_temp_date, shp_data)
+}
+
+all_temp <- all_temp_date %>%
+  mutate(date = if_else(str_length(date) == 5, str_pad(date, width = 6, pad = "0"), date)) %>%
+  mutate(date = dmy(date))
+# sf::st_write(all_temp, "data/proc/conus/cooling/2019/all_temp_date.shp", overwrite = TRUE)
+
+
+bounding_boxes <- all_temp %>%
+  group_by(place) %>%
+  summarise(geometry = st_union(geometry) %>% st_convex_hull())
+merged_shapefile <- st_union(bounding_boxes)
+# sf::st_write(merged_shapefile, "data/proc/conus/cooling/2019/bounding_boxes.shp", overwrite = TRUE)
+```
+
+```{r}
+folder.raw <- '~/phenology-urban/data/proc/conus/cooling/2019/daymet/'
+download_Daymet <- TRUE
+us_boundary <- bounding_boxes
+us_boundary <- st_set_crs(us_boundary, "EPSG:4326")
+
+if (download_Daymet){
+  for (i in 1:nrow(us_boundary)){
+    bbox <- as.vector(terra::ext(us_boundary[i,]))
+    place <- as.character(us_boundary$place[i])
+    dir.create(paste0(folder.raw, place), showWarnings = FALSE)
+    paths <- paste0(folder.raw, place, "/")
+    download_daymet_ncss(location = bbox[c('ymax', 'xmin', 'ymin', 'xmax')],
+                         start = 2019, end = 2019,
+                         frequency = "monthly",
+                         param = "tmax",
+                         path= paths)
+  }
+}
+
+# daily extreme
+up_daily_tmax <- terra::rast("~/phenology-urban/data/raw/phenology_urban/CONUS/Daymet/daily2017-2022/tmax_daily_2019_ncss.nc")
+nycboun_reproj <- sf::st_transform(nyc_boundary, crs = sf::st_crs(terra::crs(up_daily_tmax,proj = T)))
+up_daily_tmax <- terra::project(terra::mask (terra::crop(up_daily_tmax, terra::ext(nycboun_reproj)),
+                                    nycboun_reproj), terra::crs(nyc_boundary))
+up_daily_tmax_sp <- up_daily_tmax[[yday("2021-07-24")]]
+writeRaster(up_daily_tmax_sp, filename = "data/proc/daymet/nyc/tmax_daily_upper.tif")
+
+
+# summer average
+tmax.nc <- terra::rast("~/phenology-urban/data/raw/NY/Daymet/tmax_monavg_2021_ncss.nc")
+tmin.nc <- terra::rast("~/phenology-urban/data/raw/NY/Daymet/tmin_monavg_2021_ncss.nc")
+nycboun_reproj <- sf::st_transform(nyc_boundary, crs = sf::st_crs(terra::crs(tmax.nc,proj = T)))
+tmax <- terra::project(terra::mask (terra::crop(tmax.nc, terra::ext(nycboun_reproj)),
+                                    nycboun_reproj), terra::crs(nyc_boundary))
+tmin <- terra::project(terra::mask (terra::crop(tmin.nc, terra::ext(nycboun_reproj)), 
+                                    nycboun_reproj), terra::crs(nyc_boundary))
+tmax_summer <- (tmax[[6]]+tmax[[7]]+tmax[[8]])/3
+tmin_summer <- (tmin[[6]]+tmin[[7]]+tmin[[8]])/3
+tavg_summer <- (tmax_summer + tmin_summer)/2
+writeRaster(tavg_summer, filename = "data/proc/daymet/nyc/tavg_summer_upper.tif")
+
+
+# summer average - Terra
+
+
+```
+
 
 
 ## 4.5. Spatial spillover
