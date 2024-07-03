@@ -145,9 +145,7 @@ up_daily_macro<- terra::rast("data/proc/daymet/nyc/tmax_daily_upper.tif") %>%
   terra::extract(Upper_point_af)
 Upper_point_af <- cbind(Upper_point_af, setNames(list(up_daily_macro[,2]), "daymet_tmax_daily"))
 
-up_summer_macro <- terra::rast("data/proc/daymet/nyc/tavg_summer_upper.tif") %>%
-  terra::extract(Upper_point_af)
-Upper_point_af <- cbind(Upper_point_af, setNames(list(up_summer_macro[,2]), "daymet_tavg_summer"))
+up_ç
 
 low_daily_macro <- terra::rast("data/proc/daymet/nyc/tmax_daily_lower.tif") %>%
   terra::extract(Lower_point_af)
@@ -727,7 +725,7 @@ merged_shapefile <- st_union(bounding_boxes)
 ```
 
 ```{r}
-folder.raw <- '~/phenology-urban/data/proc/conus/cooling/2019/daymet/'
+folder.raw <- '~/phenology-urban/data/proc/conus/cooling/2019/daymet/month/'
 download_Daymet <- TRUE
 us_boundary <- bounding_boxes
 us_boundary <- st_set_crs(us_boundary, "EPSG:4326")
@@ -741,36 +739,56 @@ if (download_Daymet){
     download_daymet_ncss(location = bbox[c('ymax', 'xmin', 'ymin', 'xmax')],
                          start = 2019, end = 2019,
                          frequency = "monthly",
-                         param = "tmax",
+                         param = "tmin",
                          path= paths)
   }
 }
 
-# daily extreme
-up_daily_tmax <- terra::rast("~/phenology-urban/data/raw/phenology_urban/CONUS/Daymet/daily2017-2022/tmax_daily_2019_ncss.nc")
-nycboun_reproj <- sf::st_transform(nyc_boundary, crs = sf::st_crs(terra::crs(up_daily_tmax,proj = T)))
-up_daily_tmax <- terra::project(terra::mask (terra::crop(up_daily_tmax, terra::ext(nycboun_reproj)),
-                                    nycboun_reproj), terra::crs(nyc_boundary))
-up_daily_tmax_sp <- up_daily_tmax[[yday("2021-07-24")]]
-writeRaster(up_daily_tmax_sp, filename = "data/proc/daymet/nyc/tmax_daily_upper.tif")
-
-
 # summer average
-tmax.nc <- terra::rast("~/phenology-urban/data/raw/NY/Daymet/tmax_monavg_2021_ncss.nc")
-tmin.nc <- terra::rast("~/phenology-urban/data/raw/NY/Daymet/tmin_monavg_2021_ncss.nc")
-nycboun_reproj <- sf::st_transform(nyc_boundary, crs = sf::st_crs(terra::crs(tmax.nc,proj = T)))
-tmax <- terra::project(terra::mask (terra::crop(tmax.nc, terra::ext(nycboun_reproj)),
-                                    nycboun_reproj), terra::crs(nyc_boundary))
-tmin <- terra::project(terra::mask (terra::crop(tmin.nc, terra::ext(nycboun_reproj)), 
-                                    nycboun_reproj), terra::crs(nyc_boundary))
+folder_path <- "~/phenology-urban/data/proc/conus/cooling/2019/daymet/month"
+max_files <- list.files(path = folder_path, pattern = "tmax.*\\.nc$", recursive = TRUE, full.names = TRUE)
+tmax.nc <- lapply(max_files, terra::rast)
+tmax.nc.merge <- do.call(terra::mosaic, tmax.nc)
+
+min_files <- list.files(path = folder_path, pattern = "tmin.*\\.nc$", recursive = TRUE, full.names = TRUE)
+tmin.nc <- lapply(max_files, terra::rast)
+tmin.nc.merge <- do.call(terra::mosaic, tmin.nc)
+
+nycboun_reproj <- sf::st_transform(us_boundary, crs = sf::st_crs(terra::crs(tmax.nc.merge,proj = T)))
+tmax <- terra::project(terra::mask (terra::crop(tmax.nc.merge, terra::ext(nycboun_reproj)),
+                                    nycboun_reproj), terra::crs(us_boundary))
+tmin <- terra::project(terra::mask (terra::crop(tmin.nc.merge, terra::ext(nycboun_reproj)), 
+                                    nycboun_reproj), terra::crs(us_boundary))
+
 tmax_summer <- (tmax[[6]]+tmax[[7]]+tmax[[8]])/3
 tmin_summer <- (tmin[[6]]+tmin[[7]]+tmin[[8]])/3
 tavg_summer <- (tmax_summer + tmin_summer)/2
-writeRaster(tavg_summer, filename = "data/proc/daymet/nyc/tavg_summer_upper.tif")
+writeRaster(tavg_summer, filename = "data/proc/conus/cooling/2019/daymet/tavg_summer_2019.tif")
+
+up_summer_macro <- terra::rast("data/proc/conus/cooling/2019/daymet/tavg_summer_2019.tif") %>%
+  terra::extract(all_temp_date)
+all_temp <- cbind(all_temp, setNames(list(up_summer_macro[,2]), "daymet_tavg_summer"))
+
+# daily extreme + extract
+# according to date info
+for (i in 1:nrow(all_temp)){
+  place <-  all_temp[i,]$place
+  date <- all_temp[i,]$date
+  up_daily_tmax <- terra::rast(str_c("data/proc/conus/cooling/2019/daymet/daily/", place, "/tmax_daily_2019_ncss.nc"))
+                               
+  nycboun_reproj <- sf::st_transform(us_boundary, crs = sf::st_crs(terra::crs(up_daily_tmax,proj = T)))
+  up_daily_tmax <- terra::project(terra::mask (terra::crop(up_daily_tmax, terra::ext(nycboun_reproj)),
+                                    nycboun_reproj), terra::crs(us_boundary))
+  up_daily_tmax_sp <- terra::extract(up_daily_tmax[[yday(all_temp[i,]$date)]],all_temp[i,])
+  all_temp[i, "daymet_tmax_daily"] <- up_daily_tmax_sp[, 2]
+}
 
 
-# summer average - Terra
 
+
+up_daily_macro<- terra::rast("") %>%
+  terra::extract(Upper_point_af)
+Upper_point_af <- cbind(Upper_point_af, setNames(list(up_daily_macro[,2]), "daymet_tmax_daily"))
 
 ```
 
