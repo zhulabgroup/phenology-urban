@@ -33,6 +33,7 @@ library(twang)
 library(MatchIt)
 library(lavaan)
 library(car)
+library(readr)
 ```
 
 # 1. The relationship between tcc and lst 2013-2021
@@ -657,6 +658,7 @@ semPaths(fit, "std", layout = "tree", edge.label.cex = 1.2, sizeMan = 5, sizeLat
 
 # 5 More data in 2019
 
+## 5.1 extract the points
 ```{r}
 folder_path <- "~/Downloads/osfstorage-archive"
 shp_files <- list.files(path = folder_path, pattern = "\\.shp$", recursive = TRUE, full.names = TRUE)
@@ -724,7 +726,10 @@ merged_shapefile <- st_union(bounding_boxes)
 # sf::st_write(merged_shapefile, "data/proc/conus/cooling/2019/bounding_boxes.shp", overwrite = TRUE)
 ```
 
+## 5.2 the macro temp from Daymet
 ```{r}
+
+# download the data
 folder.raw <- '~/phenology-urban/data/proc/conus/cooling/2019/daymet/month/'
 download_Daymet <- TRUE
 us_boundary <- bounding_boxes
@@ -743,7 +748,10 @@ if (download_Daymet){
                          path= paths)
   }
 }
+```
 
+
+```{r}
 # summer average
 folder_path <- "~/phenology-urban/data/proc/conus/cooling/2019/daymet/month"
 max_files <- list.files(path = folder_path, pattern = "tmax.*\\.nc$", recursive = TRUE, full.names = TRUE)
@@ -767,7 +775,8 @@ writeRaster(tavg_summer, filename = "data/proc/conus/cooling/2019/daymet/tavg_su
 
 up_summer_macro <- terra::rast("data/proc/conus/cooling/2019/daymet/tavg_summer_2019.tif") %>%
   terra::extract(all_temp_date)
-all_temp <- cbind(all_temp, setNames(list(up_summer_macro[,2]), "daymet_tavg_summer"))
+all_temp <- cbind(all_temp, setNames(list(up_summer_macro[,2]), "daymet_tavg_summer")) %>%
+  dplyr::select(daymet_tavg_summer, geometry)
 
 # daily extreme + extract
 # according to date info
@@ -782,16 +791,185 @@ for (i in 1:nrow(all_temp)){
   up_daily_tmax_sp <- terra::extract(up_daily_tmax[[yday(all_temp[i,]$date)]],all_temp[i,])
   all_temp[i, "daymet_tmax_daily"] <- up_daily_tmax_sp[, 2]
 }
+```
+
+## 5.3 extract the ndvi nlcd
+```{r}
+us_boundary <- sf::read_sf('~/phenology-urban/data/proc/conus/cooling/2019/bounding_boxes.shp')
+all_temp <- sf::read_sf('~/phenology-urban/data/proc/conus/cooling/2019/all_temp_date.shp')
+all_temp_date <- sf::read_sf('~/phenology-urban/data/proc/conus/cooling/2019/all_temp_date.shp')
+nlcdValues <- read_csv("data/raw/phenology_urban/CONUS/Heat_Watch/2019/LandcoverValues.csv") %>%
+  dplyr::select('system:index', landcover)
+all_temp_ndvi_nlcd <- read_csv("data/raw/phenology_urban/CONUS/Heat_Watch/2019/ndviValues.csv") %>%
+  dplyr::select('system:index', ndvi, place, t_c, .geo) %>%
+  rename(geometry = .geo) %>%
+  left_join(nlcdValues, by = "system:index")
+
+library(jsonlite)
+coords <- lapply(all_temp_ndvi_nlcd$geometry, function(geom) {
+  json <- fromJSON(geom)
+  return(json$coordinates)
+})
+coords_matrix <- do.call(rbind, coords)
+colnames(coords_matrix) <- c("longitude", "latitude")
+
+coords_df <- data.frame(coords_matrix)
+combined_df <- cbind(all_temp_ndvi_nlcd, coords_df)
 
 
+combined_df$geometry <- NULL
+combined_df$`system:index` <- NULL
 
 
-up_daily_macro<- terra::rast("") %>%
-  terra::extract(Upper_point_af)
-Upper_point_af <- cbind(Upper_point_af, setNames(list(up_daily_macro[,2]), "daymet_tmax_daily"))
+all_temp_sf <- st_as_sf(combined_df, coords = c("longitude", "latitude"), crs = 4326)
+
+up_summer_macro <- terra::rast("data/proc/conus/cooling/2019/daymet/tavg_summer_2019.tif") %>%
+  terra::extract(all_temp_sf)
+all_temp_sf <- cbind(all_temp_sf, setNames(list(up_summer_macro[,2]), "daymet_tavg_summer"))
+all_temp_sf$landcover <- as.character(all_temp_sf$landcover)
+
+saveRDS(all_temp_sf, "data/proc/conus/cooling/2019/all_temp_sf.rds")
 
 ```
 
+## 5.4. Classic correlation/regression
+
+```{r}
+# histogram
+plot <- ggplot(all_temp_sf, aes(x = unlist(t_c), fill = place)) +
+    geom_density(alpha = 0.5) +
+    theme_minimal() +
+    labs(title = "Heatwatch temperature at transect points, 2019", 
+         x = "Temperature (˚C)", y = "Density") +
+    theme(
+      title = element_text(size = 18),
+      axis.text = element_text(size = 14), 
+        axis.title = element_text(size = 14)) 
+
+# relationship for temp~lc
+nlcd_colors <- c(
+  "11" = "#476ba1", # Open Water
+  "12" = "#d1def8", # Perennial Ice/Snow
+  "21" = "#decaca", # Developed, Open Space
+  "22" = "#d99482", # Developed, Low Intensity
+  "23" = "#ee0000", # Developed, Medium Intensity
+  "24" = "#ab0000", # Developed, High Intensity
+  "31" = "#b3aea3", # Barren Land (Rock/Sand/Clay)
+  "41" = "#68ab5f", # Deciduous Forest
+  "42" = "#1c6330", # Evergreen Forest
+  "43" = "#b5ca8f", # Mixed Forest
+  "51" = "#a68c30", # Dwarf Scrub*
+  "52" = "#ccba7d", # Shrub/Scrub
+  "71" = "#e2e2c4", # Grassland/Herbaceous
+  "72" = "#c9d6ad", # Sedge/Herbaceous*
+  "73" = "#99c147", # Lichens*
+  "74" = "#80ba9e", # Moss*
+  "81" = "#dbd83d", # Pasture/Hay
+  "82" = "#ab7028", # Cultivated Crops
+  "90" = "#bad8ea", # Woody Wetlands
+  "95" = "#70a3ba"  # Emergent Herbaceous Wetlands
+)
+
+lc_count <- data.frame(table(all_temp_sf$landcover))
+
+plot <- ggplot(lc_count, aes(x = factor(Var1), y = Freq, fill = factor(Var1))) +
+  geom_bar(stat = "identity", width = 0.7) +
+  geom_text(aes(label = Freq), vjust = -0.3, size = 5) +
+  scale_fill_manual(values = nlcd_colors) +
+  labs(title = "Land Cover Types Distribution", x = "Land Cover Type", y = "Count") +
+  theme_minimal() +
+  theme(
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 14),
+    plot.title = element_text(size = 16),
+    legend.position = "none"
+  )
+
+plot <- ggplot(all_temp_sf, aes(x = factor(landcover), y = t_c, fill = factor(landcover))) +
+  geom_boxplot() +
+  scale_fill_manual(values = nlcd_colors) +
+  labs(x = "Land Cover (lc_ncld)", y = "Temperature (°C)", title = "Transect Temp by Land Cover") +
+  theme_minimal() +
+  theme(legend.position = "none")  # Optionally remove legend if not needed
+
+# qq plot
+plot <- ggplot(filtered_data, aes(sample = daymet_tmax_daily)) +
+  stat_qq() +
+  stat_qq_line() +
+  facet_wrap(~ lc_ncld)
+# Shapiro-Wilk
+filtered_data <- filtered_data %>%
+  filter(lc_ncld %in% c("21", "22", "23", "24", "41", "42")) %>%
+  group_by(lc_ncld) %>%
+  summarise(p_value = shapiro.test(temp_c)$p.value)
+
+print(filtered_data)
+
+
+# relationship for temp~ndvi 
+plot <- ggplot(all_temp_sf_ca, aes(x = ndvi, y = t_c)) +
+  #geom_point(color = rgb(0.25, 0.5, 0.75, 1), size = 0.5) +
+  geom_hex(bins = 60, color = NA) +  
+  scale_fill_gradient(low = "lightblue", high = "darkblue") +
+  theme_classic() +
+  labs(x = "Tree Canopy Coverage %", y = "Temperature", fill = "Point Count") +
+  theme(axis.text = element_text(size = 20), axis.title = element_text(size = 22)) +
+  scale_x_continuous(breaks = pretty(all_temp_sf_ca$ndvi)) +
+  scale_y_continuous(breaks = pretty(all_temp_sf_ca$t_c)) +
+  theme(
+    axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(margin = margin(r = 10)),
+    legend.title = element_text(size = 22),
+    legend.text = element_text(size = 18)
+  ) +
+  geom_smooth(method = "lm", se = FALSE, color = "blue", formula = y~x) +
+  stat_poly_eq(aes(label = paste(after_stat(eq.label), after_stat(rr.label), 
+                                 after_stat(p.value.label), sep = "~~~~")),
+               formula = y ~ x,
+               parse = TRUE,
+               label.x = "right", label.y = 0.9,
+               size = 6, color = "blue")
+
+all_temp_sf_ca <- all_temp_sf %>%
+  filter(place == "Los Angeles, CA")
+all_temp_sf <- all_temp_sf %>%
+  filter(place != "Los Angeles, CA")
+
+# different location
+plot <- ggplot(all_temp_sf, aes(x = ndvi, y = t_c)) +
+  geom_point(aes(color = place), alpha = 0.01) +
+  theme_classic() +
+  labs(x = "NDVI", y = "Temperature", fill = "Places") +
+  theme(axis.text = element_text(size = 20), axis.title = element_text(size = 22)) +
+  scale_x_continuous(breaks = pretty(all_temp_sf$ndvi)) +
+  scale_y_continuous(breaks = pretty(all_temp_sf$t_c)) +
+  theme(
+    axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    axis.title.y = element_text(margin = margin(r = 10)),
+    legend.title = element_text(size = 22),
+    legend.text = element_text(size = 18)
+  ) +
+  geom_smooth(method = "lm", se = FALSE, aes(color = place), formula = y ~ x) +
+  geom_smooth(data = all_temp_sf, aes(x = ndvi, y = t_c), method = "lm", se = FALSE, color = "black", formula = y ~ x) + # 添加全局拟合线
+  guides(fill = guide_legend(title = "Point Count"), color = guide_legend(title = "Location"))
+
+model_group3 <- lm(t_c ~ ndvi, data = all_temp_sf)
+coef_group3 <- coef(model_group3)
+equation_text3 <- sprintf("y = %.2fx + %.2f", coef_group3[2], coef_group3[1])
+confint_group3 <- confint(model_group3, "ndvi", level = 0.95)
+
+x_pos <- 0.4
+y_pos_group3 <- 26
+ci_text3 <- sprintf("CI: [%.3f, %.3f]", confint_group3[1,1], confint_group3[1,2])
+
+plot <- plot +
+  annotate("text", x = x_pos, y = y_pos_group3 -1, label = ci_text3, size = 6,  color = "black") +
+  annotate("text", x = x_pos, y = y_pos_group3 +1, label = equation_text3, size = 6, color = "black")
+
+
+```
 
 
 ## 4.5. Spatial spillover
