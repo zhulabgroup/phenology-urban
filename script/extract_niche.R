@@ -10,42 +10,58 @@ library(dplyr)
 ### Differentiate the urban/natural points
 ############################### 
 
-us_gisa <- rast("~/phenology-urban/data/raw/CONUS/GISA/us_gisa.tif")
-us_saccharum_gbif1 <- us_saccharum_gbif %>%
-  rename(lon = decimalLongitude, lat = decimalLatitude)
-us_saccharum_gbif1 <- vect(us_saccharum_gbif1[, c("lon", "lat")], crs = crs(us_gisa))
+prepareData <- function(species) {
+  
+  us_gisa <- rast("~/phenology-urban/data/raw/CONUS/GISA/us_gisa.tif")
+  us_acer_gbif <- readRDS("~/phenology-urban/data/raw/CONUS/climate-niche/GBIF/us_acer_gbif.rds") %>%
+    filter(species == !!species)
+ 
+  us_acer_gbif1 <- st_as_sf(us_acer_gbif, coords = c("decimalLongitude", "decimalLatitude"), crs = crs(us_gisa))
+  
+  # Extract the GISA values
+  gbif_gisa_values <- terra::extract(us_gisa, us_acer_gbif1)
+  us_acer_gbif <- us_acer_gbif %>%
+    mutate(gisa = gbif_gisa_values[, 2]) %>%
+    mutate(gisa = recode(gisa,
+                         `1` = 1972, `2` = 1978, `3` = 1985, `4` = 1986, `5` = 1987, 
+                         `6` = 1988, `7` = 1989, `8` = 1990, `9` = 1991, `10` = 1992, 
+                         `11` = 1993, `12` = 1994, `13` = 1995, `14` = 1996, `15` = 1997, 
+                         `16` = 1998, `17` = 1999, `18` = 2000, `19` = 2001, `20` = 2002, 
+                         `21` = 2003, `22` = 2004, `23` = 2005, `24` = 2006, `25` = 2007, 
+                         `26` = 2008, `27` = 2009, `28` = 2010, `29` = 2011, `30` = 2012, 
+                         `31` = 2013, `32` = 2014, `33` = 2015, `34` = 2016, `35` = 2017, 
+                         `36` = 2018, `37` = 2019))
+  # Natrual: record before urbanization and always natural
+  # Urban: record after urbanization
+  us_acer_gbif <- us_acer_gbif %>%
+    # mutate(group = case_when(
+    #   gisa == 0 ~ "natural",
+    #   gisa != 0 & gisa <= year ~ "urban",
+    #   gisa != 0 & gisa > year ~ "natural"
+    # )) %>%
+    filter((gisa == 0 & year > 2019)) # remove the natrual records after 2019, because we cannot determine whether it is urban or not
+  
+  # Visualization
+  us_boundary <- st_read("~/phenology-urban/data/raw/CONUS/boundary/us_boundarydissolve.shp")
+  us_acer_gbif1 <- st_as_sf(us_acer_gbif, coords = c("decimalLongitude", "decimalLatitude"), crs = crs(us_gisa))
+  dist_map <- ggplot(us_acer_gbif1) +
+    geom_sf(aes(color = group), size = 0.02) +
+    geom_sf(data=us_boundary,color="grey60",fill=NA) +
+    labs(x = "Longitude", y = "Latitude", color = "Group") +
+    theme_minimal()
+  
+  return(list(us_acer_gbif = us_acer_gbif, plot = dist_map))
+}
 
-# Extract the GISA values
-gbif_gisa_values2 <- terra::extract(us_gisa, us_saccharum_gbif1)
-us_saccharum_gbif <- us_saccharum_gbif %>%
-  mutate(gisa = gbif_gisa_values[, 2]) %>%
-  mutate(gisa = recode(gisa,
-                       `1` = 1972, `2` = 1978, `3` = 1985, `4` = 1986, `5` = 1987, 
-                       `6` = 1988, `7` = 1989, `8` = 1990, `9` = 1991, `10` = 1992, 
-                       `11` = 1993, `12` = 1994, `13` = 1995, `14` = 1996, `15` = 1997, 
-                       `16` = 1998, `17` = 1999, `18` = 2000, `19` = 2001, `20` = 2002, 
-                       `21` = 2003, `22` = 2004, `23` = 2005, `24` = 2006, `25` = 2007, 
-                       `26` = 2008, `27` = 2009, `28` = 2010, `29` = 2011, `30` = 2012, 
-                       `31` = 2013, `32` = 2014, `33` = 2015, `34` = 2016, `35` = 2017, 
-                       `36` = 2018, `37` = 2019))
-# Natrual: record before urbanization and always natural
-# Urban: record after urbanization
-us_saccharum_gbif <- us_saccharum_gbif %>%
-  mutate(group = case_when(
-    gisa == 0 ~ "natural",
-    gisa != 0 & gisa <= year ~ "urban",
-    gisa != 0 & gisa > year ~ "natural"
-  )) %>%
-  filter(!(gisa == 0 & year > 2019)) # remove the natrual records after 2019, because we cannot determine whether it is urban or not
 
-# Visualization
-us_boundary <- st_read("~/phenology-urban/data/raw/CONUS/boundary/us_boundarydissolve.shp")
-us_saccharum_gbif1 <- st_as_sf(us_saccharum_gbif, coords = c("decimalLongitude", "decimalLatitude"), crs = crs(us_gisa))
-ggplot(us_saccharum_gbif1) +
-  geom_sf(aes(color = group), size = 0.02) +
-  geom_sf(data=us_boundary,color="grey60",fill=NA) +
-  labs(x = "Longitude", y = "Latitude", color = "Group") +
-  theme_minimal()
+
+
+result <- prepareData(species = "Acer rubrum")
+
+us_acer_gbif <- result$us_acer_gbif
+distribution <- result$plot
+
+print(distribution)
 
 
 ###############################
@@ -68,7 +84,7 @@ output_env <- rast("~/phenology-urban/data/raw/CONUS/chelsa/merged_rasters.tif")
 
 
 ###############################                      
-### Example: Acer saccharum: natural points
+### Example: Acer saccharum
 ###############################  
 
 # Test
@@ -77,63 +93,70 @@ output_env <- rast("~/phenology-urban/data/raw/CONUS/chelsa/merged_rasters.tif")
 # do institution locality test (botanic garden, biodiversity institutions or GBIF headquarters)
 # do human detection to double check
 
+run_occurrence_analysis <- function(occ_species, output_env, species) {
+  names(occ_species)[4] <- 'eventDate'
+  default_settings <- defaultSettings()
+  my_analysis_settings <- default_settings$analysisSettings
 
-#load data
-occ_species_natural <- us_saccharum_gbif  %>%
+  # Human and land use detection
+  my_analysis_settings$humanDetection$doHumanDetection <- FALSE
+  my_analysis_settings$landUse$doLandUse <- FALSE
+  my_analysis_settings$institutionLocality$doInstitutionLocality <- F # for natural points
+  
+  # Country and range analysis
+  my_analysis_settings$centroidDetection$doCentroidDetection <- FALSE
+  my_analysis_settings$countryStatusRange$doCountryRecordAnalysis <- FALSE
+  my_analysis_settings$countryStatusRange$doRangeAnalysis <- FALSE
+  
+  # Time accuracy test
+  my_analysis_settings$doTimeAccuracy <- FALSE
+  
+  # Environmental outliers test
+  my_analysis_settings$envOutliers$doEnvOutliers <- FALSE
+  
+  # geographical outliers
+  myGeoOutliers <- list(
+    doGeoOutliers = TRUE,
+    methodGeoOutliers = c('alphaHull', 'distance', 'median', 'grubbs', 'dixon', 'rosner', 'mcp'),
+    alpha.parameter = 2,
+    mcp_percSample = 95
+  )
+  
+  my_analysis_settings$geoOutliers <- myGeoOutliers
+  my_analysis_settings$geoOutliers$doGeoOutliers <- FALSE  # whether to use geographical outliers
+  
+  occ_species_test <- occTest(
+    sp.name = species,
+    sp.table = occ_species,
+    r.env = output_env,
+    analysisSettings = my_analysis_settings,
+    verbose = TRUE
+  )
+  clean_occ <- occFilter(df = occ_species_test, errorAcceptance = 'strict')
+  # if (errorAcceptance == 'strict')    {colMetaData$errorThreshold =0.2}
+  # if (errorAcceptance == 'majority')  {colMetaData$errorThreshold =0.5}
+  # if (errorAcceptance == 'relaxed')   {colMetaData$errorThreshold =0.7}
+  list(
+    occ_species_test = occ_species_test,
+    clean_occ = clean_occ
+  )
+}
+
+
+###############################                      
+### Example: Acer saccharum: natural
+############################### 
+
+occ_species_natural <- us_acer_gbif  %>%
   mutate(datasetName = 'gbif') %>%
   filter(group == "natural")
 
-names(occ_species_natural)[4] <- 'eventDate'
+natural_result <- run_occurrence_analysis(occ_species = occ_species_natural, output_env = output_env, species = "Acer rubrum")
 
-default_settings <- defaultSettings()
-my_analysis_settings <- default_settings$analysisSettings
-
-#modify settings
-# Decide whether conduct landuse and human influence tests - only do institution locality test
-# Because I rely on GISA data to filter urban distributed points (I could do it for double check)
-my_analysis_settings$humanDetection$doHumanDetection <- F
-my_analysis_settings$landUse$doLandUse <- F
-my_analysis_settings$institutionLocality$doInstitutionLocality <- T
-
-# Decide whether conduct country and range analysis
-my_analysis_settings$centroidDetection$doCentroidDetection <- F
-my_analysis_settings$countryStatusRange$doCountryRecordAnalysis <- F
-my_analysis_settings$countryStatusRange$doRangeAnalysis <-  F
-
-
-# Decide whether conduct time accuracy test
-my_analysis_settings$doTimeAccuracy <- F
-
-# Decide whether conduct environment outliers test
-my_analysis_settings$geoOutliers$doGeoOutliers <- F 
-my_analysis_settings$envOutliers$doEnvOutliers <- F      # environment outliers: identified in niche calculation
-
-myGeoOutliers = list (
-  doGeoOutliers=TRUE,
-  methodGeoOutliers=c('alphaHull', 'distance', 'median', 'grubbs','dixon','rosner','mcp'),  # 'quantilesamplingcorr': Error: Cannot parse CN-TW into a known Country
-  alpha.parameter = 2,
-  mcp_percSample =95
-)
-
-my_analysis_settings$geoOutliers <- myGeoOutliers     # geographical outliers
-
-my_writeout_settings <- set_writeout(output.dir = "~/phenology-urban/data/proc/conus/climate_niche/acer_saccharum_natrual" ,writeAllOutput = T)
-#run workflow
-occ_species_test <- occTest(sp.name = 'Acer saccharum',
-                            sp.table = occ_species_natural,
-                            r.env =output_env,
-                            analysisSettings = my_analysis_settings,
-                            writeoutSettings = my_writeout_settings,
-                            verbose = T)
-table(occ_species_test$geoOutliers_score,exclude = F)
-
-selMM = occFilter(df = occ_species_test,errorAcceptance = 'strict')
-# if (errorAcceptance == 'strict')    {colMetaData$errorThreshold =0.2}
-# if (errorAcceptance == 'majority')  {colMetaData$errorThreshold =0.5}
-# if (errorAcceptance == 'relaxed')   {colMetaData$errorThreshold =0.7}
-names(selMM)
-selMM[['filteredDataset']]
-head(selMM[['summaryStats']])
+# result
+n_occ_species_test <- natural_result$occ_species_test
+n_clean_occ <- natural_result$clean_occ
+head(n_clean_occ[['summaryStats']])
 
 
 # change the rules
@@ -143,14 +166,11 @@ head(selMM[['summaryStats']])
 # custom_rules[custom_rules$testBlock=="geo","errorThreshold"]<-0.2
 # 
 # selMM = occFilter(df = outMartesMartes, custom = custom_rules)
-list_of_plots <- plot(occ_species_test, 
-                      occFilter_list = selMM, 
+list_of_plots <- plot(n_occ_species_test, 
+                      occFilter_list = n_clean_occ, 
                       show_plot = T)
 
 list_of_plots
-
-
-
 
 ###############################                      
 ### Example: Acer saccharum: urban
@@ -161,71 +181,16 @@ list_of_plots
 # do geo test (outlier, accuracy), no country status
 # do institution locality test and human detection to double check
 
-
-# Test
-# do coordinates filtering
-# do geo test (outlier, accuracy), no country status
-# do institution locality test (botanic garden, biodiversity institutions or GBIF headquarters)
-# do human detection to double check
-
-
-#load data
-occ_species_urban <- us_saccharum_gbif  %>%
+occ_species_urban <- us_acer_gbif  %>%
   mutate(datasetName = 'gbif') %>%
   filter(group == "urban")
 
-names(occ_species_urban)[4] <- 'eventDate'
+urban_result <- run_occurrence_analysis(occ_species = occ_species_urban, output_env = output_env, species = "Acer rubrum")
 
-default_settings <- defaultSettings()
-my_analysis_settings <- default_settings$analysisSettings
-
-#modify settings
-# Decide whether conduct landuse and human influence tests - only do institution locality test
-# Because I rely on GISA data to filter urban distributed points (I could do it for double check)
-my_analysis_settings$humanDetection$doHumanDetection <- F
-my_analysis_settings$landUse$doLandUse <- F
-
-# Not decide whether conduct institution locality test (keep it, because it still located in urban env)
-my_analysis_settings$institutionLocality$doInstitutionLocality <- F
-
-# Decide whether conduct country and range analysis
-my_analysis_settings$centroidDetection$doCentroidDetection <- F
-my_analysis_settings$countryStatusRange$doCountryRecordAnalysis <- F
-my_analysis_settings$countryStatusRange$doRangeAnalysis <- F
-
-# Decide whether conduct time accuracy test
-my_analysis_settings$doTimeAccuracy <- F
-
-# Decide whether conduct environment outliers test
-my_analysis_settings$envOutliers$doEnvOutliers <- F      # environment outliers: identified in niche calculation
-my_analysis_settings$geoOutliers$doGeoOutliers <- F
-
-myGeoOutliers = list (
-  doGeoOutliers=TRUE,
-  methodGeoOutliers=c('alphaHull', 'distance', 'median', 'grubbs','dixon','rosner','mcp'),  # 'quantilesamplingcorr': Error: Cannot parse CN-TW into a known Country
-  alpha.parameter = 2,
-  mcp_percSample =95
-)
-
-my_analysis_settings$geoOutliers <- myGeoOutliers     # geographical outliers
-
-my_writeout_settings <- set_writeout(output.dir = "~/phenology-urban/data/proc/conus/climate_niche/acer_saccharum_urban" ,writeAllOutput = T)
-#run workflow
-occ_species_test_urban <- occTest(sp.name = 'Acer saccharum',
-                                  sp.table = occ_species_urban,
-                                  r.env =output_env,
-                                  analysisSettings = my_analysis_settings,
-                                  writeoutSettings = my_writeout_settings,
-                                  verbose = T)
-table(occ_species_test_urban$Reason,exclude = F)
-
-urban = occFilter(df = occ_species_test_urban,errorAcceptance = 'strict')
-# if (errorAcceptance == 'strict')    {colMetaData$errorThreshold =0.2}
-# if (errorAcceptance == 'majority')  {colMetaData$errorThreshold =0.5}
-# if (errorAcceptance == 'relaxed')   {colMetaData$errorThreshold =0.7}
-names(urban)
-urban[['filteredDataset']]
-head(urban[['summaryStats']])
+# result
+u_occ_species_test <- urban_result$occ_species_test
+u_clean_occ <- urban_result$clean_occ
+head(u_clean_occ[['summaryStats']])
 
 
 # change the rules
@@ -235,12 +200,11 @@ head(urban[['summaryStats']])
 # custom_rules[custom_rules$testBlock=="geo","errorThreshold"]<-0.2
 # 
 # selMM = occFilter(df = outMartesMartes, custom = custom_rules)
-list_of_plots <- plot(occ_species_test_urban, 
-                      occFilter_list = urban, 
+list_of_plots <- plot(u_occ_species_test, 
+                      occFilter_list = u_clean_occ, 
                       show_plot = T)
 
 list_of_plots
-
 
 
 ##################################
@@ -306,27 +270,29 @@ ggplot(comparison_df_long) +
 
 # natural/urban comparison
 # natural
-original_point <- st_as_sf(selMM[1]$filteredDataset, coords = c("decimalLongitude", "decimalLatitude"), crs = crs(output_env))
-  # occ_species_test %>%
-  # filter(Reason == "Duplicated--GridCell" | is.na(Reason) ) %>%
-  # st_as_sf(coords = c("decimalLongitude", "decimalLatitude"), crs = crs(output_env))
-extracted_values <- terra::extract(output_env, original_point)
+natural_point <- 
+  # st_as_sf(n_clean_occ[1]$filteredDataset, coords = c("decimalLongitude", "decimalLatitude"), crs = crs(output_env))
+  n_occ_species_test %>%
+  filter(Reason == "Duplicated--GridCell" | is.na(Reason) ) %>%
+  st_as_sf(coords = c("decimalLongitude", "decimalLatitude"), crs = crs(output_env))
+n_clim_values <- terra::extract(output_env, natural_point)
 
 # urban
-filter_point <- st_as_sf(urban[1]$filteredDataset, coords = c("decimalLongitude", "decimalLatitude"), crs = crs(output_env))
-  # occ_species_test_urban %>%
-  # filter(Reason == "Duplicated--GridCell" | is.na(Reason) ) %>%
-  # st_as_sf(coords = c("decimalLongitude", "decimalLatitude"), crs = crs(output_env))
-filter_values <- terra::extract(output_env, filter_point)
+urban_point <- 
+  # st_as_sf(u_clean_occ[1]$filteredDataset, coords = c("decimalLongitude", "decimalLatitude"), crs = crs(output_env))
+  u_occ_species_test %>%
+  filter(Reason == "Duplicated--GridCell" | is.na(Reason) ) %>%
+  st_as_sf(coords = c("decimalLongitude", "decimalLatitude"), crs = crs(output_env))
+u_clim_values <- terra::extract(output_env, urban_point)
 
 # st_as_sf(urban[1]$filteredDataset, coords = c("decimalLongitude", "decimalLatitude"), crs = crs(output_env))
 
 # calculate the range of the environmental variables
-variables <- c("bio12", "bio17")
+variables <- c("bio1", "bio5", "bio6")
 
-extracted_values_df <- extracted_values %>% mutate(source = "natural")
-filter_values_df <- filter_values %>% mutate(source = "urban")
-combined_values <- bind_rows(extracted_values_df, filter_values_df)
+n_clim_values_df <- n_clim_values %>% mutate(source = "natural")
+u_clim_values_df <- u_clim_values %>% mutate(source = "urban")
+combined_values <- bind_rows(n_clim_values_df, u_clim_values_df)
 
 combined_values_long <- combined_values %>%
   select(all_of(variables), source) %>%
@@ -343,21 +309,21 @@ ggplot(combined_values_long, aes(x = variable, y = value, fill = source)) +
 
 
 
-original_ranges <- data.frame(
+natural_ranges <- data.frame(
   variable = variables,
-  min_value = sapply(variables, function(var) quantile(extracted_values[[var]], 0, na.rm = TRUE)),
-  max_value = sapply(variables, function(var) quantile(extracted_values[[var]], 1, na.rm = TRUE))
+  min_value = sapply(variables, function(var) quantile(n_clim_values[[var]], 0.0, na.rm = TRUE)),
+  max_value = sapply(variables, function(var) quantile(n_clim_values[[var]], 1, na.rm = TRUE))
 )
-filter_ranges <- data.frame(
+urban_ranges <- data.frame(
   variable = variables,
-  min_value = sapply(variables, function(var) quantile(filter_values[[var]], 0, na.rm = TRUE)),
-  max_value = sapply(variables, function(var) quantile(filter_values[[var]], 1, na.rm = TRUE))
+  min_value = sapply(variables, function(var) quantile(u_clim_values[[var]], 0, na.rm = TRUE)),
+  max_value = sapply(variables, function(var) quantile(u_clim_values[[var]], , na.rm = TRUE))
 )
 
 # visualization
-comparison_df <- original_ranges %>%
+comparison_df <- natural_ranges %>%
   rename(min_natural = min_value, max_natural = max_value) %>%
-  inner_join(filter_ranges %>% rename(min_urban = min_value, max_urban = max_value), by = "variable")
+  inner_join(urban_ranges %>% rename(min_urban = min_value, max_urban = max_value), by = "variable")
 
 # visualization
 comparison_df_long <- comparison_df %>%
