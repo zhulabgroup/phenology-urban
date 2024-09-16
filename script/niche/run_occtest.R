@@ -20,14 +20,14 @@ run_occtest <- function(occ_species, output_env, species) {
   my_analysis_settings$envOutliers$doEnvOutliers <- FALSE
   
   # geographical outliers
-  myGeoOutliers <- list(
-    doGeoOutliers = TRUE,
-    methodGeoOutliers = c('alphaHull', 'distance', 'median', 'grubbs', 'dixon', 'rosner', 'mcp'),
-    alpha.parameter = 2,
-    mcp_percSample = 95
-  )
-  
-  my_analysis_settings$geoOutliers <- myGeoOutliers
+  # myGeoOutliers <- list(
+  #   doGeoOutliers = TRUE,
+  #   methodGeoOutliers = c('alphaHull', 'distance', 'median', 'grubbs', 'dixon', 'rosner', 'mcp'),
+  #   alpha.parameter = 2,
+  #   mcp_percSample = 95
+  # )
+  # 
+  # my_analysis_settings$geoOutliers <- myGeoOutliers
   my_analysis_settings$geoOutliers$doGeoOutliers <- FALSE  # whether to use geographical outliers
   
   occ_species_test <- occTest(
@@ -37,10 +37,13 @@ run_occtest <- function(occ_species, output_env, species) {
     analysisSettings = my_analysis_settings,
     verbose = TRUE
   )
-  clean_occ <- occFilter(df = occ_species_test, errorAcceptance = 'strict')
-  # if (errorAcceptance == 'strict')    {colMetaData$errorThreshold =0.2}
-  # if (errorAcceptance == 'majority')  {colMetaData$errorThreshold =0.5}
-  # if (errorAcceptance == 'relaxed')   {colMetaData$errorThreshold =0.7}
+  
+  clean_occ <- tryCatch({
+    occFilter(occ_species_test, errorThreshold = 1)
+  }, error = function(e) {
+    NULL
+  })
+  
   list(
     occ_species_test = occ_species_test,
     clean_occ = clean_occ

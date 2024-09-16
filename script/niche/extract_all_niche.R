@@ -56,8 +56,7 @@ source("script/niche/run_occtest.R")
 output_env <- rast("~/phenology-urban/data/raw/CONUS/chelsa/chelsa_bio_1km.tif")
 
 final_summary_stats <- data.frame()
-
-for (i in 1:nrow(potential_sp)){
+for (i in 1:2){
   species <- potential_sp$Latin.Name[i]
   us_species_gbif <- ext_species_gisa(dataset = df, species = species)
   
@@ -87,14 +86,17 @@ for (i in 1:nrow(potential_sp)){
   if (nrow(occ_species_urban) > 0) {
     urban_result <- run_occtest(occ_species = occ_species_urban, output_env = output_env, species = species)
     u_clean_occ <- urban_result$clean_occ
-    urban_point <- st_as_sf(u_clean_occ[1]$filteredDataset, coords = c("decimalLongitude", "decimalLatitude"), crs = crs(output_env))
-    
-    u_clim_values <- terra::extract(output_env, urban_point) %>%
-      bind_cols(as.data.frame(urban_point)) %>%
-      select(1:20) %>%
-      mutate(source = "urban")
+    if (is.null(u_clean_occ)) {
+      u_clim_values <- data.frame()
+    } else {
+      urban_point <- st_as_sf(u_clean_occ[1]$filteredDataset, coords = c("decimalLongitude", "decimalLatitude"), crs = crs(output_env))
+      
+      u_clim_values <- terra::extract(output_env, urban_point) %>%
+        bind_cols(as.data.frame(urban_point)) %>%
+        select(1:20) %>%
+        mutate(source = "urban")
+    }
   } else {
-    
     u_clim_values <- data.frame() 
   }
 
@@ -152,59 +154,11 @@ for (i in 1:nrow(potential_sp)){
       quantile_5 = ~ quantile(., 0.05, na.rm = TRUE)
     ))) %>%
     mutate(species = species)
-  
-  # 查看结果
+
   final_summary_stats <- bind_rows(final_summary_stats, summary_stats)
   saveRDS(final_summary_stats, "data/proc/conus/climate_niche/final_summary_stats.rds")
 }
     
-
-
-
-##################################
-###### compare to GUTI: Acer saccharum ####
-##################################
-
-
-
-
-
-
-
-
-# instead here should use city boundary - get all climate grids
-
-
-summary_stats <- guti_clim_values[, c(2,3,4)] %>%
-  summarise(across(everything(), list(
-    mean = ~ mean(.x, na.rm = TRUE),
-    median = ~ median(.x, na.rm = TRUE),
-    p99 = ~ quantile(.x, 0.99, na.rm = TRUE),
-    p1 = ~ quantile(.x, 0.01, na.rm = TRUE),
-    max = ~ max(.x, na.rm = TRUE),
-    min = ~ min(.x, na.rm = TRUE)
-  )))
-
-
-##################################
-###### Filter use little's map ####### 
-##################################
-
-# load the little's map
-
-
-
-summary_stats <- n_l_clim_values[, c(2,3,4)] %>%
-  summarise(across(everything(), list(
-    mean = ~ mean(.x, na.rm = TRUE),
-    median = ~ median(.x, na.rm = TRUE),
-    p99 = ~ quantile(.x, 0.99, na.rm = TRUE),
-    p1 = ~ quantile(.x, 0.01, na.rm = TRUE),
-    max = ~ max(.x, na.rm = TRUE),
-    min = ~ min(.x, na.rm = TRUE)
-  )))
-summary_stats
-
 
 ######################
 ###### Plot ##########
