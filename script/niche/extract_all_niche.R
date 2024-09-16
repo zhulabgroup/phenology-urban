@@ -1,19 +1,25 @@
+install.package("xfun")
 library(occTest)
-library(sp)
-library(sf)
-library(terra)
-library(ggplot2)
-library(tidyr)
-library(dplyr)
-library(readxl)
-library(stringr)
+library(xfun)
+
+xfun::pkg_attach(c("sf","sp", "dplyr", "terra", "ggplot2", "tidyr", "readxl", "stringr"), install = TRUE) 
+library(rlang)
+
+check_exist <- function(x){ 
+  arg <- quo_name(enquo(x))
+  if(exists(arg, where = .GlobalEnv)){
+    return(T)
+  } else {
+    return(F)
+  }
+}
 
 ###############################                      
 ### Potential species #########
 ###############################
 
-little_species <- read.csv("/Volumes/seas-zhukai/datasets/vegetation/USTreeAtlas/Little_datatable.csv")
-add_city <- read_csv("data/raw/CONUS/climate-niche/guti/add_city.csv")
+little_species <- read.csv("~/lab-data/datasets/vegetation/USTreeAtlas/Little_datatable.csv")
+add_city <- read.csv("~/lab-data/proj-phenology-urban/CONUS/climate-niche/guti/add_city.csv")
 
 
 # GUTI_v1_0 <- read_excel("data/raw/CONUS/climate-niche/guti/GUTI_v1.0.xlsx", 
@@ -27,7 +33,7 @@ add_city <- read_csv("data/raw/CONUS/climate-niche/guti/add_city.csv")
 #   subset(zero_count != 200)
 # saveRDS(selected_columns, "data/raw/CONUS/climate-niche/guti/us_occ_species.rds")
 
-GUTI_species <- readRDS("data/raw/CONUS/climate-niche/guti/us_occ_species.rds") %>%
+GUTI_species <- readRDS("~/lab-data/proj-phenology-urban/CONUS/climate-niche/guti/us_occ_species.rds") %>%
   select(...201) %>% slice(-1, -2) %>%
   rename(Latin.Name = ...201)
 
@@ -46,17 +52,17 @@ GUTI_only_sp <- anti_join(GUTI_species, little_species, by = "Latin.Name") %>%
 ### Differentiate the urban/natural points ####
 ############################### 
 library(data.table)
-df <- fread("~/phenology-urban/data/raw/CONUS/climate-niche/GBIF/us_potential.csv")
+df <- fread("~/lab-data/proj-phenology-urban/CONUS/climate-niche/GBIF/us_potential.csv")
 df <- df %>%
   dplyr::select("gbifID", "decimalLatitude", "decimalLongitude", "year","genus", "species")
 
 source("script/niche/ext_species_gisa.R")
 source("script/niche/run_occtest.R")
 
-output_env <- rast("~/phenology-urban/data/raw/CONUS/chelsa/chelsa_bio_1km.tif")
+output_env <- rast("~/lab-data/proj-phenology-urban/CONUS/chelsa/chelsa_bio_1km.tif")
 
-final_summary_stats <- data.frame()
-for (i in 1:2){
+final_summary_stats <- readRDS("data/proc/conus/climate_niche/final_summary_stats.rds")
+for (i in 4:5){
   species <- potential_sp$Latin.Name[i]
   us_species_gbif <- ext_species_gisa(dataset = df, species = species)
   
@@ -65,18 +71,22 @@ for (i in 1:2){
     mutate(datasetName = 'gbif') %>%
     filter(group == "natural")
   
-  natural_result <- run_occtest(occ_species = occ_species_natural, output_env = output_env, species = species)
-  
-  n_occ_species_test <- natural_result$occ_species_test
-  n_clean_occ <- natural_result$clean_occ
-  
-  natural_point <- 
-    st_as_sf(n_clean_occ[1]$filteredDataset, coords = c("decimalLongitude", "decimalLatitude"), crs = crs(output_env))
-  
-  n_clim_values <- terra::extract(output_env, natural_point)%>%
-    bind_cols(as.data.frame(natural_point)) %>%
-    select(1:20) %>%
-    mutate(source = "natural")
+  if (nrow(occ_species_natural) > 0) {
+    natural_result <- run_occtest(occ_species = occ_species_natural, output_env = output_env, species = species)
+    n_clean_occ <- natural_result$clean_occ
+    if (is.null(n_clean_occ)) {
+      n_clim_values <- data.frame()
+    } else {
+      natural_point <- st_as_sf(n_clean_occ[1]$filteredDataset, coords = c("decimalLongitude", "decimalLatitude"), crs = crs(output_env))
+      
+      n_clim_values <- terra::extract(output_env, natural_point) %>%
+        bind_cols(as.data.frame(natural_point)) %>%
+        select(1:20) %>%
+        mutate(source = "natural")
+    }
+  } else {
+    n_clim_values <- data.frame() 
+  }
   
   # urban
   occ_species_urban <- us_species_gbif  %>%
@@ -101,7 +111,7 @@ for (i in 1:2){
   }
 
   # GUTI
-  selected_columns <- readRDS("data/raw/CONUS/climate-niche/guti/us_occ_species.rds")
+  selected_columns <- readRDS("~/lab-data/proj-phenology-urban/CONUS/climate-niche/guti/us_occ_species.rds")
   
   select_rows <- selected_columns %>%
     filter(selected_columns[, 201] == species)  %>%             # define the species
@@ -128,19 +138,21 @@ for (i in 1:2){
     filter(Latin.Name == species) %>%
     pull("SHP..")
   
-  shp_path <- paste0("/Volumes/seas-zhukai/datasets/vegetation/USTreeAtlas/shp/", shp_name, "/", shp_name, ".shp")
+  shp_path <- paste0("~/lab-data/datasets/vegetation/USTreeAtlas/shp/", shp_name, "/", shp_name, ".shp")
   
   little_map <- st_read(shp_path) %>%
     st_set_crs(crs(output_env)) # Acer saccharinum
   
-  natural_point_little <- st_intersection(natural_point, little_map)
-  
-  n_l_clim_values <- terra::extract(output_env, natural_point_little)%>%
-    bind_cols(as.data.frame(natural_point_little)) %>%
-    select(1:20) %>%
-    mutate(source = "natural_little")
-  
-  
+  if (check_exist(natural_point)){
+    natural_point_little <- st_intersection(natural_point, little_map)
+    
+    n_l_clim_values <- terra::extract(output_env, natural_point_little)%>%
+      bind_cols(as.data.frame(natural_point_little)) %>%
+      select(1:20) %>%
+      mutate(source = "natural_little")
+  } else {
+    n_l_clim_values <- data.frame()}
+
   all_clim_values <- bind_rows(n_clim_values, u_clim_values, guti_clim_values, n_l_clim_values)
 
   summary_stats <- all_clim_values %>%

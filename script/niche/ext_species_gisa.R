@@ -1,6 +1,6 @@
 ext_species_gisa <- function(dataset, species) {
   
-  us_gisa <- rast("~/phenology-urban/data/raw/CONUS/GISA/us_gisa.tif")
+  us_gisa <- rast("~/lab-data/proj-phenology-urban/CONUS/GISA/us_gisa.tif")
   us_species_gbif <- dataset %>% 
     filter(species == !!species) %>%
     distinct() %>%
