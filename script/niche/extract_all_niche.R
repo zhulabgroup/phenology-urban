@@ -1,8 +1,7 @@
-library(occTest)
-library(xfun)
 
-xfun::pkg_attach(c("sf","sp", "dplyr", "terra", "ggplot2", "tidyr", "readxl", "stringr"), install = TRUE) 
-library(rlang)
+library(xfun)
+xfun::pkg_attach(c("sf","sp", "dplyr", "terra", "ggplot2", "tidyr", "occTest",
+                   "readxl", "stringr", "read.table", "rlang"), install = TRUE) 
 
 check_exist <- function(x){ 
   arg <- quo_name(enquo(x))
@@ -69,6 +68,7 @@ final_summary_stats <- data.frame()
 
 for (i in 1:nrow(potential_sp)){
   species <- potential_sp$Latin.Name[i]
+  
   us_species_gbif <- ext_species_gisa(dataset = df, species = species)
   
   #natural
@@ -116,6 +116,7 @@ for (i in 1:nrow(potential_sp)){
   }
   
   # GUTI
+  
   selected_columns <- readRDS("~/lab-data/proj-phenology-urban/CONUS/climate-niche/guti/us_occ_species.rds")
   
   select_rows <- selected_columns %>%
@@ -158,8 +159,10 @@ for (i in 1:nrow(potential_sp)){
   } else {
     n_l_clim_values <- data.frame()}
   
-  all_clim_values <- bind_rows(n_clim_values, u_clim_values, guti_clim_values, n_l_clim_values)
   
+  # calculate the statistical summary
+  
+  all_clim_values <- bind_rows(n_clim_values, u_clim_values, guti_clim_values, n_l_clim_values)
   summary_stats <- all_clim_values %>%
     group_by(source) %>%
     summarise(across(starts_with("wc"), list(
@@ -181,16 +184,9 @@ for (i in 1:nrow(potential_sp)){
 ###### Plot ##########
 ######################
 
-final_summary_stats <- readRDS("~/phenology-urban/data/proc/conus/climate_niche/final_summary_stats.rds") 
-
-filter_4_source <-  final_summary_stats %>%
-  group_by(species) %>%
-  count(species) %>%
-  ungroup() %>%
-  filter(n == 4) %>%
-  right_join(final_summary_stats, by = "species") %>%
-  na.omit() %>%
-  subset(source %in% c("natural", "urban"))
+final_summary_stats <- readRDS("~/phenology-urban/data/proc/conus/climate_niche/chelsaniche/final_summary_stats.rds")
+# colnames(final_summary_stats) <- gsub("wc2.1_10m_", "", colnames(final_summary_stats))
 
 source("script/niche/plot_seg.R")
-plot_seg(data = filter_4_source, biom = "bio5_")
+source_v <- c("natural", "urban")
+plot_seg(data = final_summary_stats, biom = "bio5_", compare = source_v)
