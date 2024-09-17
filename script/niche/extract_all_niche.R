@@ -58,12 +58,17 @@ df <- df %>%
 source("script/niche/ext_species_gisa.R")
 source("script/niche/run_occtest.R")
 
-output_env <- rast("~/lab-data/proj-phenology-urban/CONUS/chelsa/chelsa_bio_1km.tif")
+# output_env <- rast("~/lab-data/proj-phenology-urban/CONUS/chelsa/chelsa_bio_1km.tif")
 
-final_summary_stats <- readRDS("data/proc/conus/climate_niche/final_summary_stats.rds")
+path <- "~/lab-data/datasets/climate/WorldClim/wc2.1_10m"
+tif_files <- list.files(path, pattern = "bio.*\\.tif$", full.names = TRUE)
+output_env <- rast(tif_files)
 
-for (i in 6:nrow(potential_sp)){
-  species <- potential_sp$Latin.Name[3]
+
+final_summary_stats <- data.frame()
+
+for (i in 1:nrow(potential_sp)){
+  species <- potential_sp$Latin.Name[i]
   us_species_gbif <- ext_species_gisa(dataset = df, species = species)
   
   #natural
@@ -157,7 +162,7 @@ for (i in 6:nrow(potential_sp)){
   
   summary_stats <- all_clim_values %>%
     group_by(source) %>%
-    summarise(across(starts_with("bio"), list(
+    summarise(across(starts_with("wc"), list(
       min = ~ min(., na.rm = TRUE),
       max = ~ max(., na.rm = TRUE),
       mean = ~ mean(., na.rm = TRUE),
@@ -168,7 +173,7 @@ for (i in 6:nrow(potential_sp)){
     mutate(species = species)
   
   final_summary_stats <- bind_rows(final_summary_stats, summary_stats)
-  saveRDS(final_summary_stats, "data/proc/conus/climate_niche/final_summary_stats.rds")
+  saveRDS(final_summary_stats, "data/proc/conus/climate_niche/worldclim/final_summary_stats.rds")
 }
 
 
