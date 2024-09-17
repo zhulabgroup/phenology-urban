@@ -36,14 +36,15 @@ plot_seg <- function(data, biom, compare){
   
   plot <- ggplot(biom_columns, aes(x = species_order, color = source, group = source)) +
     geom_linerange(aes(ymin = !!p5_col, ymax = !!p95_col), linewidth = 1.5, alpha = 0.2) +  # 绘制 min/max 范围
-    geom_point(aes(y = !!median_col, shape = "median", color = source), size = 1.5) +  # 中值点
-    geom_point(aes(y = !!mean_col, shape = "mean", color = source), size = 1.5, alpha =0) +  # 平均值点
+    geom_point(aes(y = !!median_col, shape = "median", color = source), size = 1.2) +  # 中值点
+    geom_point(aes(y = !!mean_col, shape = "mean", color = source), size = 1.2, alpha =0.5) +  # 平均值点
     geom_point(aes(y = !!p5_col, shape = "p5", color = source), size = 1.5) +  # p5 点
     geom_point(aes(y = !!p95_col, shape = "p95", color = source), size = 1.5) +  # p95 点
     labs(title = paste0("Comparison of ", biom, "value between natural and urban niches"),
          x = "Species", y = "Value") +
     theme_classic() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +  
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          axis.text.y = element_text(size = 5)) +  
     scale_color_manual(name = "Source",
                        
                        values = c("blue", "red2"),
@@ -51,7 +52,7 @@ plot_seg <- function(data, biom, compare){
     # ,"guti" = "purple", "gbif - little" = "orange"
     
     scale_shape_manual(name = "Statistics",
-                       values = c("mean" = 4, "median" = 5, "p5" = 124, "p95" = 124),
+                       values = c("mean" = 4, "median" = 20, "p5" = 124, "p95" = 124),
                        labels = c("Mean", "Median", "P5", "P95")) +  
     
     guides(color = guide_legend(order = 1), shape = guide_legend(order = 2)) + 

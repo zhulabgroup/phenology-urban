@@ -188,5 +188,6 @@ final_summary_stats <- readRDS("~/phenology-urban/data/proc/conus/climate_niche/
 # colnames(final_summary_stats) <- gsub("wc2.1_10m_", "", colnames(final_summary_stats))
 
 source("script/niche/plot_seg.R")
-source_v <- c("natural", "urban")
-plot_seg(data = final_summary_stats, biom = "bio5_", compare = source_v)
+source_v <- c("natural_little", "urban")
+plot_seg(data = final_summary_stats, biom = "bio1_", compare = source_v)
+
