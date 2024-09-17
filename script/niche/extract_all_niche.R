@@ -1,4 +1,3 @@
-install.package("xfun")
 library(occTest)
 library(xfun)
 
@@ -110,7 +109,7 @@ for (i in 6:nrow(potential_sp)){
   } else {
     u_clim_values <- data.frame() 
   }
-
+  
   # GUTI
   selected_columns <- readRDS("~/lab-data/proj-phenology-urban/CONUS/climate-niche/guti/us_occ_species.rds")
   
@@ -132,9 +131,9 @@ for (i in 6:nrow(potential_sp)){
     bind_cols(as.data.frame(us_db)) %>%
     select(1:20) %>%
     mutate(source = "urban_guti")
-    
+  
   # little
-   
+  
   shp_name <- little_species %>%
     filter(Latin.Name == species) %>%
     pull("SHP..")
@@ -153,9 +152,9 @@ for (i in 6:nrow(potential_sp)){
       mutate(source = "natural_little")
   } else {
     n_l_clim_values <- data.frame()}
-
+  
   all_clim_values <- bind_rows(n_clim_values, u_clim_values, guti_clim_values, n_l_clim_values)
-
+  
   summary_stats <- all_clim_values %>%
     group_by(source) %>%
     summarise(across(starts_with("bio"), list(
@@ -167,56 +166,26 @@ for (i in 6:nrow(potential_sp)){
       quantile_5 = ~ quantile(., 0.05, na.rm = TRUE)
     ))) %>%
     mutate(species = species)
-
+  
   final_summary_stats <- bind_rows(final_summary_stats, summary_stats)
   saveRDS(final_summary_stats, "data/proc/conus/climate_niche/final_summary_stats.rds")
 }
-    
+
 
 ######################
 ###### Plot ##########
 ######################
 
+final_summary_stats <- readRDS("~/phenology-urban/data/proc/conus/climate_niche/final_summary_stats.rds") 
 
-library(tibble)
-#chelsa
-data <- tribble(
-  ~variable, ~source, ~mean_value, ~median_value, ~p99_value, ~p1_value, ~max_value, ~min_value,
-  "bio1", "gbif - natural", 11.2, 11.1, 19.1, 4.85, 23.4, 3.25,
-  "bio1", "gbif - urban", 11.7, 12.1, 18.6, 6.05, 20.5, 3.65,
-  "bio5", "gbif - natural", 28.7, 28.4, 34.3, 24.0, 37.7, 20.9,
-  "bio5", "gbif - urban", 28.6, 28.1, 34.3, 24.9, 38.0, 20.0,
-  "bio6", "gbif - natural", -6.10, -5.95, 5.99, -15.4, 14.1, -18.5,
-  "bio6", "gbif - urban", -4.87, -3.95, 4.45, -14.3, 8.95, -17.5,
-  "bio1", "guti", 10.39951, 10.25, 17.644, 6.252, 18.75, 6.25,
-  "bio5", "guti", 27.53835, 27.55, 32.944, 23.456, 34.35, 21.35,
-  "bio6", "guti", -6.470388, -6.45, 6.648, -14.848, 8.35, -14.85,
-  "bio1", "gbif - little", 11.01146, 10.75, 17.83, 5.75, 19.45, 4.55,
-  "bio5", "gbif - little", 28.55017, 28.25, 33.24, 24.16, 33.65, 22.55,
-  "bio6", "gbif - little", -6.587493, -6.45, 3.22, -14.95, 6.55, -16.45
-)
+filter_4_source <-  final_summary_stats %>%
+  group_by(species) %>%
+  count(species) %>%
+  ungroup() %>%
+  filter(n == 4) %>%
+  right_join(final_summary_stats, by = "species") %>%
+  na.omit() %>%
+  subset(source %in% c("natural", "urban"))
 
-
-
-# 定义 dodge 的宽度
-dodge <- position_dodge(width = 0.5)
-
-ggplot(data, aes(x = interaction(source, variable), y = mean_value, color = source)) +
-  geom_linerange(aes(ymin = min_value, ymax = max_value), linewidth = 1, show.legend = TRUE) +  # 绘制 min/max 范围
-  geom_point(aes(y = median_value, shape = "median"), size = 3, color = "black", show.legend = TRUE) +  # 中值点
-  geom_point(aes(y = mean_value, shape = "mean"), size = 3, color = "red", show.legend = TRUE) +  # 平均值点
-  geom_point(aes(y = p1_value, shape = "p1"), size = 2, color = "blue", show.legend = TRUE) +  # p1 点
-  geom_point(aes(y = p99_value, shape = "p99"), size = 2, color = "blue", show.legend = TRUE) +  # p99 点
-  labs(title = "Comparison of Environmental Variables Across Sources",
-       x = "Environmental Variable and Source", y = "Value") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +  # x轴标签倾斜
-  scale_color_manual(values = c("gbif - natural" = "darkgreen", "gbif - urban" = "brown", 
-                                "guti" = "purple", "gbif - little" = "orange")) +
-  scale_shape_manual(name = "Statistics",
-                     values = c("mean" = 16, "median" = 15, "p1" = 17, "p99" = 17),
-                     labels = c("Mean", "Median", "P1", "P99")) +  # 添加 mean/median/p1/p99 的图例
-  guides(color = guide_legend(order = 1), shape = guide_legend(order = 2)) +  # 确保图例显示，并调整顺序
-  coord_flip()  # 翻转坐标轴
-
-
+source("script/niche/plot_seg.R")
+plot_seg(data = filter_4_source, biom = "bio5_")
