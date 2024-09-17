@@ -57,11 +57,13 @@ df <- df %>%
 source("script/niche/ext_species_gisa.R")
 source("script/niche/run_occtest.R")
 
-# output_env <- rast("~/lab-data/proj-phenology-urban/CONUS/chelsa/chelsa_bio_1km.tif")
 
-path <- "~/lab-data/datasets/climate/WorldClim/wc2.1_10m"
-tif_files <- list.files(path, pattern = "bio.*\\.tif$", full.names = TRUE)
-output_env <- rast(tif_files)
+## choose the tif
+output_env <- rast("~/lab-data/proj-phenology-urban/CONUS/chelsa/chelsa_bio_1km.tif")
+
+# path <- "~/lab-data/datasets/climate/WorldClim/wc2.1_10m"
+# tif_files <- list.files(path, pattern = "bio.*\\.tif$", full.names = TRUE)
+# output_env <- rast(tif_files)
 
 
 final_summary_stats <- data.frame()
@@ -87,7 +89,9 @@ for (i in 1:nrow(potential_sp)){
       n_clim_values <- terra::extract(output_env, natural_point) %>%
         bind_cols(as.data.frame(natural_point)) %>%
         select(1:20) %>%
-        mutate(source = "natural")
+        mutate(source = "natural") %>%
+        mutate(filter_per = nrow(natural_point)/nrow(occ_species_natural)) %>%
+        mutate(size = nrow(natural_point))
     }
   } else {
     n_clim_values <- data.frame() 
@@ -109,7 +113,9 @@ for (i in 1:nrow(potential_sp)){
       u_clim_values <- terra::extract(output_env, urban_point) %>%
         bind_cols(as.data.frame(urban_point)) %>%
         select(1:20) %>%
-        mutate(source = "urban")
+        mutate(source = "urban")%>%
+        mutate(filter_per = nrow(urban_point)/nrow(occ_species_urban)) %>%
+        mutate(size = nrow(urban_point))
     }
   } else {
     u_clim_values <- data.frame() 
@@ -136,7 +142,9 @@ for (i in 1:nrow(potential_sp)){
   guti_clim_values <- terra::extract(output_env, us_db) %>%
     bind_cols(as.data.frame(us_db)) %>%
     select(1:20) %>%
-    mutate(source = "urban_guti")
+    mutate(source = "urban_guti")%>%
+    mutate(filter_per = 1) %>%
+    mutate(size = nrow(us_db))
   
   # little
   
@@ -155,7 +163,9 @@ for (i in 1:nrow(potential_sp)){
     n_l_clim_values <- terra::extract(output_env, natural_point_little)%>%
       bind_cols(as.data.frame(natural_point_little)) %>%
       select(1:20) %>%
-      mutate(source = "natural_little")
+      mutate(source = "natural_little")%>%
+      mutate(filter_per = nrow(natural_point_little)/nrow(occ_species_natural)) %>%
+      mutate(size = nrow(natural_point_little))
   } else {
     n_l_clim_values <- data.frame()}
   
@@ -165,7 +175,10 @@ for (i in 1:nrow(potential_sp)){
   all_clim_values <- bind_rows(n_clim_values, u_clim_values, guti_clim_values, n_l_clim_values)
   summary_stats <- all_clim_values %>%
     group_by(source) %>%
-    summarise(across(starts_with("wc"), list(
+    summarise(
+      size = first(size),
+      filter_per = first(filter_per),
+      across(starts_with("bio"), list(
       min = ~ min(., na.rm = TRUE),
       max = ~ max(., na.rm = TRUE),
       mean = ~ mean(., na.rm = TRUE),
@@ -174,9 +187,10 @@ for (i in 1:nrow(potential_sp)){
       quantile_5 = ~ quantile(., 0.05, na.rm = TRUE)
     ))) %>%
     mutate(species = species)
+    
   
   final_summary_stats <- bind_rows(final_summary_stats, summary_stats)
-  saveRDS(final_summary_stats, "data/proc/conus/climate_niche/worldclim/final_summary_stats.rds")
+  saveRDS(final_summary_stats, "data/proc/conus/climate_niche/chelsaniche/little_guit_both.rds")
 }
 
 
@@ -190,4 +204,9 @@ final_summary_stats <- readRDS("~/phenology-urban/data/proc/conus/climate_niche/
 source("script/niche/plot_seg.R")
 source_v <- c("natural_little", "urban")
 plot_seg(data = final_summary_stats, biom = "bio1_", compare = source_v)
+
+source("script/niche/plot_diff_scatter.R")
+plot_diff_scatter(data = final_summary_stats, biom = "bio1_quantile_5", compare = source_v)
+
+# calculate the difference between natural and urban
 
