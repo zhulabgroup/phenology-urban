@@ -62,8 +62,9 @@ source("script/niche/run_occtest.R")
 output_env <- rast("~/lab-data/proj-phenology-urban/CONUS/chelsa/chelsa_bio_1km.tif")
 
 final_summary_stats <- readRDS("data/proc/conus/climate_niche/final_summary_stats.rds")
-for (i in 4:5){
-  species <- potential_sp$Latin.Name[i]
+
+for (i in 6:nrow(potential_sp)){
+  species <- potential_sp$Latin.Name[3]
   us_species_gbif <- ext_species_gisa(dataset = df, species = species)
   
   #natural
