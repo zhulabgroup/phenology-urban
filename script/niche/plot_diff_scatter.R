@@ -21,7 +21,7 @@ plot_diff_scatter <- function(data, biom, compare) {
       diff = !!sym(compare[1]) - !!sym(compare[2])  # Use !!sym() to evaluate column names
     )
   
-  model <- lm(as.formula(paste("diff", "~", compare[1])), diff_data)
+  model <- lm(as.formula(paste(compare[2], "~", compare[1])), diff_data)
   coef <- coef(model)
   equation_text <- sprintf("y = %.2fx + %.2f", coef[2], coef[1])
   r_squared <- summary(model)$r.squared
@@ -30,16 +30,17 @@ plot_diff_scatter <- function(data, biom, compare) {
   p_text <- paste0("p-value = ", format(p_value, digits = 3, scientific = TRUE))
   
   
-  plot <- ggplot(diff_data, aes(x = !!sym(compare[1]), y = diff)) +
+  plot <- ggplot(diff_data, aes(x = !!sym(compare[1]), y = !!sym(compare[2]))) +
     geom_point() +
     geom_smooth(method = "lm", se = TRUE, level = 0.95,  fill = "gray", alpha = 0.5) +
+    geom_abline(intercept = 0, slope = 1, color = "red", alpha =0.7, linewidth = 1) +
     labs(
       title = biom, 
       subtitle = paste(
         equation_text, "; ", r2_text, "; ", p_text
       ),
       x = "Natural", 
-      y = "Natural - Urban"
+      y = "Urban"
     ) +
     theme_classic()
   

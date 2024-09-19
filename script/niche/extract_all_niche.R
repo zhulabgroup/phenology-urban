@@ -85,7 +85,8 @@ for (i in 1:nrow(potential_sp)){
       n_clim_values <- data.frame()
     } else {
       natural_point <- st_as_sf(n_clean_occ[1]$filteredDataset, coords = c("decimalLongitude", "decimalLatitude"), crs = crs(output_env))
-      
+
+      # sample_n(smaller(nrow(urban_point),nrow(natural_point)))      
       n_clim_values <- terra::extract(output_env, natural_point) %>%
         bind_cols(as.data.frame(natural_point)) %>%
         select(1:20) %>%
@@ -199,14 +200,28 @@ for (i in 1:nrow(potential_sp)){
 ######################
 
 final_summary_stats <- readRDS("~/phenology-urban/data/proc/conus/climate_niche/chelsaniche/final_summary_stats.rds")
+little_only <- readRDS("~/phenology-urban/data/proc/conus/climate_niche/chelsaniche/little_only.rds")
 # colnames(final_summary_stats) <- gsub("wc2.1_10m_", "", colnames(final_summary_stats))
 
 source("script/niche/plot_seg.R")
-source_v <- c("natural_little", "urban")
-plot_seg(data = final_summary_stats, biom = "bio1_", compare = source_v)
+source_v <- c("natural", "urban")
+plot_seg(data = little_only, biom = "bio6_", compare = source_v)
 
 source("script/niche/plot_diff_scatter.R")
-plot_diff_scatter(data = final_summary_stats, biom = "bio1_quantile_5", compare = source_v)
+
+all_data <- rbind(final_summary_stats, little_only)
+
+plot_diff_scatter(data = all_data, biom = "bio6_quantile_5", compare = source_v)
 
 # calculate the difference between natural and urban
+
+filter_4_source <- little_only %>%
+  group_by(species) %>%
+  count(species) %>%
+  ungroup() %>%
+  filter(n == 4) %>%                          ####
+  right_join(little_only, by = "species") %>%
+  na.omit() %>%
+  select(species, source, size, filter_per) %>%
+  filter(source %in% source_v)
 
