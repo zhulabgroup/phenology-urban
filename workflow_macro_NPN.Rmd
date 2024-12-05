@@ -14,39 +14,49 @@ library(patchwork)
 library(purrr)
 library(coda)
 
-# individual_phenometrics_data <- read_csv("~/phenology-urban/data/raw/CONUS/NPN/NPN1722/individual_phenometrics_data.csv")
-# individual_leaf_bud <- subset(individual_phenometrics_data, Phenophase_Description == "Breaking leaf buds")
-# individual_color_leaf <- subset(individual_phenometrics_data, Phenophase_Description == "Colored leaves")
+individual_phenometrics_data <- read_csv("~/phenology-urban/data/raw/CONUS/NPN/NPN1722/individual_phenometrics_data.csv")
+individual_leaf_bud <- subset(individual_phenometrics_data, Phenophase_Description == "Breaking leaf buds")
+individual_color_leaf <- subset(individual_phenometrics_data, Phenophase_Description == "Colored leaves")
 ```
 
 ## 1.2 average with sites/species/year (avg.individual)
 ```{r}
-# individual_leaf_bud_filter <- individual_leaf_bud %>%
-#   group_by(Individual_ID, First_Yes_Year) %>%
-#   summarise(First_Yes_DOY = min(First_Yes_DOY, na.rm = TRUE)) %>%
-#   left_join(individual_leaf_bud, by = c("Individual_ID", "First_Yes_Year", "First_Yes_DOY"))%>%
-#   filter(First_Yes_DOY <= 183)
-# 
-# individual_color_leaf_filter <- individual_color_leaf %>%
-#   group_by(Individual_ID, First_Yes_Year) %>%
-#   summarise(First_Yes_DOY = min(First_Yes_DOY, na.rm = TRUE)) %>%
-#   left_join(individual_color_leaf, by = c("Individual_ID", "First_Yes_Year", "First_Yes_DOY")) %>%
-#   filter(First_Yes_DOY >= 182)
-# 
-# # breaking leaf buds (species) >= 80
-# individual_leaf_bud_filter2 <- individual_leaf_bud_filter %>%
-#     group_by(Genus, Species) %>%
-#     count() %>%
-#     filter(n >= 80) %>%
-#     inner_join(individual_leaf_bud_filter, by = c("Genus", "Species"))
-# 
-# # colored leaves (species) >= 40
-# individual_color_leaf_filter2 <- individual_color_leaf_filter %>%
-#     group_by(Genus, Species) %>%
-#     count() %>%
-#     filter(n >= 40) %>%
-#     inner_join(individual_color_leaf_filter, by = c("Genus", "Species"))
-# 
+individual_leaf_bud_filter <- individual_leaf_bud %>%
+  group_by(Individual_ID, First_Yes_Year) %>%
+  summarise(First_Yes_DOY = min(First_Yes_DOY, na.rm = TRUE)) %>%
+  left_join(individual_leaf_bud, by = c("Individual_ID", "First_Yes_Year", "First_Yes_DOY"))%>%
+  filter(First_Yes_DOY <= 183)
+
+individual_color_leaf_filter <- individual_color_leaf %>%
+  group_by(Individual_ID, First_Yes_Year) %>%
+  summarise(First_Yes_DOY = min(First_Yes_DOY, na.rm = TRUE)) %>%
+  left_join(individual_color_leaf, by = c("Individual_ID", "First_Yes_Year", "First_Yes_DOY")) %>%
+  filter(First_Yes_DOY >= 182)
+
+# breaking leaf buds (species) >= 80
+individual_leaf_bud_filter2 <- individual_leaf_bud_filter %>%
+    group_by(Genus, Species) %>%
+    count() %>%
+    filter(n >= 80) %>%
+    inner_join(individual_leaf_bud_filter, by = c("Genus", "Species"))
+
+# colored leaves (species) >= 40
+individual_color_leaf_filter2 <- individual_color_leaf_filter %>%
+    group_by(Genus, Species) %>%
+    count() %>%
+    filter(n >= 40) %>%
+    inner_join(individual_color_leaf_filter, by = c("Genus", "Species"))
+
+coordinates(individual_leaf_bud_filter) <- c("Longitude", "Latitude")
+species_leaf_bud_site <- st_as_sf(individual_leaf_bud_filter) %>% st_set_crs("EPSG:4326")
+
+coordinates(individual_color_leaf_filter) <- c("Longitude", "Latitude")
+species_color_leaf_site <- st_as_sf(individual_color_leaf_filter) %>% st_set_crs("EPSG:4326")
+
+## save as shp.
+write_sf(species_leaf_bud_site, "~/phenology-urban/data/proc/conus/npn/leaf_bud_1222.shp")
+write_sf(species_color_leaf_site, "~/phenology-urban/data/proc/conus/npn/color_leaf_1222.shp")
+
 # # species-site-year average doy for leaf-bud
 # species_leaf_bud <- individual_leaf_bud_filter2 %>%
 #   group_by(Site_ID, Latitude, Longitude,
@@ -708,3 +718,39 @@ mod_all_sene_empi = bind_rows(sum_lmm_fix(mod_1, "Temp. only"),
 
 ```
 
+# 5 Add LST data
+
+## leaf_bud
+```{r}
+filefolder <- "~/phenology-urban/data/proc/conus/npn/leaf_LST"
+lst_files <- list.files(path = filefolder, pattern = "\\.csv$", full.names = TRUE)
+
+leaf_lst <- lapply(lst_files, function(file) {
+  data <- read.csv(file)
+  
+  required_columns <- c("id", "source",
+                        "year", "month","day", 
+                        "lst")
+  
+  if (!all(required_columns %in% colnames(data))) {
+    message("Skipping file due to missing columns: ", file)
+    return(NULL)
+  }
+  
+  data %>%
+    dplyr::select(all_of(required_columns)) 
+})
+
+leaf_lst <- Filter(Negate(is.null), leaf_lst)
+leaf_lst <- do.call(rbind, leaf_lst)
+
+leaf_each <- leaf_lst %>%
+  mutate(season = case_when(
+    month %in% c(3, 4, 5) ~ "spring",
+    month %in% c(12, 1, 2) ~ "winter",
+    month %in% c(6,7,8,9,10,11) ~ "other")) %>%
+  mutate(date = as.Date(paste(year, month, day, sep = "-"))) %>%
+  group_by(id, season) %>%
+  summarize(lst_seasonal = mean(lst, na.rm = TRUE))
+
+```

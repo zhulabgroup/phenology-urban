@@ -656,6 +656,7 @@ plot <- ggplot(analyze_color_leaf, aes(x = Tavg_Summer, y = First_Yes_DOY, color
 analyze_color_leaf$Tavg_Summer_scaled <- scale(analyze_color_leaf$Tavg_Summer)
 analyze_color_leaf$summer_sm_scaled <- scale(analyze_color_leaf$summer_sm)
 
+
 control = lme4::lmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 1e5))
 mod_1 = lmerTest::lmer(First_Yes_DOY ~ Tavg_Summer_scaled + 
                         (1 | Genus) + (1 | First_Yes_Year) + 
@@ -1079,3 +1080,29 @@ mod_all_sene_empi = bind_rows(sum_lmm_fix(mod_1_1, "Temp. only"),
          `VPD : ALAN` = "alan_scaled:summer_vpd_scaled",
          `delta AIC` = delta)
 ```
+
+### 3.5 SEM model
+
+```{r}
+library(lavaan)
+analyze_color_leaf <- readRDS("~/phenology-urban/data/proc/conus/npn/all_drivers/color_leaf_1116.rds") %>%
+  as.data.frame() %>%
+  na.omit() %>%
+  mutate(inter_alan_sm = alan * summer_sm_scaled) %>%
+  mutate(inter_alan_temp = alan * Tavg_Summer_scaled)
+
+m1 <-   '
+  # regressions
+    First_Yes_DOY ~ 1 + Tavg_Summer_scaled + summer_sm_scaled + alan + inter_alan_sm + inter_alan_temp
+    summer_sm_scaled ~ 1 + alan 
+    Tavg_Summer_scaled ~ 1 + alan
+  # covariance and variance
+    Tavg_Summer_scaled ~~ Tavg_Summer_scaled
+    summer_sm_scaled ~~ summer_sm_scaled
+    alan ~~ alan
+    First_Yes_DOY ~~ First_Yes_DOY
+'
+fit1 <- sem(m1, data = analyze_color_leaf)
+summary(fit1, fit.measures=TRUE)
+```
+
