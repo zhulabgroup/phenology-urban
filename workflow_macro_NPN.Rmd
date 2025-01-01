@@ -2,6 +2,7 @@
 ## 1.1 insert data
 ```{r}
 library(readr)
+library(tidyr)
 library(dplyr)
 library(sf)
 library(sp)
@@ -722,7 +723,9 @@ mod_all_sene_empi = bind_rows(sum_lmm_fix(mod_1, "Temp. only"),
 
 ## leaf_bud
 ```{r}
-filefolder <- "~/phenology-urban/data/proc/conus/npn/leaf_LST"
+bud_sf <- sf::st_read("~/phenology-urban/data/proc/conus/npn/12_22/leaf_bud/leafWithId_shapefile.shp")
+
+filefolder <- "~/phenology-urban/data/proc/conus/npn/12_22/leaf_bud/leaf_LST"
 lst_files <- list.files(path = filefolder, pattern = "\\.csv$", full.names = TRUE)
 
 leaf_lst <- lapply(lst_files, function(file) {
@@ -730,13 +733,12 @@ leaf_lst <- lapply(lst_files, function(file) {
   
   required_columns <- c("id", "source",
                         "year", "month","day", 
-                        "lst")
+                        "lst", ".geo")
   
   if (!all(required_columns %in% colnames(data))) {
     message("Skipping file due to missing columns: ", file)
     return(NULL)
   }
-  
   data %>%
     dplyr::select(all_of(required_columns)) 
 })
@@ -745,12 +747,96 @@ leaf_lst <- Filter(Negate(is.null), leaf_lst)
 leaf_lst <- do.call(rbind, leaf_lst)
 
 leaf_each <- leaf_lst %>%
-  mutate(season = case_when(
-    month %in% c(3, 4, 5) ~ "spring",
-    month %in% c(12, 1, 2) ~ "winter",
-    month %in% c(6,7,8,9,10,11) ~ "other")) %>%
-  mutate(date = as.Date(paste(year, month, day, sep = "-"))) %>%
+  mutate(
+    season = case_when(
+      month %in% c(3, 4, 5) ~ "spring",
+      month %in% c(12, 1, 2) ~ "winter",
+      TRUE ~ "other"
+    ),
+    date = as.Date(paste(year, month, day, sep = "-"))
+  ) %>%
   group_by(id, season) %>%
-  summarize(lst_seasonal = mean(lst, na.rm = TRUE))
+  summarize(
+    lst_seasonal = mean(lst, na.rm = TRUE),
+    .groups = "drop_last" # Keeps grouping by `id`
+  ) %>%
+  filter(season %in% c("spring", "winter")) %>%
+  pivot_wider(
+    names_from = season,
+    values_from = lst_seasonal,
+    names_prefix = "mean_"
+  ) %>%
+  ungroup() %>%
+  left_join(
+    leaf_lst %>%
+      mutate(date = as.Date(paste(year, month, day, sep = "-"))) %>%
+      group_by(id) %>%
+      slice_max(order_by = date, with_ties = FALSE) %>%
+      dplyr::select(id, lst),
+    by = "id"
+  ) %>%
+  rename(lst_recent = lst)
 
+bud_sf <- left_join(bud_sf, leaf_each, by = "id")
 ```
+
+## color_leaf
+
+```{r}
+color_sf <- sf::st_read("~/phenology-urban/data/proc/conus/npn/12_22/color_leaf/colorWithId_shapefile.shp")
+
+filefolder <- "~/phenology-urban/data/proc/conus/npn/12_22/color_leaf/color_LST"
+lst_files <- list.files(path = filefolder, pattern = "\\.csv$", full.names = TRUE)
+
+color_lst <- lapply(lst_files, function(file) {
+  data <- read.csv(file)
+  
+  required_columns <- c("id", "source",
+                        "year", "month","day", 
+                        "lst", ".geo")
+  
+  if (!all(required_columns %in% colnames(data))) {
+    message("Skipping file due to missing columns: ", file)
+    return(NULL)
+  }
+  data %>%
+    dplyr::select(all_of(required_columns)) 
+})
+
+color_lst <- Filter(Negate(is.null), color_lst)
+color_lst <- do.call(rbind, color_lst)
+
+color_each <- color_lst %>%
+  mutate(
+    season = case_when(
+      month %in% c(3, 4, 5) ~ "spring",
+      month %in% c(12, 1, 2) ~ "winter",
+      month %in% c(6, 7, 8) ~ "summer",
+      month %in% c(9, 10, 11) ~ "fall",
+      TRUE ~ "other"
+    ),
+    date = as.Date(paste(year, month, day, sep = "-"))
+  ) %>%
+  group_by(id, season) %>%
+  summarize(
+    lst_seasonal = mean(lst, na.rm = TRUE),
+    .groups = "drop_last" # Keeps grouping by `id`
+  ) %>%
+  filter(season %in% c("spring", "winter")) %>%
+  pivot_wider(
+    names_from = season,
+    values_from = lst_seasonal,
+    names_prefix = "mean_"
+  ) %>%
+  ungroup() %>%
+  left_join(
+    color_lst %>%
+      mutate(date = as.Date(paste(year, month, day, sep = "-"))) %>%
+      group_by(id) %>%
+      slice_max(order_by = date, with_ties = FALSE) %>%
+      dplyr::select(id, lst),
+    by = "id"
+  ) %>%
+  rename(lst_recent = lst)
+
+color_sf <- left_join(color_sf, color_each, by = "id")

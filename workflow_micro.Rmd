@@ -9,16 +9,49 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-1. Insert tree id
+# Weather underground data
 ```{r}
-source("script/read_tree_inventory.R")
-cityoi <- "NY"
-df_tree <- read_tree_inventory(city = cityoi)
-
-v_taxa <- c("Quercus", "Morus", "Ulmus", "Fraxinus", "Betula", "Acer", "Populus", "Vacant")
+all_sites_temp <- readRDS("~/urban-cooling/data/raw/NYC/WU/all_sites_temp.rds")
 ```
 
-2. Creat buffer zone near tree point (sample points)
+
+# 1. Insert tree id base on WU data
+```{r}
+################ For phenology data ################
+
+metadata <- read_csv("~/lab-data/datasets/vegetation/PS/urban/metadata.csv") %>%
+  filter(site == "NY") %>%
+  mutate
+
+file_list <- list.files(path = "~/lab-data/datasets/vegetation/PS/urban/doy/", pattern = "^doy_NY_.*\\.rds$", full.names = TRUE)
+data_list <- file_list %>%
+  map(~ readRDS(.x) %>% filter(direction == "up" & thres == 0.5 & year == 2020))
+ny_now <- bind_rows(data_list)
+
+tree_location <- metadata %>%
+  mutate(genus = str_extract(taxa, "^[^ ]+")) %>%
+  # left_join(ny_now, by = "id") %>%
+  # filter(!is.na(doy)) %>%
+  st_as_sf(coords = c("lon", "lat"), crs = 4326)
+
+wu_location <- read_csv("data/raw/NYC/WU/location.csv") %>%
+  st_as_sf(coords = c("Lon", "Lat"), crs = 4326)
+wu_buffer <- st_buffer(wu_location, dist = 100)
+
+intersects <- st_intersects(tree_location, wu_buffer)
+points_in_buffer <- tree_location[lengths(intersects) > 0, ]
+points_in_buffer <- tree_location %>%
+  mutate(buffer_id = sapply(intersects, function(x) if (length(x) > 0) x[1] else NA)) %>% 
+  left_join(wu_buffer %>% st_drop_geometry() %>% mutate(buffer_id = row_number()), by = "buffer_id") %>%
+  filter(!is.na(buffer_id)) %>%
+  select(-buffer_id)
+
+write_csv(points_in_buffer, "~/phenology-urban/data/proc/nyc/tree_WU_100_buffer.csv")
+
+```
+
+
+# 2. Creat buffer zone near tree point (sample points)
 ```{r}
 library(sp)
 library(sf)
@@ -52,7 +85,7 @@ geom_sf(data = boundary_NY, fill = "white", color = "black") +
 
 ```
 
-3. Insert building data / Intersection fail (prelimilary result from Arcgis)
+# 3. Insert building data / Intersection fail (prelimilary result from Arcgis)
 ```{r}
 source("~/phenology-urban/script/faster_intersect.R")
 building_footprint <- sf::read_sf('~/phenology-urban/data/raw/NY/NY_building_footprint/geo_export_56deb8a8-0463-4f00-8f45-99e751e3b8e1.shp') %>%
@@ -64,7 +97,7 @@ intersection_result <- faster_intersect(building_footprint, buffers)
 
 ```
 
-4. building index for betula_200_buffer
+# 4. building index for betula_200_buffer
 ```{r}
 library(dplyr)
 library(foreign)
@@ -120,7 +153,7 @@ svf_betula <- SVF(
 
 ```
 
-5. visualize
+# 5. visualize
 
 ```{r}
 library(ggplot2)
