@@ -729,7 +729,7 @@ formula <- as.formula("doy ~ AvgTemp_mean + Sum_mm_sum + srad_mean")
 #               starting=starting, tuning=tuning, priors=priors, knots = c(20, 20, 0),
 #               cov.model="exponential", verbose=TRUE, n.samples=n.samples, n.report=25)
 # save(model, file = "result/urban/ny_all_genus_tavg_SOS.RData")
-load("result/urban/ny_all_genus_tavg_SOS.RData")
+load("~/phenology-urban/data/proc/urban/ny_all_genus_tavg_SOS.RData")
 
 plot(model$p.beta.samples)
 plot(model$p.theta.samples)
@@ -748,7 +748,7 @@ burn.in <- 0.5* n.samples
 ##recover beta and spatial random effects
 # m.1 <- spRecover(model, start=burn.in, verbose=FALSE)
 # save(m.1, file = "result/urban/ny_all_genus_tavg_SOS_re.RData")
-load("result/urban/ny_all_genus_tavg_SOS_re.RData")
+load("~/phenology-urban/data/proc/urban/ny_all_genus_tavg_SOS_re.RData")
 
 beta_samples <- as.matrix(m.1$p.beta.recover.samples)
 temp_coefficients <- beta_samples[, "AvgTemp_mean"]
@@ -818,13 +818,13 @@ priors <- list(
 #               starting=starting, tuning=tuning, priors=priors,knots = c(20, 20, 0),
 #               cov.model="exponential", verbose=TRUE, n.samples=n.samples, n.report=100)
 # save(model2, file = "result/urban/ny_acer_tavg_SOS.RData")
-load("result/urban/ny_acer_tavg_SOS.RData")
+load("~/phenology-urban/data/proc/urban/ny_acer_tavg_SOS.RData")
 
 burn.in <- 0.5* n.samples
 ##recover beta and spatial random effects
 # m.2 <- spRecover(model2, start=burn.in, verbose=TRUE)
 # save(m.2, file = "result/urban/ny_acer_tavg_SOS_re.RData")
-load("result/urban/ny_acer_tavg_SOS_re.RData")
+load("~/phenology-urban/data/proc/urban/ny_acer_tavg_SOS_re.RData")
 
 plot(model2$p.beta.samples)
 plot(model2$p.theta.samples)
