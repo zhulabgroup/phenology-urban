@@ -7,22 +7,22 @@ library(sf)
 library(sp)
 library(raster)
 library(ggplot2)
+library(lubridate)
 
-bearer <- "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJlbWFpbF9hZGRyZXNzIjoiamlhbGl6QHVtaWNoLmVkdSIsImlzcyI6IkFQUyBPQXV0aDIgQXV0aGVudGljYXRvciIsImlhdCI6MTcwNjU4MDAwNywibmJmIjoxNzA2NTgwMDA3LCJleHAiOjE4NjQyNjAwMDcsInVpZCI6ImppYWxpejk4IiwidG9rZW5DcmVhdG9yIjoiamlhbGl6OTgifQ.00pMRaYU0YJBfodt70ptBeZyfiAoSeVLsryGmTI0sq0"
+bearer <- "eyJ0eXAiOiJKV1QiLCJvcmlnaW4iOiJFYXJ0aGRhdGEgTG9naW4iLCJzaWciOiJlZGxqd3RwdWJrZXlfb3BzIiwiYWxnIjoiUlMyNTYifQ.eyJ0eXBlIjoiVXNlciIsInVpZCI6ImppYWxpejk4IiwiZXhwIjoxNzQxNjMzMjIxLCJpYXQiOjE3MzY0NDkyMjEsImlzcyI6Imh0dHBzOi8vdXJzLmVhcnRoZGF0YS5uYXNhLmdvdiIsImlkZW50aXR5X3Byb3ZpZGVyIjoiZWRsX29wcyIsImFjciI6ImVkbCIsImFzc3VyYW5jZV9sZXZlbCI6M30.Gzvc-3Jes6R91nm-CEjvwxl1hq72fB_ly6OkEoGQ6Jjhm1MgF1XxwQE_EMLps8ictr1YMgCa9jaIv8dPjTttElxCZW8xGpPLKjVD0d86X8YcpmIfMiLl-BwdUwHiAhyJn7gZCCJsoic0G39LxWlfllCAcOwL-ghxtH0EybOlfvECEXdE1nDjha1Hv-MiNVXVlzZDP6VSBERKsA0qzq-Ghe43Xd3tq7f2_uW-ETfZ0cU2d3mCpFVzwuanhWUfxFvpQhw7n2uZT2ntoDvCOlsVOcXyJiDSOo_ToAb6lE57mefZlYJBSrwF-gLTT_vefytf6VGD8DcRyW0RtCuxqYPpWA"
 roi_sf <- sf::read_sf('data/raw/CONUS/boundary/us_boundarydissolve.shp')
 us_boundary <- st_transform(roi_sf, crs = st_crs(4326))
 
-for (y in 2017:2017){
-  bm_raster(roi_sf = us_boundary,
-            product_id = "VNP46A4",
-            date = y,
-            bearer = bearer,
-            output_location_type = "file",
-            file_dir = "~/phenology-urban/data/raw/CONUS/ALAN",
-            check_all_tiles_exist = FALSE,
-            variable = "NearNadir_Composite_Snow_Free") # defult, different angle, snow cover
-  }
 
+bm_raster(roi_sf = us_boundary,
+          product_id = "VNP46A3",
+          date = seq.Date(from = ymd("2012-01-01"), to = ymd("2022-12-01"), by = "month"),
+          bearer = bearer,
+          output_location_type = "file",
+          quality_flag_rm = 2,
+          file_dir = "~/phenology-urban/data/raw/CONUS/ALAN",
+          check_all_tiles_exist = FALSE,
+          variable = "NearNadir_Composite_Snow_Free") # defult, different angle, snow cover
 ```
 2. Map
 
@@ -60,36 +60,6 @@ ggsave("~/phenology-urban/result/alan/alan_2018_betula.jpg", p, width = 8, heigh
 
 3. Add temperature - 2018 Birch - daymet
 ```{r}
-# ------------------------------------ Get Daymet Data ------------------------------------ #
-# download the Daymet data
-library(daymetr)  # for getting Daymet data
-library(ncdf4)  # for processing .nc data
-library(janitor)  # for detecting cols with all records empty
-library(gstat)  # for interpolation
-library(sp)
-library(sf)
-library(raster)
-
-folder.raw <- '~/phenology-urban/data/raw/CONUS/Daymet/test'
-
-download_Daymet <- TRUE
-
-
-
-us_boundary <- sf::read_sf('data/raw/CONUS/boundary/us_boundarydissolve.shp')
-us_boundary <- st_set_crs(us_boundary, "EPSG:4326")
-
-if (download_Daymet){
-  # get LST extent
-  bbox <- as.vector(terra::ext(us_boundary))
-  # download Daymet data
-  download_daymet_ncss(location = bbox[c('ymax', 'xmin', 'ymin', 'xmax')],
-                       start = 2018, end = 2018,
-                       frequency = "monthly",
-                       param = c("tmin","tmax"),
-                       path=folder.raw)
-}
-
 # open the netCDF variables
 tmax.nc <- terra::rast("~/phenology-urban/data/raw/CONUS/Daymet/tmax_monavg_2018_ncss.nc")
 tmin.nc <- terra::rast("~/phenology-urban/data/raw/CONUS/Daymet/tmin_monavg_2018_ncss.nc")

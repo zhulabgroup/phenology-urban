@@ -4,7 +4,7 @@ load_packages(c("dplyr","lubridate", "ggplot2", "sf", "readr", "purrr", "stringr
 
 ################### Combine all the weather data from different stations ###################
 
-read_clean_WU <- function(city = "NY", run_checks = TRUE) {
+read_clean_WU <- function(city, run_checks = TRUE) {
   file_path <- paste0("~/urban-cooling/data/raw/WU/", city, "/data")
   file_list <- list.files(path = file_path, pattern = "*.csv", full.names = TRUE)
   all_data <- data.frame()
@@ -201,7 +201,7 @@ read_clean_WU <- function(city = "NY", run_checks = TRUE) {
         Sum_mm = case_when(Prcp_Flag ~ NA_real_, TRUE ~ Sum_mm)
       )
     
-    saveRDS(final, "~/urban-cooling/data/raw/WU/NY/NY_wu.rds")
+    saveRDS(final, paste0("~/urban-cooling/data/raw/WU/",city,"/",city,"_wu.rds"))
     return(final)
   }
   return(all_temp)
