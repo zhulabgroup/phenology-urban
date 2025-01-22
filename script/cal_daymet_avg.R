@@ -9,15 +9,14 @@ library(sp)
 library(sf)
 library(raster)
 
-folder.raw <- '~/phenology-urban/data/raw/TP/Daymet/daily2016-2024'
 
+city = "DT"
+folder.raw <- paste0("~/phenology-urban/data/raw/", city, "/Daymet/daily2016-2024")
 download_Daymet <- TRUE
 
-
-
-us_boundary <- sf::read_sf("~/urban-cooling/data/raw/WU/TP/Municipal_Boundary/Municipal_Boundary.shp")
-us_boundary <- us_boundary %>% st_transform(4326) %>%
-  filter(NAME != "Plant City")
+################# based on the boundary of the city #################
+us_boundary <- sf::read_sf("~/urban-cooling/data/raw/WU/DT/City_of_Detroit_Boundary/City_of_Detroit_Boundary.shp")
+us_boundary <- us_boundary %>% st_transform(4326)
 
 ################# larege area #################
 
@@ -91,16 +90,17 @@ if (download_Daymet){
 
 ############# clean srad #############
 
-data_dir <- "~/phenology-urban/data/raw/HT/Daymet/daily2016-2024/"
+data_dir <- paste0("~/phenology-urban/data/raw/", city, "/Daymet/daily2016-2024/")
 file_list <- list.files(data_dir, pattern = "srad_daily_\\d{4}_ncss\\.nc$", full.names = TRUE)
 
 result <- NULL
 
+points_in_buffer <- read_csv(paste0("~/phenology-urban/data/proc/urban/", city, "/tree_WU_500_buffer_PS.csv"), show_col_types = FALSE)
 points <- points_in_buffer %>%
   group_by(id) %>%
   summarise(geometry = first(geometry))
 coords <- do.call(rbind, lapply(points$geometry, function(x) {
-  as.numeric(unlist(strsplit(gsub("[^0-9\\.-]", "", x), " ")))
+  as.numeric(unlist(strsplit(gsub("c\\(|\\)", "", x), ", ")))
 }))
 points_vect <- vect(coords, crs = "EPSG:4326")
 
@@ -121,4 +121,4 @@ for (file in file_list) {
   result <- bind_rows(result, temp_result)
 }
 
-saveRDS(result, "~/phenology-urban/data/raw/HT/Daymet/daily2016-2024/srad_daily_2016-2023.rds")
+saveRDS(result, paste0("~/phenology-urban/data/raw/", city, "/Daymet/daily2016-2024/srad_daily_2016-2023.rds"))

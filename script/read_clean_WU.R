@@ -105,7 +105,6 @@ read_clean_WU <- function(city, run_checks = TRUE) {
     
     all_data_iden_ext <- all_data_iden %>%
       select(Date, name) %>%
-      # filter(name == "KNYNEWYO1585") %>%
       mutate(row_index = row_number()) %>%
       pmap_dfr(~ check_extreme_prcp(all_data_iden, ..2, ..1, ..3))
       

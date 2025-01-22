@@ -776,43 +776,40 @@ library(sp)
 library(sf)
 library(ggplot2)
 
-boundary_NY <- sf::read_sf('data/raw/NY/boundary/nybb_dissolved.shp')
-coordinates(df_tree) <- c("lon", "lat")
-point_tree <- st_as_sf(df_tree)
+points_in_buffer <- read_csv(paste0("~/phenology-urban/data/proc/urban/NY/tree_WU_500_buffer_PS.csv"), show_col_types = FALSE) %>%
+  group_by(id) %>%
+  slice(1) %>%
+  ungroup() %>%
+  st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
+  st_buffer(dist = 50)
 
-# randomly pick
-set.seed(123)
-betula_points <- point_tree %>% filter(str_detect(taxa, "Betula")) 
-sample_points <- st_set_crs(sample_points, "EPSG:4326")
+boundary <- st_read("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp") %>%
+  st_transform(4326)
 
-# Transform the data to a new CRS with explicit units
-sample_points <- st_transform(sample_points, crs = st_crs("+proj=longlat +datum=WGS84 +units=m"))
-st_crs(sample_points)
-
-# Create buffer for height index
-buffers <- st_buffer(sample_points, dist = 200)
-
-# Visualize
 ggplot() +
-geom_sf(data = boundary_NY, fill = "white", color = "black") +
-  coord_sf(ylim = c(40.5, 40.9), xlim = c(-74.3, -73.6)) +
-  geom_sf(data = sample_points, color = "black", size=2, shape=17) +
-  scale_color_manual(values="darkgreen") +
-  theme_minimal() +
-  theme(legend.position="none") +
-  geom_sf(data = buffers, fill = "white", color = "red")
+  geom_sf(data = intersect_50_bld, fill = "grey") +
+  # geom_sf(data = first_point, color = "red", size = 0.05) +
+  theme_minimal()
+
+source("~/phenology-urban/script/faster_intersect.R")
+building_footprint <- sf::read_sf('~/phenology-urban/data/raw/NY/NY_building_footprint/geo_export_56deb8a8-0463-4f00-8f45-99e751e3b8e1.shp') %>%
+  st_make_valid() %>% select(base_bbl, bin, groundelev, heightroof)
+points_in_buffer <- st_transform(points_in_buffer, st_crs(building_footprint))
+
+first_point <- points_in_buffer[1, ]
+filtered_building_footprint <- building_footprint %>%
+  st_crop(st_bbox(first_point))
+intersect_50_bld <- st_intersection(first_point, filtered_building_footprint)
+intersect_50_bld$area_size <- st_area(intersect_50_bld) %>%
+  
+
+
 
 ```
 
 # 3. Insert building data / Intersection fail (prelimilary result from Arcgis)
 ```{r}
-source("~/phenology-urban/script/faster_intersect.R")
-building_footprint <- sf::read_sf('~/phenology-urban/data/raw/NY/NY_building_footprint/geo_export_56deb8a8-0463-4f00-8f45-99e751e3b8e1.shp') %>%
-  st_make_valid() %>% select(base_bbl, bin, groundelev, heightroof)
 
-buffers <- st_transform(buffers, crs = st_crs(building_footprint))
-
-intersection_result <- faster_intersect(building_footprint, buffers)
 
 ```
 
