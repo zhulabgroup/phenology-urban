@@ -27,11 +27,11 @@ CHAIN_INDEX=$((SLURM_ARRAY_TASK_ID - 1))
 PHE_TYPE=${PHE_TYPES[$CHAIN_INDEX]}
 
 # Define the R script and input/output files
-R_SCRIPT=../phenology-urban/script/run_spbayes.R
-WORKING_DIR=$(pwd)/../urban_phenology_sp
+R_SCRIPT=../phenology-urban/script/run_bayes.R
+WORKING_DIR=../urban_phenology_sp
 R_INPUT_DIR=$WORKING_DIR/input/
 R_OUTPUT_DIR=$WORKING_DIR/output/
-CITY=ST
+CITY=NY
 
 # Export variables to be used in the R script
 export R_INPUT_DIR

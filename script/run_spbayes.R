@@ -9,20 +9,20 @@ library(car)
 library(gstat)
 
 # Read file paths from environment variables
-# r_input_dir <- Sys.getenv("R_INPUT_DIR")
-# r_output_dir <- Sys.getenv("R_OUTPUT_DIR")
-# city <- Sys.getenv("CITY")
-# phe_type <- Sys.getenv("PHE_TYPE")
+r_input_dir <- Sys.getenv("R_INPUT_DIR")
+r_output_dir <- Sys.getenv("R_OUTPUT_DIR")
+city <- Sys.getenv("CITY")
+phe_type <- Sys.getenv("PHE_TYPE")
 
-args <- commandArgs(trailingOnly = TRUE)
-if (length(args) < 3) {
-  stop("5 arguments needed: r_output_file, city, phe_type")
-}
-
-r_input_dir <- args[1]
-r_output_dir <- args[2]
-city <- args[3]
-phe_type <- args[4]
+# args <- commandArgs(trailingOnly = TRUE)
+# if (length(args) < 3) {
+#   stop("5 arguments needed: r_output_file, city, phe_type")
+# }
+# 
+# r_input_dir <- args[1]
+# r_output_dir <- args[2]
+# city <- args[3]
+# phe_type <- args[4]
 
 # r_input_dir <- "~/phenology-urban/data/proc/urban/"
 # r_output_dir <- "~/phenology-urban/data/proc/urban/sp_model/"
@@ -31,7 +31,7 @@ phe_type <- args[4]
 
 #################### Read data ####################
 
-tavg_allyear_var <- readRDS(paste0(r_input_dir, city, "/tavg_allyear_var.rds"))
+tavg_allyear_var <- readRDS(paste0(r_input_dir, "tavg_allyear_var.rds"))
 
 if (phe_type == "SOS") {
   phe_metric <- "doy"
@@ -62,7 +62,7 @@ for (genus in unique_genus) {
   tavg_phe <- tavg_allyear_var %>%
     filter(direction == !!direction & thres == !!thres & genus == !!genus) %>%
     na.omit()
-  print(length(tavg_phe))
+  print(nrow(tavg_phe))
   if (nrow(tavg_phe) == 0) next
   
   OLS_formula <- as.formula(paste0(phe_metric, " ~ AvgTemp_mean + Sum_mm_sum + srad_mean + (1|year)"))

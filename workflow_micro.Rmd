@@ -776,31 +776,72 @@ library(sp)
 library(sf)
 library(ggplot2)
 
+buffer_size = 50
+
 points_in_buffer <- read_csv(paste0("~/phenology-urban/data/proc/urban/NY/tree_WU_500_buffer_PS.csv"), show_col_types = FALSE) %>%
   group_by(id) %>%
   slice(1) %>%
   ungroup() %>%
   st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
-  st_buffer(dist = 50)
+  st_buffer(dist = buffer_size)
+
+merged_polygon <- st_union(points_in_buffer)
 
 boundary <- st_read("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp") %>%
   st_transform(4326)
 
 ggplot() +
-  geom_sf(data = intersect_50_bld, fill = "grey") +
-  # geom_sf(data = first_point, color = "red", size = 0.05) +
+  # geom_sf(data = boundary, fill = "grey") +
+  geom_sf(data = merged_polygon, fill = "red") +
   theme_minimal()
 
 source("~/phenology-urban/script/faster_intersect.R")
 building_footprint <- sf::read_sf('~/phenology-urban/data/raw/NY/NY_building_footprint/geo_export_56deb8a8-0463-4f00-8f45-99e751e3b8e1.shp') %>%
   st_make_valid() %>% select(base_bbl, bin, groundelev, heightroof)
 points_in_buffer <- st_transform(points_in_buffer, st_crs(building_footprint))
+merged_polygon <- st_transform(merged_polygon, st_crs(building_footprint)) %>%
+  st_make_valid() %>%
+  st_cast("POLYGON") %>%
+  st_as_sf()
 
-first_point <- points_in_buffer[1, ]
-filtered_building_footprint <- building_footprint %>%
-  st_crop(st_bbox(first_point))
-intersect_50_bld <- st_intersection(first_point, filtered_building_footprint)
-intersect_50_bld$area_size <- st_area(intersect_50_bld) %>%
+
+results <- list()
+# Loop through each row in points_in_buffer
+for (i in 1:nrow(merged_polygon)) {
+  point <- merged_polygon[i, ]
+  cat("Processing row:", i, "of", nrow(merged_polygon), "\n")
+  filtered_building_footprint1 <- building_footprint %>%
+    st_crop(st_bbox(point))
+  intersect_50_bld <- st_intersection(point, filtered_building_footprint1) %>%
+    st_make_valid()
+  results[[i]] <- intersect_50_bld
+}
+step1_build <- do.call(rbind, results)
+
+
+
+
+results <- list()
+# Loop through each row in points_in_buffer
+for (i in 1:nrow(points_in_buffer)) {
+  point <- points_in_buffer[i, ]
+  cat("Processing row:", i, "of", nrow(points_in_buffer), "\n")
+  filtered_building_footprint1 <- step1_build %>%
+    st_crop(st_bbox(point))
+  intersect_50_bld <- st_intersection(point, filtered_building_footprint1) %>%
+    st_make_valid()
+  intersect_50_bld$area_size <- st_area(intersect_50_bld)
+  intersect_50_bld_BVD <- intersect_50_bld %>%
+    as.data.frame() %>%
+    group_by(id) %>%
+    summarise(BVD = sum(as.numeric(area_size) * heightroof) / (buffer_size * buffer_size * pi))
+  
+  results[[i]] <- data.frame(
+    id = point$id,
+    BVD = intersect_50_bld_BVD$BVD
+  )
+}
+final_results <- do.call(rbind, results)
   
 
 

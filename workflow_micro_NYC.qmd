@@ -1125,5 +1125,6 @@ ggplot(summary_data, aes(x = Parameter, y = mean_value, color = phe_type)) +
 Next steps:
 
 -   Future steps:
-    -   Test sensitivity by changing buffer size.
+    -   Interspecific difference:
+        
     -   Add more taxa (data in DataDen and download latest PS images)
