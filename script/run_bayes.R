@@ -59,7 +59,6 @@ if (phe_type == "SOS") {
 unique_genus <- unique(tavg_allyear_var$genus)
 
 for (genus in unique_genus) {
-  genus = "Alnus"
   tavg_phe <- tavg_allyear_var %>%
     filter(direction == !!direction & thres == !!thres & genus == !!genus) %>%
     na.omit()
