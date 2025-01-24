@@ -31,7 +31,7 @@ phe_type <- Sys.getenv("PHE_TYPE")
 
 #################### Read data ####################
 
-tavg_allyear_var <- readRDS(paste0(r_input_dir, "tavg_allyear_var.rds"))
+tavg_allyear_var <- readRDS(paste0(r_input_dir, city, "/tavg_allyear_var.rds"))
 
 if (phe_type == "SOS") {
   phe_metric <- "doy"
