@@ -199,17 +199,17 @@ for (genus in unique_genus) {
                              summary = TRUE, 
                              WAIC = TRUE)
   
-  beta_label <- data.frame(Parameter = "beta[2]", Label = "AvgTemp")
-  param_data <- ggs(modelMCMCrun$samples, par_labels = beta_label) %>%
-    filter(Parameter == "AvgTemp")
-  beta_mean <- mean(param_data$value)
-  param_data %>%
-    ggs_density() +
-    theme_bw() +
-    ggtitle(paste("Genus:", genus)) +
-    theme(plot.title = element_text(hjust = 0.5)) +
-    annotate("text", x = beta_mean, y = 0, label = paste0("Mean: ", round(beta_mean, 2)),vjust = -1.5, color = "red", size = 4)
-  
+  # beta_label <- data.frame(Parameter = "beta[2]", Label = "AvgTemp")
+  # param_data <- ggs(modelMCMCrun$samples, par_labels = beta_label) %>%
+  #   filter(Parameter == "AvgTemp")
+  # beta_mean <- mean(param_data$value)
+  # param_data %>%
+  #   ggs_density() +
+  #   theme_bw() +
+  #   ggtitle(paste("Genus:", genus)) +
+  #   theme(plot.title = element_text(hjust = 0.5)) +
+  #   annotate("text", x = beta_mean, y = 0, label = paste0("Mean: ", round(beta_mean, 2)),vjust = -1.5, color = "red", size = 4)
+  # 
 
   
   model_path <- paste0(r_output_dir, city, "_", genus, "_tavg_", phe_type,  ".rds")
