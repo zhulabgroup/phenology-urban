@@ -40,7 +40,7 @@ export PHE_TYPES
 export CITY
 
 # Load necessary modules
-module load Rgeospatial Rtidyverse
+module load Rgeospatial/4.2.0-2023-04-25
 
 # Record the start time
 start_time=$(date +%s)
