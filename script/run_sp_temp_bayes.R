@@ -32,7 +32,7 @@ phe_type <- Sys.getenv("PHE_TYPE")
 
 #################### Read data ####################
 
-tavg_allyear_var <- readRDS(paste0(r_input_dir, "tavg_allyear_var.rds"))
+tavg_allyear_var <- readRDS(paste0(r_input_dir, city, "/tavg_allyear_var.rds"))
 
 if (phe_type == "SOS") {
   phe_metric <- "doy"
@@ -60,7 +60,6 @@ if (phe_type == "SOS") {
 unique_genus <- unique(tavg_allyear_var$genus)
 
 for (genus in unique_genus) {
-  # genus = "Carya"
   tavg_phe <- tavg_allyear_var %>%
     filter(direction == !!direction & thres == !!thres & genus == !!genus) %>%
     na.omit()
@@ -83,7 +82,7 @@ for (genus in unique_genus) {
     filter(direction == !!direction & thres == !!thres & genus == !!genus) %>%
     na.omit()
   tavg_phe_df_ori <- tavg_phe_df_ori[, c(phe_metric, "lon", "lat", "year", "AvgTemp_mean", "Sum_mm_sum", "srad_mean")]
-  tavg_phe_df[, ] <- scale(tavg_phe_df_ori[, ])
+  tavg_phe_df_ori[, c("lon", "lat", "year")] <- scale(tavg_phe_df_ori[, c("lon", "lat", "year")])
   sp_formula <- as.formula(paste0(phe_metric, " ~ AvgTemp_mean + Sum_mm_sum + srad_mean"))
   
   # Define covariance functions
@@ -101,14 +100,23 @@ for (genus in unique_genus) {
   matern_covariance <- nimbleFunction(
     run = function(d = double(0), range = double(0), sigma.sq = double(0), nu = double(0)) {
       returnType(double(0))
-        if (d == 0) {
-          return(sigma.sq)
-        } else {
-          part <- (2^(1 - nu)) / gamma(nu)  * (sqrt(2 * nu) * d / range)^nu
-          return(sigma.sq * part * besselK(d / range, nu))
-        }
+      if (d == 0) {
+        return(sigma.sq)
+      } else {
+        part <- (2^(1 - nu)) / gamma(nu)  * (sqrt(2 * nu) * d / range)^nu
+        return(sigma.sq * part * besselK(d / range, nu))
+      }
     }
   )
+  # matern_covariance <- nimbleFunction(
+  #   run = function(dist_matrix = double(2), range = double(0), sigma.sq = double(0), nu = double(0)) {
+  #     returnType(double(2))
+  #     part <- (2^(1 - nu)) / gamma(nu) * (sqrt(2 * nu) * dist_matrix / range)^nu
+  #     cov_matrix <- sigma.sq * part * besselK(dist_matrix / range, nu)
+  #     diag(cov_matrix) <- sigma.sq
+  #     return(cov_matrix) 
+  #   }
+  # )
   # Define Nimble model code
   model_code <- nimbleCode({
     for (i in 1:N) {
@@ -122,7 +130,6 @@ for (genus in unique_genus) {
       beta[j] ~ dnorm(0, sd = 1000)
     }
     spatial_temporal_effect[1:N] ~ dmnorm(Mu[1:N], cov = cov_matrix[1:N, 1:N])
-    
     # Choose the covariance function based on variogram fitting
     if (cov_type == "Mat") {
       for (m in 1:N) {
@@ -150,13 +157,13 @@ for (genus in unique_genus) {
   
   # Data inputs
   
-  N <- nrow(tavg_phe_df)
-  X <- model.matrix(sp_formula, data = tavg_phe_df)
-  y <- tavg_phe_df[[all.vars(sp_formula)[1]]]
+  N <- nrow(tavg_phe_df_ori)
+  X <- model.matrix(sp_formula, data = tavg_phe_df_ori)
+  y <- tavg_phe_df_ori[[all.vars(sp_formula)[1]]]
   
-  spatio_temp_coords <- tavg_phe_df[, c("lon", "lat", "year")]
+  spatio_temp_coords <- tavg_phe_df_ori[, c("lon", "lat", "year")]
   dist_matrix <- as.matrix(dist(spatio_temp_coords))
-
+  
   data <- list(y = y, X = X) 
   inits <- list(
     beta = rep(0, ncol(X)),
@@ -196,8 +203,7 @@ for (genus in unique_genus) {
   
   # beta_label <- data.frame(Parameter = "beta[2]", Label = "AvgTemp")
   # param_data <- ggs(modelMCMCrun$samples, par_labels = beta_label) %>%
-  #   filter(Parameter == "AvgTemp") %>%
-  #   mutate(value = value * (sd(tavg_phe_df_ori[[phe_metric]]) / sd(tavg_phe_df_ori$AvgTemp_mean)))
+  #   filter(Parameter == "AvgTemp")
   # beta_mean <- mean(param_data$value)
   # param_data %>%
   #   ggs_density() +
@@ -205,7 +211,7 @@ for (genus in unique_genus) {
   #   ggtitle(paste("Genus:", genus)) +
   #   theme(plot.title = element_text(hjust = 0.5)) +
   #   annotate("text", x = beta_mean, y = 0, label = paste0("Mean: ", round(beta_mean, 2)),vjust = -1.5, color = "red", size = 4)
-
+  # 
   
   model_path <- paste0(r_output_dir, city, "_", genus, "_tavg_", phe_type,  ".rds")
   saveRDS(modelMCMCrun, file = model_path)
