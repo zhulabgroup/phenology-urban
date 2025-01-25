@@ -7,13 +7,12 @@ library(lme4)
 library(coda)
 library(car)
 library(gstat)
-library(ggmcmc)
 
 # Read file paths from environment variables
 r_input_dir <- Sys.getenv("R_INPUT_DIR")
 r_output_dir <- Sys.getenv("R_OUTPUT_DIR")
 city <- Sys.getenv("CITY")
-phe_type <- Sys.getenv("PHE_TYPE")
+phe_type <- Sys.getenv("PHE_TYPES")
 
 # args <- commandArgs(trailingOnly = TRUE)
 # if (length(args) < 3) {
