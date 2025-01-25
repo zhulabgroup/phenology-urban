@@ -36,7 +36,7 @@ CITY="NY"
 # Export variables to be used in the R script
 export R_INPUT_DIR
 export R_OUTPUT_DIR
-export PHE_TYPES
+export PHE_TYPE
 export CITY
 
 # Load necessary modules
@@ -75,5 +75,6 @@ echo "End Time: $(date -d @$end_time '+%Y-%m-%d %H:%M:%S')" >> $job_info
 echo "Duration: $formatted_duration" >> $job_info
 
 # Move Slurm output and error files to the output directory
-mv slurm_job${SLURM_JOB_ID}_task${SLURM_ARRAY_TASK_ID}.out $OUTPUT_DIR/
-mv slurm_job${SLURM_JOB_ID}_task${SLURM_ARRAY_TASK_ID}.err $OUTPUT_DIR/
+# Move Slurm output and error files to the output directory
+mv slurm_job${SLURM_JOB_ID}_task${SLURM_ARRAY_TASK_ID}.out $R_OUTPUT_DIR/
+mv slurm_job${SLURM_JOB_ID}_task${SLURM_ARRAY_TASK_ID}.err $R_OUTPUT_DIR/

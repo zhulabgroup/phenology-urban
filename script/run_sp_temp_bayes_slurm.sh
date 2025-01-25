@@ -20,7 +20,7 @@
 
 
 # Define combinations of chains and iterations
-PHE_TYPES=(SOS EOS GreenUp GreenDown)
+PHE_TYPES=("SOS" "EOS" "GreenUp" "GreenDown")
 
 # Get the combination for this array job
 CHAIN_INDEX=$((SLURM_ARRAY_TASK_ID - 1))
@@ -31,12 +31,12 @@ R_SCRIPT=../phenology-urban/script/run_sp_temp_bayes.R
 WORKING_DIR=../urban_phenology_sp
 R_INPUT_DIR=$WORKING_DIR/input/
 R_OUTPUT_DIR=$WORKING_DIR/output/
-CITY=NY
+CITY="NY"
 
 # Export variables to be used in the R script
 export R_INPUT_DIR
 export R_OUTPUT_DIR
-export PHE_TYPES
+export PHE_TYPE
 export CITY
 
 # Load necessary modules
@@ -75,5 +75,5 @@ echo "End Time: $(date -d @$end_time '+%Y-%m-%d %H:%M:%S')" >> $job_info
 echo "Duration: $formatted_duration" >> $job_info
 
 # Move Slurm output and error files to the output directory
-mv slurm_job${SLURM_JOB_ID}_task${SLURM_ARRAY_TASK_ID}.out $OUTPUT_DIR/
-mv slurm_job${SLURM_JOB_ID}_task${SLURM_ARRAY_TASK_ID}.err $OUTPUT_DIR/
+mv slurm_job${SLURM_JOB_ID}_task${SLURM_ARRAY_TASK_ID}.out $R_OUTPUT_DIR/
+mv slurm_job${SLURM_JOB_ID}_task${SLURM_ARRAY_TASK_ID}.err $R_OUTPUT_DIR/
