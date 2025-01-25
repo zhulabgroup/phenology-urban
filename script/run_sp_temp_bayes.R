@@ -13,7 +13,7 @@ library(ggmcmc)
 r_input_dir <- Sys.getenv("R_INPUT_DIR")
 r_output_dir <- Sys.getenv("R_OUTPUT_DIR")
 city <- Sys.getenv("CITY")
-phe_type <- Sys.getenv("PHE_TYPE")
+phe_type <- Sys.getenv("PHE_TYPES")
 
 # args <- commandArgs(trailingOnly = TRUE)
 # if (length(args) < 3) {
@@ -64,6 +64,7 @@ for (genus in unique_genus) {
     filter(direction == !!direction & thres == !!thres & genus == !!genus) %>%
     na.omit()
   print(nrow(tavg_phe))
+  print(phe_type, genus, direction, thres)
   if (nrow(tavg_phe) == 0) next
   tavg_phe$year <- as.factor(tavg_phe$year)
   tavg_phe$genus <- as.factor(tavg_phe$genus)
