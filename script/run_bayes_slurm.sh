@@ -20,7 +20,7 @@
 
 
 # Define combinations of chains and iterations
-PHE_TYPES=(SOS EOS GreenUp GreenDown)
+PHE_TYPES=("SOS" "EOS" "GreenUp" "GreenDown")
 
 # Get the combination for this array job
 CHAIN_INDEX=$((SLURM_ARRAY_TASK_ID - 1))
@@ -31,7 +31,7 @@ R_SCRIPT=../phenology-urban/script/run_bayes.R
 WORKING_DIR=../urban_phenology_sp
 R_INPUT_DIR=$WORKING_DIR/input/
 R_OUTPUT_DIR=$WORKING_DIR/output/
-CITY=NY
+CITY="NY"
 
 # Export variables to be used in the R script
 export R_INPUT_DIR

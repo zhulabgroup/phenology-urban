@@ -4,8 +4,8 @@
 #SBATCH --error=slurm_job%j_task%a.err
 #SBATCH --array=1-4
 #SBATCH --time=24:00:00
-#SBATCH --partition=largemem
-#SBATCH --mem=32G
+#SBATCH --partition=standard
+#SBATCH --mem=10G
 #SBATCH --cpus-per-task=2
 
 # Usage:
