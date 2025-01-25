@@ -63,6 +63,7 @@ for (genus in unique_genus) {
     filter(direction == !!direction & thres == !!thres & genus == !!genus) %>%
     na.omit()
   print(nrow(tavg_phe))
+  print(phe_type, genus, direction, thres)
   if (nrow(tavg_phe) == 0) next
   tavg_phe$year <- as.factor(tavg_phe$year)
   tavg_phe$genus <- as.factor(tavg_phe$genus)
