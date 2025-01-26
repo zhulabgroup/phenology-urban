@@ -1,8 +1,0 @@
-[1] 39
-[1] "Type: GreenDown ; metric: doy_diff ; direction: down ; thres: 0.2"
-warning: problem initializing stochastic node spatial_temporal_effect[1:39]: logProb is NA or NaN.
-|-------------|-------------|-------------|-------------|
-|-------------------------------------------------------|
-  [Warning] There are 2 individual pWAIC values that are greater than 0.4. This may indicate that the WAIC estimate is unstable (Vehtari et al., 2017), at least in cases without grouping of data nodes or multivariate data nodes.
-[1] 821
-[1] "Type: GreenDown ; metric: doy_diff ; direction: down ; thres: 0.2"

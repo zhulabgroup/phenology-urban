@@ -1,0 +1,27 @@
+[1] 693
+[1] "Type: SOS ; metric: doy ; direction: up ; thres: 0.5"
+|-------------|-------------|-------------|-------------|
+|-------------------------------------------------------|
+  [Warning] There are 3 individual pWAIC values that are greater than 0.4. This may indicate that the WAIC estimate is unstable (Vehtari et al., 2017), at least in cases without grouping of data nodes or multivariate data nodes.
+[1] 615
+[1] "Type: SOS ; metric: doy ; direction: up ; thres: 0.5"
+|-------------|-------------|-------------|-------------|
+|-------------------------------------------------------|
+  [Warning] There are 6 individual pWAIC values that are greater than 0.4. This may indicate that the WAIC estimate is unstable (Vehtari et al., 2017), at least in cases without grouping of data nodes or multivariate data nodes.
+[1] 639
+[1] "Type: SOS ; metric: doy ; direction: up ; thres: 0.5"
+|-------------|-------------|-------------|-------------|
+|-------------------------------------------------------|
+  [Warning] There are 3 individual pWAIC values that are greater than 0.4. This may indicate that the WAIC estimate is unstable (Vehtari et al., 2017), at least in cases without grouping of data nodes or multivariate data nodes.
+[1] 112
+[1] "Type: SOS ; metric: doy ; direction: up ; thres: 0.5"
+|-------------|-------------|-------------|-------------|
+|-------------------------------------------------------|
+  [Warning] There are 4 individual pWAIC values that are greater than 0.4. This may indicate that the WAIC estimate is unstable (Vehtari et al., 2017), at least in cases without grouping of data nodes or multivariate data nodes.
+[1] 10
+[1] "Type: SOS ; metric: doy ; direction: up ; thres: 0.5"
+|-------------|-------------|-------------|-------------|
+|-------------------------------------------------------|
+  [Warning] There are 10 individual pWAIC values that are greater than 0.4. This may indicate that the WAIC estimate is unstable (Vehtari et al., 2017), at least in cases without grouping of data nodes or multivariate data nodes.
+[1] 504
+[1] "Type: SOS ; metric: doy ; direction: up ; thres: 0.5"

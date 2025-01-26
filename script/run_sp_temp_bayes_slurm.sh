@@ -5,7 +5,7 @@
 #SBATCH --array=1-4
 #SBATCH --time=24:00:00
 #SBATCH --partition=standard
-#SBATCH --mem=10G
+#SBATCH --mem=28G
 #SBATCH --cpus-per-task=2
 
 # Usage:

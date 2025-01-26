@@ -37,26 +37,30 @@ if (phe_type == "SOS") {
   phe_metric <- "doy"
   direction <- "up"
   thres <- 0.5
+  unique_genus = c("Ulmus", "Fraxinus", "Celtis", "Salix", "Alnus","Betula", "Morus", "Populus")
 } else if (phe_type == "EOS") {
   phe_metric <- "doy"
   direction <- "down"
   thres <- 0.5
+  unique_genus = c("Ulmus", "Fraxinus", "Celtis", "Salix", "Alnus")
 } else if (phe_type == "GreenUp") {
   phe_metric <- "doy_diff"
   direction <- "up"
   thres <- 0.2
   tavg_allyear_var$doy_diff <- as.numeric(tavg_allyear_var$doy_diff)
+  unique_genus = c("Ulmus", "Fraxinus", "Celtis", "Salix", "Alnus", "Morus")
 } else {
   phe_metric <- "doy_diff"
   direction <- "down"
   thres <- 0.2
   tavg_allyear_var$doy_diff <- as.numeric(tavg_allyear_var$doy_diff)
+  unique_genus = c("Ulmus", "Fraxinus", "Celtis", "Salix", "Alnus","Betula", "Morus", "Populus", "Juglans", "Liquidambar")
 }
 
 
 #################### Find the optimal cov model ####################
 
-unique_genus <- unique(tavg_allyear_var$genus)
+# unique_genus <- unique(tavg_allyear_var$genus)
 
 for (genus in unique_genus) {
   tavg_phe <- tavg_allyear_var %>%
