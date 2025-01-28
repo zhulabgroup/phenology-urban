@@ -1,0 +1,8 @@
+[1] "City: DV Genus: Celtis ; metric: 2709"
+[1] "Type: EOS ; metric: doy ; direction: down ; thres: 0.5"
+warning: value of deterministic node knots_cov_chol_inv[1:100, 1:100]: value is NA or NaN even after trying to calculate.
+warning: value of deterministic node cov_matrix[1:2709, 1:2709]: value is NA or NaN even after trying to calculate.
+warning: value of deterministic node lifted_chol_oPcov_matrix_oB1to2709_comma_1to2709_cB_cP[1:2709, 1:2709]: value is NA or NaN even after trying to calculate.
+warning: problem initializing stochastic node spatial_effect[1:2709]: logProb is NA or NaN.
+|-------------|-------------|-------------|-------------|
+|

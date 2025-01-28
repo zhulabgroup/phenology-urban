@@ -31,7 +31,7 @@ R_SCRIPT=../phenology-urban/script/run_spbayes.R
 WORKING_DIR=../urban_phenology_sp
 R_INPUT_DIR=$WORKING_DIR/input/
 R_OUTPUT_DIR=$WORKING_DIR/output/
-CITY="HT"
+CITY="TP"
 
 # Export variables to be used in the R script
 export R_INPUT_DIR

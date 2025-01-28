@@ -62,7 +62,8 @@ for (genus in unique_genus) {
   tavg_phe <- tavg_allyear_var %>%
     filter(direction == !!direction & thres == !!thres & genus == !!genus) %>%
     na.omit()
-  print(nrow(tavg_phe))
+  print(paste("City:",city, "Genus:",genus, "; metric:", nrow(tavg_phe)))
+  print(paste("Type:", phe_type, "; metric:", phe_metric, "; direction:", direction, "; thres:", thres))
   if (nrow(tavg_phe) == 0) next
   
   OLS_formula <- as.formula(paste0(phe_metric, " ~ AvgTemp_mean + Sum_mm_sum + srad_mean + (1|year)"))
