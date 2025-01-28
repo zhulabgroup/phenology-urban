@@ -20,7 +20,7 @@ library(zhulabtools)
 load_packages(c("dplyr","lubridate", "ggplot2", "sf","sp", "readr", "purrr", "stringr","glue", "tidyr", "broom","lme4", "knitr", "broom.mixed", "ppcor", "spdep", "spatialreg", "lmtest","car", "spBayes", "coda", "patchwork", "performance", "terra", "ggpmisc", "gstat", "ggmcmc"))
 # source("~/phenology-urban/script/read_clean_WU.R")
 select <- dplyr::select
-city = "ST"
+city = "DT"
 ```
 
 ## Intro
@@ -41,6 +41,7 @@ For exploratory analysis, I used the street tree in NYC, with the phenology info
 #| label: tree_wu_sites
 #| include: false
 #| warning: false
+#| eval: false
 
 ################ For phenology data ################
 
@@ -99,8 +100,6 @@ points_in_buffer <- tree_location %>%
   filter(!is.na(Site))
 
 # write_csv(points_in_buffer, paste0("~/phenology-urban/data/proc/urban/", city, "/tree_WU_500_buffer_PS.csv"))
-points_in_buffer <- read_csv(paste0("~/phenology-urban/data/proc/urban/",city,"/tree_WU_500_buffer_PS.csv"), show_col_types = FALSE)
-
 ```
 
 ```{r}
@@ -109,15 +108,40 @@ points_in_buffer <- read_csv(paste0("~/phenology-urban/data/proc/urban/",city,"/
 #| fig-cap: "Location of WU sites and trees"
 #| warning: false
 
+points_in_buffer <- read_csv(paste0("~/phenology-urban/data/proc/urban/",city,"/tree_WU_500_buffer_PS.csv"), show_col_types = FALSE)
+
 points_in_buffer_sf <- points_in_buffer %>%
   st_as_sf(coords = c("lon", "lat"), crs = 4326)
-boundary <- st_read("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp") %>%
-  st_transform(4326)
+
+boundary <- switch(
+  city,
+  "NY" = st_read("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp") %>%
+    st_transform(4326),
+  "DT" = st_read("~/urban-cooling/data/raw/WU/DT/City_of_Detroit_Boundary/City_of_Detroit_Boundary.shp") %>%
+    st_transform(4326),
+  "ST" = st_read("~/urban-cooling/data/raw/WU/ST/seattle_boundary/CityUGA.shp") %>%
+    st_transform(4326) %>%
+    filter(CITY_NM == "Seattle"),
+  "HT" = st_read("~/urban-cooling/data/raw/WU/HT/kx-houston-texas-city-limits-SHP/houston-texas-city-limits.shp") %>%
+    st_transform(4326),
+  "TP" = st_read("~/urban-cooling/data/raw/WU/TP/Municipal_Boundary/Municipal_Boundary.shp") %>%
+    st_transform(4326) %>%
+    filter(NAME == "Tampa"),
+  "DV" = st_read("~/urban-cooling/data/raw/WU/DV/denver-boundary/denver-colorado-county-boundary.shp") %>%
+    st_transform(4326),
+  "AT" = st_read("~/urban-cooling/data/raw/WU/AT/TxDOT_City_Boundaries/Cities.shp") %>%
+    filter(CITY_NM == "Austin") %>%
+    st_transform(4326),
+  stop("Invalid city abbreviation.")
+)
+
+wu_location <- read_csv(paste0("~/urban-cooling/data/raw/WU/", city, "/location.csv"), show_col_types = FALSE) %>%
+  st_as_sf(coords = c("Lon", "Lat"), crs = 4326)
 
 ggplot() +
   geom_sf(data = boundary, fill = "grey") +
   geom_sf(data = wu_location, color = "blue", size = 1) +
-  geom_sf(data = points_in_buffer_sf, color = "red", size = 0.05) +
+  geom_sf(data = points_in_buffer_sf, color = "red", size = 0.01) +
   theme_minimal()
 
 ```
@@ -224,22 +248,46 @@ calculate_partial_correlation <- function(insert_data, direction, thres, genus, 
       ) %>%
       na.omit()
     }
-    partial_corr <- pcor(selected_data)
     
-    correlation <- partial_corr$estimate[
+    
+    # Use tryCatch to handle errors in pcor()
+    tryCatch({
+      partial_corr <- pcor(selected_data)
+      
+      correlation <- partial_corr$estimate[
         rownames(partial_corr$estimate) == phe_variable, 
         colnames(partial_corr$estimate) == temp_variable
       ]
-    pvalue <- partial_corr$p.value[
+      pvalue <- partial_corr$p.value[
         rownames(partial_corr$p.value) == phe_variable, 
         colnames(partial_corr$p.value) == temp_variable
       ]
-  list(correlation = correlation, pvalue = pvalue, preseason_var = preseason_var)
+      
+      list(correlation = correlation, pvalue = pvalue, preseason_var = preseason_var)
+    }, error = function(e) {
+      cat("Error with pre_length:", pre_length, " - Skipping this pre_length.\n")
+      list(correlation = NA, pvalue = NA, preseason_var = NA)
+    })
   })
+  
+  # Remove results with NA correlations
+  results <- results[!sapply(results, function(x) is.null(x$correlation) || is.na(x$correlation))]
   
   correlations <- sapply(results, function(x) (x$correlation))
   pvalues <- sapply(results, function(x) (x$pvalue))
   
+  if(all(sapply(correlations, is.null))){
+      message("Skipping this genus due to empty correlation matrices.")
+    return(list(
+      optimal_pre_length = NA,
+      pre_length_candidate = NULL,
+      pre_length_trend = NULL,
+      pvalue_trend = NULL,
+      partial_correlation = NULL,
+      partial_corr_pvalue = NULL,
+      preseason_var = NULL
+    ))
+  }
   
   max_idx <- which.max(abs(correlations))
   
@@ -305,7 +353,16 @@ spring_date_combined_results <- lapply(all_results, function(x) {
     pvalue_trend = x$pvalue_trend
   )
 })
+
+
+# Function to check if a list element is effectively empty
+is_empty <- function(x) {
+  all(sapply(x, function(field) is.null(field) || all(is.na(field))))
+}
+spring_date_combined_results <- spring_date_combined_results[!sapply(spring_date_combined_results, is_empty)]
 spring_date_combined_results <- do.call(rbind, lapply(spring_date_combined_results, as.data.frame))
+
+
 
 ```
 
@@ -361,6 +418,11 @@ spring_pace_combined_results <- lapply(all_results, function(x) {
     pvalue_trend = x$pvalue_trend
   )
 })
+
+# Filter out empty elements
+spring_pace_combined_results <- spring_pace_combined_results[!sapply(spring_pace_combined_results, is_empty)]
+
+# Combine the valid results
 spring_pace_combined_results <- do.call(rbind, lapply(spring_pace_combined_results, as.data.frame))
 
 ```
@@ -411,6 +473,11 @@ fall_date_combined_results <- lapply(all_results, function(x) {
     pvalue_trend = x$pvalue_trend
   )
 })
+
+# Filter out empty elements
+fall_date_combined_results <- fall_date_combined_results[!sapply(fall_date_combined_results, is_empty)]
+
+# Combine the valid results
 fall_date_combined_results <- do.call(rbind, lapply(fall_date_combined_results, as.data.frame))
 ```
 
@@ -455,6 +522,12 @@ fall_pace_combined_results <- lapply(all_results, function(x) {
     pvalue_trend = x$pvalue_trend
   )
 })
+
+
+# Filter out empty elements
+fall_pace_combined_results <- fall_pace_combined_results[!sapply(fall_pace_combined_results, is_empty)]
+
+# Combine the valid results
 fall_pace_combined_results <- do.call(rbind, lapply(fall_pace_combined_results, as.data.frame))
 ```
 
@@ -519,125 +592,129 @@ As for `EOS`, most genera (except Populus, Platanus) have positive partial corre
 #|   - "Spring phenology"
 #|   - "Fall phenology"
 #| warning: false
+#| fig-width: 13
+#| fig-height: 6
+
 
 tavg_allyear_pcorr <- readRDS(paste0("~/phenology-urban/data/proc/urban/",city,"/tavg_allyear_pcorr.rds")) %>%
-  select(genus, optimal_pre_length, partial_correlation, partial_corr_pvalue, type) %>%
-  group_by(genus, optimal_pre_length, partial_correlation, partial_corr_pvalue, type) %>%
-  slice(1) %>%
-  ungroup() %>%
-  pivot_wider(
-    names_from = type,
-    values_from = c(optimal_pre_length, partial_correlation, partial_corr_pvalue)
-  ) %>%
   mutate(
-    group_spring = case_when(
-      partial_corr_pvalue_SOS <= 0.05 & `partial_corr_pvalue_green-up pace` <= 0.05 ~ "1",
-      partial_corr_pvalue_SOS <= 0.05 & `partial_corr_pvalue_green-up pace` > 0.05 ~ "2",
-      partial_corr_pvalue_SOS > 0.05 & `partial_corr_pvalue_green-up pace` <= 0.05 ~ "3",
-      TRUE ~ "4"
-    ),
-    group_fall = case_when(
-      partial_corr_pvalue_EOS <= 0.05 & `partial_corr_pvalue_green-down pace` <= 0.05 ~ "1",
-      partial_corr_pvalue_EOS <= 0.05 & `partial_corr_pvalue_green-down pace` > 0.05 ~ "2",
-      partial_corr_pvalue_EOS > 0.05 & `partial_corr_pvalue_green-down pace` <= 0.05 ~ "3",
-      TRUE ~ "4"
-    )
-  )
+    # Create a flag for optimal_pre_length
+    is_optimal = ifelse(pre_length_candidate == optimal_pre_length, TRUE, FALSE),
+    # Create a flag for significant pvalue
+    is_significant = ifelse(pvalue_trend < 0.05, TRUE, FALSE),
+    # Adjust transparency
+    alpha = ifelse(is_optimal, 1, 0.2),
+    shape = ifelse(is_significant, 21, 1),
+    size = ifelse(is_optimal, 2.5, 1.2)
+  ) %>%
+  mutate(shape = factor(shape, levels = c(21, 1)),
+         size = factor(size, levels = c(1.2, 2.5)))
+  
 
-spring_pcorr_p <- ggplot(tavg_allyear_pcorr, aes(x = partial_correlation_SOS, y = `partial_correlation_green-up pace`, color = group_spring, label = genus)) +
-  geom_point(size = 3) +
-  geom_text(vjust = -0.6, hjust = 0.5) +
-  geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
-  scale_color_manual(
-    values = c("1" = "mediumorchid4", "2" = "lightpink", "3" = "lightblue1", "4" = "gray95"),
-    labels = c(
-      "1" = "Both p-values < 0.05",
-      "2" = "SOS p-value < 0.05 \n Green-up p-value > 0.05",
-      "3" = "SOS p-value > 0.05 \n Green-up p-value < 0.05",
-      "4" = "Both p-values > 0.05"
-    )
+# Create the plot
+sos_p <- ggplot((tavg_allyear_pcorr %>% filter(type == "SOS")), aes(x = pre_length_candidate, y = pre_length_trend, color = genus, fill = genus, group = genus)) +
+  geom_line(aes(alpha = 0.1)) +  # Add lines for trends
+  geom_point(aes(alpha = alpha, shape = shape, size = size)) +  # Add points with alpha and fill
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red", alpha =0.5) +
+  scale_alpha_identity() +  # Use the alpha values directly
+  scale_shape_manual(
+    name = "Significance", 
+    values = c(21, 1),
+    labels = c("p < 0.05", "p > 0.05")   
+    ) +
+  scale_size_manual(
+    name = "Pre-season length",  
+    values = c(1.2, 2.5), 
+    labels = c("Others", "Optimal preseason length")
   ) +
+  guides(
+    shape = guide_legend(override.aes = list(fill = c("black", NA),color = "black")))+
   labs(
-    x = "Partial correlation coefficient (SOS)",
-    y = "Partial correlation coefficient (Green-up pace)",
-    color = "Group",
-    title = "Distribution of\npartial correlation coefficient"
-  ) +
-  theme_minimal()  +
-  theme(legend.position = "bottom")
-
-spring_pre_length_p <- ggplot(tavg_allyear_pcorr, aes(x = optimal_pre_length_SOS, y = `optimal_pre_length_green-up pace`, color = group_spring, label = genus)) +
-  geom_point(size = 3) +
-  geom_text(vjust = -0.6, hjust = 0.5) +
-  geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
-  scale_color_manual(
-    values = c("1" = "mediumorchid4", "2" = "lightpink", "3" = "lightblue1", "4" = "gray95"),
-    labels = c(
-      "1" = "Both p-values < 0.05",
-      "2" = "SOS p-value < 0.05 \n Green-up p-value > 0.05",
-      "3" = "SOS p-value > 0.05 \n Green-up p-value < 0.05",
-      "4" = "Both p-values > 0.05"
-    )
-  ) +
-  labs(
-    x = "Optimal preseason length (SOS)",
-    y = "Optimal preseason length (Green-up Pace)",
-    color = "Group",
-    title = "Distribution of preseason length"
+    title = "Start of season",
+    x = "Pre-season length",
+    y = "Partial correlation coefficient"
   ) +
   theme_minimal() +
-  theme(legend.position = "bottom")
-
-fall_pcorr_p <- ggplot(tavg_allyear_pcorr, aes(x = partial_correlation_EOS, y = `partial_correlation_green-down pace`, color = group_fall, label = genus)) +
-  geom_point(size = 3) +
-  geom_text(vjust = -0.6, hjust = 0.5) +
-  geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
-  scale_color_manual(
-    values = c("1" = "mediumorchid4", "2" = "lightpink", "3" = "lightblue1", "4" = "gray95"),
-    labels = c(
-      "1" = "Both p-values < 0.05",
-      "2" = "EOS p-value < 0.05 \n Green-down p-value > 0.05",
-      "3" = "EOS p-value > 0.05 \n Green-down p-value < 0.05",
-      "4" = "Both p-values > 0.05"
-    )
+  theme(legend.position = "right")
+  
+greenup_p <- ggplot((tavg_allyear_pcorr %>% filter(type == "green-up pace")), aes(x = pre_length_candidate, y = pre_length_trend, color = genus, fill = genus, group = genus)) +
+  geom_line(aes(alpha = 0.1)) +  # Add lines for trends
+  geom_point(aes(alpha = alpha, size = size, shape = shape)) +  # Add points with alpha and fill
+    geom_hline(yintercept = 0, linetype = "dashed", color = "red", alpha =0.5) +
+  scale_alpha_identity() +  # Use the alpha values directly
+  scale_shape_manual(
+    name = "Significance", 
+    values = c(21, 1),
+    labels = c("p < 0.05", "p > 0.05")   
+    ) +
+  scale_size_manual(
+    name = "Pre-season length",  
+    values = c(1.2, 2.5), 
+    labels = c("Others", "Optimal preseason length")
   ) +
+  guides(
+    shape = guide_legend(override.aes = list(fill = c("black", NA),color = "black")))+
   labs(
-    x = "Partial correlation coefficient (EOS)",
-    y = "Partial correlation coefficient (Green-down pace)",
-    color = "Group",
-    title = "Distribution of\npartial correlation coefficient"
-  ) +
-  theme_minimal()  +
-  theme(legend.position = "bottom")
-
-fall_pre_length_p <- ggplot(tavg_allyear_pcorr, aes(x = optimal_pre_length_EOS, y = `optimal_pre_length_green-down pace`, color = group_fall, label = genus)) +
-  geom_point(size = 3) +
-  geom_text(vjust = -0.6, hjust = 0.5) +
-  geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
-  geom_hline(yintercept = 0, linetype = "dashed", color = "black") +
-  scale_color_manual(
-    values = c("1" = "mediumorchid4", "2" = "lightpink", "3" = "lightblue1", "4" = "gray95"),
-    labels = c(
-      "1" = "Both p-values < 0.05",
-      "2" = "EOS p-value < 0.05 \n Green-down p-value > 0.05",
-      "3" = "EOS p-value > 0.05 \n Green-down p-value < 0.05",
-      "4" = "Both p-values > 0.05"
-    )
-  ) +
-  labs(
-    x = "Optimal preseason length (EOS)",
-    y = "Optimal preseason length (Green-down Pace)",
-    color = "Group",
-    title = "Distribution of preseason length"
+    title = "Green-up pace",
+    x = "Pre-season length",
+    y = "Partial correlation coefficient"
   ) +
   theme_minimal() +
-  theme(legend.position = "bottom")
+  theme(legend.position = "right")
 
-spring_pcorr_p + spring_pre_length_p + plot_layout(guides = "collect") & theme(legend.position = "bottom")
-fall_pcorr_p + fall_pre_length_p + plot_layout(guides = "collect") & theme(legend.position = "bottom")
+eos_p <- ggplot((tavg_allyear_pcorr %>% filter(type == "EOS")), aes(x = pre_length_candidate, y = pre_length_trend, color = genus, fill = genus, group = genus)) +
+  geom_line(aes(alpha = 0.1)) +  # Add lines for trends
+  geom_point(aes(alpha = alpha, size = size, shape = shape)) +  # Add points with alpha and fill
+    geom_hline(yintercept = 0, linetype = "dashed", color = "red", alpha =0.5) +
+  scale_alpha_identity() +  # Use the alpha values directly
+  scale_shape_manual(
+    name = "Significance", 
+    values = c(21, 1),
+    labels = c("p < 0.05", "p > 0.05")   
+    ) +
+  scale_size_manual(
+    name = "Pre-season length",  
+    values = c(1.2, 2.5), 
+    labels = c("Others", "Optimal preseason length")
+  ) +
+  guides(
+    shape = guide_legend(override.aes = list(fill = c("black", NA),color = "black")))+
+  labs(
+    title = "End of season",
+    x = "Pre-season length",
+    y = "Partial correlation coefficient"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "right")
+
+
+greendown_p <- ggplot((tavg_allyear_pcorr %>% filter(type == "green-down pace")), aes(x = pre_length_candidate, y = pre_length_trend, color = genus, fill = genus, group = genus)) +
+  geom_line(aes(alpha = 0.1)) +  # Add lines for trends
+  geom_point(aes(alpha = alpha, size = size, shape = shape)) +  # Add points with alpha and fill
+    geom_hline(yintercept = 0, linetype = "dashed", color = "red", alpha =0.5) +
+  scale_alpha_identity() +  # Use the alpha values directly
+  scale_shape_manual(
+    name = "Significance", 
+    values = c(21, 1),
+    labels = c("p < 0.05", "p > 0.05")   
+    ) +
+  scale_size_manual(
+    name = "Pre-season length",  
+    values = c(1.2, 2.5), 
+    labels = c("Others", "Optimal preseason length")
+  ) +
+  guides(
+    shape = guide_legend(override.aes = list(fill = c("black", NA),color = "black")))+
+  labs(
+    title = "Green-down pace",
+    x = "Pre-season length",
+    y = "Partial correlation coefficient"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "right")
+
+sos_p + greenup_p + plot_layout(guides = "collect") & theme(legend.position = "right")
+eos_p + greendown_p + plot_layout(guides = "collect") & theme(legend.position = "right")
 ```
 
 ## 3 Spatial pattern

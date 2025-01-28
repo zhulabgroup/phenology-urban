@@ -26,7 +26,7 @@ phe_type <- Sys.getenv("PHE_TYPE")
 
 # r_input_dir <- "~/phenology-urban/data/proc/urban/"
 # r_output_dir <- "~/phenology-urban/data/proc/urban/sp_model/"
-# city <- "NY"
+# city <- "ST"
 # phe_type <- "SOS"
 
 #################### Read data ####################
@@ -75,33 +75,56 @@ for (genus in unique_genus) {
   cov_type <- as.character(vgm_exn_fit$model)
   
   #################### Run the spatial model ####################
-  
   coords <- coordinates(tavg_phe)
+  dist_matrix <- as.matrix(dist(coords))
+  N_knots = 100
+  N <- nrow(tavg_phe)
+  knots <- kmeans(coords, centers = N_knots)$centers
+  knots_dist_matrix <- as.matrix(dist(knots))
+  data_knots_dist_matrix <- as.matrix(dist(rbind(coords, knots)))[1:N, (N + 1):(N + N_knots)]
+  
+  
   tavg_phe_df <- as.data.frame(tavg_phe)
   sp_formula <- as.formula(paste0(phe_metric, " ~ AvgTemp_mean + Sum_mm_sum + srad_mean"))
   
   # Define covariance functions
   
   spherical_covariance <- nimbleFunction(
-    run = function(d = double(0), range = double(0), sigma.sq = double(0)) {
-      returnType(double(0)) 
-      if (d <= range) {
-        return (sigma.sq * (1 - (3 * d / (2 * range)) + (d^3 / (2 * range^3))))
-      } else {
-        return(0.0)
+    run = function(d = double(2), range = double(0), sigma.sq = double(0)) {
+      returnType(double(2))  # Return type is a matrix
+      nrow_d <- dim(d)[1]
+      ncol_d <- dim(d)[2]
+      result <- matrix(0, nrow_d, ncol_d)  # Initialize result matrix
+      for (i in 1:nrow_d) {
+        for (j in 1:ncol_d) {
+          if (d[i, j] <= range) {
+            result[i, j] = sigma.sq * (1 - (3 * d[i, j] / (2 * range)) + (d[i, j]^3 / (2 * range^3)))
+          } else {
+            result[i, j] = 0.0
+          }
+        }
       }
+      return(result)
     }
   )
   
   matern_covariance <- nimbleFunction(
-    run = function(d = double(0), range = double(0), sigma.sq = double(0), nu = double(0)) {
-      returnType(double(0))
-        if (d == 0) {
-          return(sigma.sq)
-        } else {
-          part <- (2^(1 - nu)) / gamma(nu)  * (sqrt(2 * nu) * d / range)^nu
-          return(sigma.sq * part * besselK(d / range, nu))
+    run = function(d = double(2), range = double(0), sigma.sq = double(0), nu = double(0)) {
+      returnType(double(2))
+      nrow_d <- dim(d)[1]
+      ncol_d <- dim(d)[2]
+      result <- matrix(0, nrow_d, ncol_d)  # Initialize result matrix
+      for (i in 1:nrow_d) {
+        for (j in 1:ncol_d) {
+            if (d[i, j] == 0) {
+              result[i, j] = 0.0
+          } else {
+              part <- (2^(1 - nu)) / gamma(nu)  * (sqrt(2 * nu) * d[i, j] / range)^nu
+              result[i,j] = sigma.sq * part * besselK(d[i, j] / range, nu)
+          }
         }
+      }  
+      return(result)
     }
   )
   
@@ -119,25 +142,44 @@ for (genus in unique_genus) {
     }
     spatial_effect[1:N] ~ dmnorm(Mu[1:N], cov = cov_matrix[1:N, 1:N])
     
+    
+    
     # Choose the covariance function based on variogram fitting
     
     if (cov_type == "Mat") {
-      for (m in 1:N) {
-        for (n in 1:N) {
-          cov_matrix[m, n] <- matern_covariance(dist_matrix[m, n], range, sigma.sq, nu)
-        }
-      }
+      knots_cov_matrix[1:N_knots, 1:N_knots] <- matern_covariance(knots_dist_matrix[1:N_knots, 1:N_knots], range, sigma.sq, nu) + I[1:N_knots, 1:N_knots]
+      data_knots_cov_matrix[1:N, 1:N_knots] <- matern_covariance(data_knots_dist_matrix[1:N, 1:N_knots], range, sigma.sq, nu)
     } else if (cov_type == "Gau") {
-      cov_matrix[1:N, 1:N] <- sigma.sq * exp(-phi * dist_matrix[1:N, 1:N]^2)
+      knots_cov_matrix[1:N_knots, 1:N_knots] <- sigma.sq * exp(-phi * knots_dist_matrix[1:N_knots, 1:N_knots]^2) + I[1:N_knots, 1:N_knots]
+      data_knots_cov_matrix[1:N, 1:N_knots] <- sigma.sq * exp(-phi * data_knots_dist_matrix[1:N, 1:N_knots]^2)
     } else if (cov_type == "Exp") {
-      cov_matrix[1:N, 1:N] <- sigma.sq * exp(-phi * dist_matrix[1:N, 1:N])
+      knots_cov_matrix[1:N_knots, 1:N_knots] <- sigma.sq * exp(-phi * knots_dist_matrix[1:N_knots, 1:N_knots]) + I[1:N_knots, 1:N_knots]
+      data_knots_cov_matrix[1:N, 1:N_knots] <- sigma.sq * exp(-phi * data_knots_dist_matrix[1:N, 1:N_knots])
+    # } else if (cov_type == "Sph") {
+    #   for (m in 1:N_knots) {
+    #     for (n in 1:N_knots) {
+    #       knots_cov_matrix[m, n] <- spherical_covariance(knots_dist_matrix[m, n], range, sigma.sq)
+    #     }
+    #   }
+    #   for (i in 1:N) {
+    #     for (j in 1:N_knots) {
+    #       data_knots_cov_matrix[i, j] <- spherical_covariance(data_knots_dist_matrix[i, j], range, sigma.sq)
+    #     }
+    #   }
+    #   cov_matrix_ori[1:N, 1:N] <- data_knots_cov_matrix[1:N, 1:N_knots] %*% 
+    #     inverse(knots_cov_matrix[1:N_knots, 1:N_knots]) %*% 
+    #     t(data_knots_cov_matrix[1:N, 1:N_knots])
+    #   cov_matrix[1:N, 1:N] <- cov_matrix_ori[1:N, 1:N] + I[1:N, 1:N]
+    # }
     } else if (cov_type == "Sph") {
-      for (m in 1:N) {
-        for (n in 1:N) {
-          cov_matrix[m, n] <- spherical_covariance(dist_matrix[m, n], range, sigma.sq)
-        }
-      }
+      knots_cov_matrix[1:N_knots, 1:N_knots] <- spherical_covariance(knots_dist_matrix[1:N_knots, 1:N_knots], range, sigma.sq) + I[1:N_knots, 1:N_knots]
+      data_knots_cov_matrix[1:N, 1:N_knots] <- spherical_covariance(data_knots_dist_matrix[1:N, 1:N_knots], range, sigma.sq)
     }
+    knots_cov_chol_inv[1:N_knots, 1:N_knots] <- inverse(chol(knots_cov_matrix[1:N_knots, 1:N_knots]))
+    cov_matrix[1:N, 1:N] <- data_knots_cov_matrix[1:N, 1:N_knots] %*% 
+      knots_cov_chol_inv[1:N_knots, 1:N_knots] %*% t(knots_cov_chol_inv[1:N_knots, 1:N_knots]) %*% 
+      t(data_knots_cov_matrix[1:N, 1:N_knots]) + I[1:N, 1:N]
+      
     tau ~ dgamma(0.001, 0.001)
     sigma.sq ~ dinvgamma(2.5, 120)
     phi ~ dunif(5 / 1, 5 / 0.1)
@@ -148,11 +190,9 @@ for (genus in unique_genus) {
   
   # Data inputs
   
-  N <- nrow(tavg_phe_df)
   nyears <- length(unique(tavg_phe_df$year))
   X <- model.matrix(sp_formula, data = tavg_phe_df)
   y <- tavg_phe_df[[all.vars(sp_formula)[1]]]
-  dist_matrix <- as.matrix(dist(coords))
   year_index <- as.integer(factor(tavg_phe_df$year))  # Create fixed year indices
   data <- list(y = y, X = X)  # Remove 'year' from data
   inits <- list(
@@ -165,8 +205,10 @@ for (genus in unique_genus) {
   )
   
   ### Change based on semi-variogram fitting
-  constants <- list(N = N, P = ncol(X), Mu = rep(0, N), nyears = nyears, dist_matrix = dist_matrix,
-                    year = year_index, I = diag(1,N), cov_type = cov_type)  # Add 'year' to constants
+  constants <- list(N = N, N_knots = N_knots, P = ncol(X), Mu = rep(0, N), nyears = nyears, 
+                    dist_matrix = dist_matrix, knots_dist_matrix = knots_dist_matrix, 
+                    data_knots_dist_matrix = data_knots_dist_matrix,
+                    year = year_index, I = diag(1e-6,N), cov_type = cov_type)  # Add 'year' to constants
   monitors <- switch(
     cov_type,
     "Mat" = c("beta", "tau.year", "range", "sigma.sq", "nu", "spatial_effect", "year_effect"),
@@ -176,7 +218,7 @@ for (genus in unique_genus) {
     stop("Unknown cov_type!")
   )
   
-  ni <- 20000   # nb iterations 
+  ni <- 2000   # nb iterations 
   nt <- 1       # thinning interval
   nb <- ni / 2    # nb iterations as burn-in 
   nc <- 1         # nb chains
@@ -192,6 +234,17 @@ for (genus in unique_genus) {
                              summary = TRUE, 
                              WAIC = TRUE)
   
+  # beta_label <- data.frame(Parameter = "beta[2]", Label = "AvgTemp")
+  # param_data <- ggs(modelMCMCrun$samples, par_labels = beta_label) %>%
+  #   filter(Parameter == "AvgTemp")
+  # beta_median <- median(param_data$value)
+  # param_data %>%
+  #   ggs_density() +
+  #   theme_bw() +
+  #   ggtitle(paste("Genus:", genus)) +
+  #   theme(plot.title = element_text(hjust = 0.5)) +
+  #   annotate("text", x = beta_median, y = 0, label = paste0("Median: ", round(beta_median, 2)),vjust = -1.5, color = "red", size = 4)
+  # 
   model_path <- paste0(r_output_dir, city, "_", genus, "_tavg_", phe_type,  ".rds")
   saveRDS(modelMCMCrun, file = model_path)
 }

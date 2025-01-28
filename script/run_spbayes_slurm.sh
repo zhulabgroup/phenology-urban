@@ -2,8 +2,8 @@
 #SBATCH --job-name=jags_array
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err
-#SBATCH --array=1-4
-#SBATCH --time=24:00:00
+#SBATCH --array=1
+#SBATCH --time=2:00:00
 #SBATCH --partition=largemem
 #SBATCH --mem=32G
 #SBATCH --cpus-per-task=2
@@ -20,7 +20,7 @@
 
 
 # Define combinations of chains and iterations
-PHE_TYPES=("SOS" "EOS" "GreenUp" "GreenDown")
+PHE_TYPES=("SOS")
 
 # Get the combination for this array job
 CHAIN_INDEX=$((SLURM_ARRAY_TASK_ID - 1))
