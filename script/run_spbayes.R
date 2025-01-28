@@ -11,8 +11,8 @@ library(gstat)
 # Read file paths from environment variables
 r_input_dir <- Sys.getenv("R_INPUT_DIR")
 r_output_dir <- Sys.getenv("R_OUTPUT_DIR")
-city <- Sys.getenv("CITY")
-phe_type <- Sys.getenv("PHE_TYPE")
+city <- as.character(Sys.getenv("CITY"))
+phe_type <- as.character(Sys.getenv("PHE_TYPE"))
 
 # args <- commandArgs(trailingOnly = TRUE)
 # if (length(args) < 3) {
