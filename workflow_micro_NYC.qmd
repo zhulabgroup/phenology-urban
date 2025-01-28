@@ -734,27 +734,56 @@ I computed the empirical semivariogram for the residuals to analyze spatial stru
 
 
 tavg_allyear_var <- readRDS("~/phenology-urban/data/proc/urban/NY/tavg_allyear_var.rds")
+phe_types <- c("SOS", "EOS", "GreenUp", "GreenDown")
+all_genus <- unique(tavg_allyear_var$genus)
+results <- list()
 
+for (phe_type in phe_types) {
+  if (phe_type == "SOS") {
+    phe_metric <- "doy"
+    direction <- "up"
+    thres <- 0.5
+  } else if (phe_type == "EOS") {
+    phe_metric <- "doy"
+    direction <- "down"
+    thres <- 0.5
+  } else if (phe_type == "GreenUp") {
+    phe_metric <- "doy_diff"
+    direction <- "up"
+    thres <- 0.2
+    tavg_allyear_var$doy_diff <- as.numeric(tavg_allyear_var$doy_diff)
+  } else {
+    phe_metric <- "doy_diff"
+    direction <- "down"
+    thres <- 0.2
+    tavg_allyear_var$doy_diff <- as.numeric(tavg_allyear_var$doy_diff)
+  }
+    
+    for (genus in all_genus) {
+      tavg_SOS <- tavg_allyear_var %>%
+        filter(direction == !!direction & thres == thres & genus == !!genus) %>%
+        na.omit()
+      model <- as.formula(paste0(phe_metric, " ~ AvgTemp_mean + Sum_mm_sum + srad_mean + (1|year) + (1 | id)"))
+      full_model <- lmer(model, data = tavg_SOS)
+      var_components <- VarCorr(full_model)
+      
+      total_variance <-  var_components$id[1, 1] +  var_components$year[1, 1] + attr(var_components, "sc")^2
+      spatial_contribution <- var_components$id[1, 1]  / total_variance
+      year_contribution <-  var_components$year[1, 1] / total_variance
+      residual_contribution <- attr(var_components, "sc")^2 / total_variance
+      
+      variance_components <- data.frame(
+            Metric = phe_type,
+            Genus = genus,
+            Component = c("Spatial", "Year", "Residual"),
+            Variance = c(spatial_contribution, year_contribution, residual_contribution)
+          )
+          
+          results[[paste(phe_type, genus, sep = "_")]] <- variance_components
+  }
+}
 
-tavg_SOS <- tavg_allyear_var %>%
-  filter(direction == "up" & thres == 0.5 & genus == !!genus) %>%
-  na.omit()
-full_model <- lmer(doy ~ AvgTemp_mean + Sum_mm_sum + srad_mean + (1 | id) + (1 | year), data = tavg_SOS)
-summary(full_model)
-var_components <- VarCorr(full_model)
-
-total_variance <-  var_components$id[1, 1] +  var_components$year[1, 1] + attr(var_components, "sc")^2
-spatial_contribution <- var_components$id[1, 1]  / total_variance
-year_contribution <-  var_components$year[1, 1] / total_variance
-residual_contribution <- attr(var_components, "sc")^2 / total_variance
-
-
-variance_components <- data.frame(
-  Component = c("Spatial", "Year", "Residual"),
-  Variance = c(var_loc, var_year, var_residual)
-)
-
-
+final_results <- do.call(rbind, results)
 
 
 

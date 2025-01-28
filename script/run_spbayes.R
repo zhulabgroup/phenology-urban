@@ -143,42 +143,52 @@ for (genus in unique_genus) {
     spatial_effect[1:N] ~ dmnorm(Mu[1:N], cov = cov_matrix[1:N, 1:N])
     
     
-    
     # Choose the covariance function based on variogram fitting
-    
-    if (cov_type == "Mat") {
-      knots_cov_matrix[1:N_knots, 1:N_knots] <- matern_covariance(knots_dist_matrix[1:N_knots, 1:N_knots], range, sigma.sq, nu) + I[1:N_knots, 1:N_knots]
-      data_knots_cov_matrix[1:N, 1:N_knots] <- matern_covariance(data_knots_dist_matrix[1:N, 1:N_knots], range, sigma.sq, nu)
-    } else if (cov_type == "Gau") {
-      knots_cov_matrix[1:N_knots, 1:N_knots] <- sigma.sq * exp(-phi * knots_dist_matrix[1:N_knots, 1:N_knots]^2) + I[1:N_knots, 1:N_knots]
-      data_knots_cov_matrix[1:N, 1:N_knots] <- sigma.sq * exp(-phi * data_knots_dist_matrix[1:N, 1:N_knots]^2)
-    } else if (cov_type == "Exp") {
-      knots_cov_matrix[1:N_knots, 1:N_knots] <- sigma.sq * exp(-phi * knots_dist_matrix[1:N_knots, 1:N_knots]) + I[1:N_knots, 1:N_knots]
-      data_knots_cov_matrix[1:N, 1:N_knots] <- sigma.sq * exp(-phi * data_knots_dist_matrix[1:N, 1:N_knots])
-    # } else if (cov_type == "Sph") {
-    #   for (m in 1:N_knots) {
-    #     for (n in 1:N_knots) {
-    #       knots_cov_matrix[m, n] <- spherical_covariance(knots_dist_matrix[m, n], range, sigma.sq)
-    #     }
-    #   }
-    #   for (i in 1:N) {
-    #     for (j in 1:N_knots) {
-    #       data_knots_cov_matrix[i, j] <- spherical_covariance(data_knots_dist_matrix[i, j], range, sigma.sq)
-    #     }
-    #   }
-    #   cov_matrix_ori[1:N, 1:N] <- data_knots_cov_matrix[1:N, 1:N_knots] %*% 
-    #     inverse(knots_cov_matrix[1:N_knots, 1:N_knots]) %*% 
-    #     t(data_knots_cov_matrix[1:N, 1:N_knots])
-    #   cov_matrix[1:N, 1:N] <- cov_matrix_ori[1:N, 1:N] + I[1:N, 1:N]
-    # }
-    } else if (cov_type == "Sph") {
-      knots_cov_matrix[1:N_knots, 1:N_knots] <- spherical_covariance(knots_dist_matrix[1:N_knots, 1:N_knots], range, sigma.sq) + I[1:N_knots, 1:N_knots]
-      data_knots_cov_matrix[1:N, 1:N_knots] <- spherical_covariance(data_knots_dist_matrix[1:N, 1:N_knots], range, sigma.sq)
+    if (N_knots <= N){
+      if (cov_type == "Mat") {
+        knots_cov_matrix[1:N_knots, 1:N_knots] <- matern_covariance(knots_dist_matrix[1:N_knots, 1:N_knots], range, sigma.sq, nu) + I[1:N_knots, 1:N_knots]
+        data_knots_cov_matrix[1:N, 1:N_knots] <- matern_covariance(data_knots_dist_matrix[1:N, 1:N_knots], range, sigma.sq, nu)
+      } else if (cov_type == "Gau") {
+        knots_cov_matrix[1:N_knots, 1:N_knots] <- sigma.sq * exp(-phi * knots_dist_matrix[1:N_knots, 1:N_knots]^2) + I[1:N_knots, 1:N_knots]
+        data_knots_cov_matrix[1:N, 1:N_knots] <- sigma.sq * exp(-phi * data_knots_dist_matrix[1:N, 1:N_knots]^2)
+      } else if (cov_type == "Exp") {
+        knots_cov_matrix[1:N_knots, 1:N_knots] <- sigma.sq * exp(-phi * knots_dist_matrix[1:N_knots, 1:N_knots]) + I[1:N_knots, 1:N_knots]
+        data_knots_cov_matrix[1:N, 1:N_knots] <- sigma.sq * exp(-phi * data_knots_dist_matrix[1:N, 1:N_knots])
+      # } else if (cov_type == "Sph") {
+      #   for (m in 1:N_knots) {
+      #     for (n in 1:N_knots) {
+      #       knots_cov_matrix[m, n] <- spherical_covariance(knots_dist_matrix[m, n], range, sigma.sq)
+      #     }
+      #   }
+      #   for (i in 1:N) {
+      #     for (j in 1:N_knots) {
+      #       data_knots_cov_matrix[i, j] <- spherical_covariance(data_knots_dist_matrix[i, j], range, sigma.sq)
+      #     }
+      #   }
+      #   cov_matrix_ori[1:N, 1:N] <- data_knots_cov_matrix[1:N, 1:N_knots] %*% 
+      #     inverse(knots_cov_matrix[1:N_knots, 1:N_knots]) %*% 
+      #     t(data_knots_cov_matrix[1:N, 1:N_knots])
+      #   cov_matrix[1:N, 1:N] <- cov_matrix_ori[1:N, 1:N] + I[1:N, 1:N]
+      # }
+      } else if (cov_type == "Sph") {
+        knots_cov_matrix[1:N_knots, 1:N_knots] <- spherical_covariance(knots_dist_matrix[1:N_knots, 1:N_knots], range, sigma.sq) + I[1:N_knots, 1:N_knots]
+        data_knots_cov_matrix[1:N, 1:N_knots] <- spherical_covariance(data_knots_dist_matrix[1:N, 1:N_knots], range, sigma.sq)
+      }
+      knots_cov_chol_inv[1:N_knots, 1:N_knots] <- inverse(chol(knots_cov_matrix[1:N_knots, 1:N_knots]))
+      cov_matrix[1:N, 1:N] <- data_knots_cov_matrix[1:N, 1:N_knots] %*% 
+        knots_cov_chol_inv[1:N_knots, 1:N_knots] %*% t(knots_cov_chol_inv[1:N_knots, 1:N_knots]) %*% 
+        t(data_knots_cov_matrix[1:N, 1:N_knots]) + I[1:N, 1:N]
+    } else {
+      if (cov_type == "Mat") {
+        cov_matrix[1:N, 1:N] <-  matern_covariance(dist_matrix[1:N, 1:N], range, sigma.sq, nu) + I[1:N, 1:N]
+      } else if (cov_type == "Gau") {
+        cov_matrix[1:N, 1:N] <- sigma.sq * exp(-phi * dist_matrix[1:N, 1:N]^2) + I[1:N, 1:N]
+      } else if (cov_type == "Exp") {
+        cov_matrix[1:N, 1:N] <- sigma.sq * exp(-phi * dist_matrix[1:N, 1:N]) + I[1:N, 1:N]
+      } else if (cov_type == "Sph") {
+        cov_matrix[1:N, 1:N] <- spherical_covariance(dist_matrix[1:N, 1:N], range, sigma.sq) + I[1:N, 1:N]
+      }
     }
-    knots_cov_chol_inv[1:N_knots, 1:N_knots] <- inverse(chol(knots_cov_matrix[1:N_knots, 1:N_knots]))
-    cov_matrix[1:N, 1:N] <- data_knots_cov_matrix[1:N, 1:N_knots] %*% 
-      knots_cov_chol_inv[1:N_knots, 1:N_knots] %*% t(knots_cov_chol_inv[1:N_knots, 1:N_knots]) %*% 
-      t(data_knots_cov_matrix[1:N, 1:N_knots]) + I[1:N, 1:N]
       
     tau ~ dgamma(0.001, 0.001)
     sigma.sq ~ dinvgamma(2.5, 120)
@@ -218,8 +228,8 @@ for (genus in unique_genus) {
     stop("Unknown cov_type!")
   )
   
-  ni <- 2000   # nb iterations 
-  nt <- 1       # thinning interval
+  ni <- 10000   # nb iterations 
+  nt <- 50       # thinning interval
   nb <- ni / 2    # nb iterations as burn-in 
   nc <- 1         # nb chains
   
