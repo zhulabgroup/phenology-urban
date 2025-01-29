@@ -1,4 +1,0 @@
-"0","intersect_200_bld_betula <- read.dbf(dbf_file)
-"
-"2","Error in read.dbf(dbf_file) : unable to open DBF file
-"

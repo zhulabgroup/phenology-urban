@@ -1,3 +1,0 @@
-"0","us_boundary <- st_set_crs(us_boundary, ""EPSG:4326"")
-"
-"2","Warning: st_crs<- : replacing crs does not reproject data; use st_transform for that"

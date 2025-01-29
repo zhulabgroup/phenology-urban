@@ -1,5 +1,0 @@
-"0","plot_sca <- analyze_stat_slopeCI(analyze_leaf_bud, ""Tavg_Spring"", ""First_Yes_DOY"", ""Temp - bud break"")
-"
-"2","Error in ggplot(data, aes_string(x = temp_col, y = doy_col, color = ""group"")) : 
-  object 'analyze_leaf_bud' not found
-"

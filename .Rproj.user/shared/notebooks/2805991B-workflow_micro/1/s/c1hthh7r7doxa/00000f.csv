@@ -1,9 +1,0 @@
-"0","library(dplyr)
-library(shadow)
-betula_data <- point_tree %>% filter(str_detect(taxa, ""Betula""))
-
-intersect_200_bld_betula <- read.dbf(""~/phenology-urban/result/bld_index/inter_buffer_200_betula.dbf"")
-"
-"2","Error in read.dbf(""~/phenology-urban/result/bld_index/inter_buffer_200_betula.dbf"") : 
-  could not find function ""read.dbf""
-"

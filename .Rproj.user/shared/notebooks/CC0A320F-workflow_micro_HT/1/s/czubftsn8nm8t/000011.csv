@@ -1,4 +1,0 @@
-"0","points_in_buffer <- tree_location[lengths(intersects) = 1, ]
-"
-"2","Error: unexpected '=' in ""points_in_buffer <- tree_location[lengths(intersects) =""
-"

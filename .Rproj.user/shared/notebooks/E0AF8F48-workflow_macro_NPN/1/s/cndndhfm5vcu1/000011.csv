@@ -1,6 +1,0 @@
-"0","## save as shp.
-write_sf(species_leaf_bud_site, ""~/phenology-urban/data/proc/conus/npn/leaf_bud_1222.shp"")
-"
-"2","Warning: Field names abbreviated for ESRI Shapefile driver"
-"0","write_sf(species_color_leaf_site, ""~/phenology-urban/data/proc/conus/npn/color_leaf_1222.shp"")"
-"2","Warning: Field names abbreviated for ESRI Shapefile driver"

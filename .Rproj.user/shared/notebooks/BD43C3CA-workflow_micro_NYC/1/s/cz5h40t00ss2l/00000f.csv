@@ -1,7 +1,0 @@
-"0","#| label: plot_function"
-"0","#| include: true"
-"0","#| warning: false"
-"0",""
-"0","# download"
-"0","srad_daily <- readRDS(paste0(""~/phenology-urban/data/raw/"",city,""/Daymet/daily2016-2024/srad_daily_2016-2023.rds"")) %>%"
-"0","  select(id, value, date)"
