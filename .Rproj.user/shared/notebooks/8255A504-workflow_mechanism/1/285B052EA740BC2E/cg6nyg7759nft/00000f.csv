@@ -1,0 +1,96 @@
+"0","library(dplyr)"
+"2","
+Attaching package: ‘dplyr’
+
+"
+"2","The following objects are masked from ‘package:raster’:
+
+    intersect, select, union
+
+"
+"2","The following objects are masked from ‘package:stats’:
+
+    filter, lag
+
+"
+"2","The following objects are masked from ‘package:base’:
+
+    intersect, setdiff, setequal, union
+
+"
+"0","library(stringr)"
+"0","library(ggplot2)"
+"0","library(sf)"
+"2","Linking to GEOS 3.10.2, GDAL 3.5.1, PROJ 9.0.0; sf_use_s2() is TRUE
+"
+"0","library(data.table)"
+"2","Registered S3 method overwritten by 'data.table':
+  method           from
+  print.data.table     
+"
+"2","data.table 1.14.2 using 1 threads (see ?getDTthreads).  Latest news: r-datatable.com
+"
+"2","
+Attaching package: ‘data.table’
+
+"
+"2","The following objects are masked from ‘package:dplyr’:
+
+    between, first, last
+
+"
+"2","The following object is masked from ‘package:raster’:
+
+    shift
+
+"
+"0","library(daymetr)  # for getting Daymet data"
+"0","library(ncdf4)  # for processing .nc data"
+"0","library(janitor)  # for detecting cols with all records empty"
+"2","
+Attaching package: ‘janitor’
+
+"
+"2","The following object is masked from ‘package:raster’:
+
+    crosstab
+
+"
+"2","The following objects are masked from ‘package:stats’:
+
+    chisq.test, fisher.test
+
+"
+"0","library(gstat)  # for interpolation"
+"0","library(sp)"
+"0","library(sf)"
+"0","library(raster)"
+"0","library(purrr)"
+"2","
+Attaching package: ‘purrr’
+
+"
+"2","The following object is masked from ‘package:data.table’:
+
+    transpose
+
+"
+"0","library(ppcor)"
+"2","Loading required package: MASS
+"
+"2","
+Attaching package: ‘MASS’
+
+"
+"2","The following object is masked from ‘package:dplyr’:
+
+    select
+
+"
+"2","The following objects are masked from ‘package:raster’:
+
+    area, select
+
+"
+"0","library(cowplot)"
+"0","library(ggsignif)"

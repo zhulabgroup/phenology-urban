@@ -69,7 +69,7 @@ for (genus in unique_genus) {
     na.omit()
   print(paste("City:",city, "Genus:",genus, "; metric:", nrow(tavg_phe)))
   print(paste("Type:", phe_type, "; metric:", phe_metric, "; direction:", direction, "; thres:", thres))
-  if (nrow(tavg_phe) == 0) next
+  if (nrow(tavg_phe) < 10) next
   
   OLS_formula <- as.formula(paste0(phe_metric, " ~ AvgTemp_mean + Sum_mm_sum + srad_mean + (1|year)"))
   random_OLS <- lmer(OLS_formula, data = tavg_phe)

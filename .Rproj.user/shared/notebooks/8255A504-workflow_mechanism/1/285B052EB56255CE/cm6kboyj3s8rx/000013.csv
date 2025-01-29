@@ -1,0 +1,16 @@
+"0","# urban acer using NPN data
+analyze_color_leaf <- readRDS(""~/phenology-urban/data/proc/conus/npn/all_drivers/color_leaf_1116.rds"") %>%
+  filter(Genus  == ""Acer"") %>%
+  filter(group == ""ALAN"") %>%
+  dplyr::select(""Genus"", ""Species"", ""Tavg_annual"") %>%
+  group_by(Genus, Species) %>% 
+  summarise_if(is.numeric,list(mean = ~mean(.,na.rm=T), median = ~median(.,na.rm=T), 
+                               q05=~quantile(., probs=c(0.05), na.rm = T),q95=~quantile(., probs=c(0.95),na.rm = T)))
+"
+"1","[1m[33mError[39m in `dplyr::select()`:[22m
+[33m![39m Can't subset columns that don't exist.
+[31m✖[39m Column `Tavg_annual` doesn't exist.
+Backtrace:
+[90m  1. [39m... %>% ...
+[90m 17. [39m[1m[94msf:::select.sf([39m[22m., ""Genus"", ""Species"", ""Tavg_annual""[1m[94m)[39m[22m
+"

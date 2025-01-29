@@ -1,0 +1,5 @@
+"0","sen <- analyze_stat_slopeCI(analyze_color_leaf, ""summer_sm"", ""First_Yes_DOY"", """")
+"
+"2","Warning: `aes_string()` was deprecated in ggplot2 3.0.0.
+Please use tidy evaluation idioms with `aes()`. 
+See also `vignette(""ggplot2-in-packages"")` for more information."

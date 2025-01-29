@@ -1,0 +1,26 @@
+{
+    "id": "99142D60",
+    "path": "~/phenology-urban/script/niche/plot_seg.R",
+    "project_path": "script/niche/plot_seg.R",
+    "type": "r_source",
+    "hash": "692481185",
+    "contents": "",
+    "dirty": false,
+    "created": 1726580064216.0,
+    "source_on_save": false,
+    "relative_order": 4,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "4,20",
+        "scrollLine": "0"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1726546184,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1726546184,
+    "read_only": false,
+    "read_only_alternatives": []
+}

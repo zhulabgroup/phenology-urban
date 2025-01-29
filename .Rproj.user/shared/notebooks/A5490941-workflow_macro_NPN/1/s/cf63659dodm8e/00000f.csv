@@ -1,0 +1,5 @@
+"0","individual_phenometrics_data <- read_csv(""~/phenology-urban/data/raw/CONUS/NPN/NPN1722/individual_phenometrics_data.csv"")
+"
+"2","Error in read_csv(""~/phenology-urban/data/raw/CONUS/NPN/NPN1722/individual_phenometrics_data.csv"") : 
+  could not find function ""read_csv""
+"

@@ -1,0 +1,13 @@
+[1] "City: HT Genus: Betula ; metric: 276"
+[1] "Type: SOS ; metric: doy ; direction: up ; thres: 0.5"
+|-------------|-------------|-------------|-------------|
+|-------------------------------------------------------|
+[1] "City: HT Genus: Salix ; metric: 251"
+[1] "Type: SOS ; metric: doy ; direction: up ; thres: 0.5"
+|-------------|-------------|-------------|-------------|
+|-------------------------------------------------------|
+  [Warning] There are 4 individual pWAIC values that are greater than 0.4. This may indicate that the WAIC estimate is unstable (Vehtari et al., 2017), at least in cases without grouping of data nodes or multivariate data nodes.
+[1] "City: HT Genus: Populus ; metric: 231"
+[1] "Type: SOS ; metric: doy ; direction: up ; thres: 0.5"
+|-------------|-------------|-------------|-------------|
+|---------

@@ -1,0 +1,44 @@
+ext_species_gisa <- function(dataset, species) {
+  
+  us_gisa <- rast("~/lab-data/proj-phenology-urban/CONUS/GISA/us_gisa.tif")
+  us_species_gbif <- dataset %>% 
+    filter(species == !!species) %>%
+    distinct() %>%
+    filter(year <= 2019)
+  
+  us_species_gbif1 <- st_as_sf(us_species_gbif, coords = c("decimalLongitude", "decimalLatitude"), crs = crs(us_gisa))
+  
+  # Extract the GISA values
+  gbif_gisa_values <- terra::extract(us_gisa, us_species_gbif1)
+  us_species_gbif <- us_species_gbif %>%
+    mutate(gisa = gbif_gisa_values[, 2]) %>%
+    mutate(gisa = recode(gisa,
+                         `1` = 1972, `2` = 1978, `3` = 1985, `4` = 1986, `5` = 1987, 
+                         `6` = 1988, `7` = 1989, `8` = 1990, `9` = 1991, `10` = 1992, 
+                         `11` = 1993, `12` = 1994, `13` = 1995, `14` = 1996, `15` = 1997, 
+                         `16` = 1998, `17` = 1999, `18` = 2000, `19` = 2001, `20` = 2002, 
+                         `21` = 2003, `22` = 2004, `23` = 2005, `24` = 2006, `25` = 2007, 
+                         `26` = 2008, `27` = 2009, `28` = 2010, `29` = 2011, `30` = 2012, 
+                         `31` = 2013, `32` = 2014, `33` = 2015, `34` = 2016, `35` = 2017, 
+                         `36` = 2018, `37` = 2019))
+  # Natrual: record before urbanization and always natural
+  # Urban: record after urbanization
+  us_species_gbif <- us_species_gbif %>%
+    mutate(group = case_when(
+      gisa == 0 ~ "natural",
+      gisa != 0 & gisa <= year ~ "urban",
+      gisa != 0 & gisa > year ~ "natural"
+    )) %>%
+    filter(!(gisa == 0 & year > 2019)) # remove the natrual records after 2019, because we cannot determine whether it is urban or not
+  
+  # Visualization
+  # us_boundary <- st_read("~/phenology-urban/data/raw/CONUS/boundary/us_boundarydissolve.shp")
+  # us_species_gbif1 <- st_as_sf(us_species_gbif, coords = c("decimalLongitude", "decimalLatitude"), crs = crs(us_gisa))
+  # dist_map <- ggplot(us_species_gbif1) +
+  #   geom_sf(aes(color = group), size = 0.02) +
+  #   geom_sf(data=us_boundary,color="grey60",fill=NA) +
+  #   labs(x = "Longitude", y = "Latitude", color = "Group") +
+  #   theme_minimal()
+  
+  return(us_species_gbif = us_species_gbif)
+}

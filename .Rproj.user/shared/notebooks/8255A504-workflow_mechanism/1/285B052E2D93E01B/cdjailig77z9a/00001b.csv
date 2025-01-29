@@ -1,0 +1,25 @@
+"0","us_acer_db <- us_acer_db %>%
+  rowwise() %>%
+  mutate(MAT = read_and_average_nc(year, as.numeric(decimalLatitude), as.numeric(decimalLongitude)))
+"
+"2","Registered S3 methods overwritten by 'htmltools':
+  method               from         
+  print.html           tools:rstudio
+  print.shiny.tag      tools:rstudio
+  print.shiny.tag.list tools:rstudio
+"
+"1","[1m[33mError[39m in `mutate()`:[22m
+[38;5;232m[36mℹ[38;5;232m In argument: `MAT = read_and_average_nc(year, as.numeric(decimalLatitude),
+  as.numeric(decimalLongitude))`.
+[36mℹ[38;5;232m In row 144.[39m
+[1mCaused by error:[22m
+[33m![39m [rast] file does not exist: data/raw/CONUS/Daymet/annual1980-2023/tmin_annavg_2024_ncss.nc
+Backtrace:
+[90m  1. [39mus_acer_db %>% rowwise() %>% ...
+[90m  9. [39m[1mglobal[22m read_and_average_nc(year, as.numeric(decimalLatitude), as.numeric(decimalLongitude))
+[90m 11. [39m[1mterra[22m::rast(tmin_file)
+[90m 12. [39mterra (local) .local(x, ...)
+[90m 13. [39mterra:::messages(r, ""rast"")
+[90m 14. [39mterra:::error(f, x@ptr$getError())
+[90m 15. [39m[1mbase[22m::stop(""["", f, ""] "", emsg, ..., call. = FALSE)
+"

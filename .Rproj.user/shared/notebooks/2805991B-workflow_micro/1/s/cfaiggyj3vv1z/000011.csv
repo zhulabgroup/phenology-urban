@@ -1,0 +1,8 @@
+"0","point_tree <- st_as_sf(df_tree)
+point_tree <- st_as_sf(df_tree)
+# Transform the data to a new CRS with explicit units
+point_tree <- st_transform(point_tree, crs = st_crs(""+proj=longlat +datum=WGS84 +units=m""))
+"
+"2","Error in st_transform.sfc(st_geometry(x), crs, ...) : 
+  cannot transform sfc object with missing crs
+"

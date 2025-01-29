@@ -1,0 +1,7 @@
+"0","# bud
+source(""stat_slope_CI.R"")
+"
+"2","Warning: cannot open file 'stat_slope_CI.R': No such file or directory"
+"2","Error in file(filename, ""r"", encoding = encoding) : 
+  cannot open the connection
+"

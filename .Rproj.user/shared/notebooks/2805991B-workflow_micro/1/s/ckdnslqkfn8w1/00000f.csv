@@ -1,0 +1,10 @@
+"0","svf_betula <- SVF(
+  betula_point_sp, 
+  building_footprint_sp_cleaned,
+  obstacles_height_field = ""heightroof"",
+  res_angle = 10,
+  b = 10,
+  parallel = 4
+)
+"
+"2","Warning: GEOS support is provided by the sf and terra packages among others"

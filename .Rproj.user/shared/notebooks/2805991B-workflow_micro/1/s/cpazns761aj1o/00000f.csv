@@ -1,0 +1,6 @@
+"0","building_footprint <- sf::read_sf('~/phenology-urban/data/raw/NY/NY_building_footprint/geo_export_56deb8a8-0463-4f00-8f45-99e751e3b8e1.shp') %>%
+  st_make_valid(building_footprint)
+"
+"2","Error in st_make_valid(., building_footprint) : 
+  could not find function ""st_make_valid""
+"

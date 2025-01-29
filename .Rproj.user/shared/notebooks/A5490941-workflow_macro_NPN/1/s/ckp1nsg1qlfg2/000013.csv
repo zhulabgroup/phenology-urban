@@ -1,0 +1,2 @@
+"0",""
+"0","ggsave(""result/combined_plot.png"", plot = combined_plot, width = 10, height = 12, dpi = 300)"

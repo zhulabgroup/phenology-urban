@@ -1,0 +1,12 @@
+"0","svf_betula <- SVF(
+  betula_point_sp, 
+  building_footprint_sp,
+  obstacles_height_field = ""heightroof"",
+  res_angle = 10,
+  b = 10,
+  parallel = 4
+)
+"
+"2","Error in if (any(obstacles@data[, obstacles_height_field] < 0)) stop(""'obstacles_height_field' cannot contain negative values"") : 
+  missing value where TRUE/FALSE needed
+"

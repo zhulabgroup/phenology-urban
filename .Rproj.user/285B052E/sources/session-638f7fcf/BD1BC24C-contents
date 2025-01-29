@@ -1,0 +1,5 @@
+[1] 39
+[1] "Type:  ; metric: doy_diff ; direction: down ; thres: 0.2"
+warning: problem initializing stochastic node spatial_temporal_effect[1:39]: logProb is NA or NaN.
+|-------------|-------------|-------------|-------------|
+|-------------

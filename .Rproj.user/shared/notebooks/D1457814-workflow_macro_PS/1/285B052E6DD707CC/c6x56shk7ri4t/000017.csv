@@ -1,0 +1,17 @@
+"0","  # download Daymet data
+  download_daymet_ncss(location = bbox[c('ymax', 'xmin', 'ymin', 'xmax')],
+                       start = 2022, end = 2022,
+                       frequency = ""daily"",
+                       param = c(""tmin"",""tmax""),
+                       path=folder.raw)
+"
+"2","Creating a subset of the Daymet data
+        be patient, this might take a while!
+
+"
+"2","https://thredds.daac.ornl.gov/thredds/ncss/ornldaac/2129/daymet_v4_daily_na_tmin_2022.nc
+"
+"2","
+Downloading DAYMET subset: year: 2022; product: tmin
+
+"

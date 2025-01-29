@@ -1,0 +1,187 @@
+---
+title: "urban-planet"
+author: "Jiali Zhu"
+date: "2023-10-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+1. Insert tree id
+```{r}
+source("script/read_tree_inventory.R")
+cityoi <- "NY"
+df_tree <- read_tree_inventory(city = cityoi)
+
+v_taxa <- c("Quercus", "Morus", "Ulmus", "Fraxinus", "Betula", "Acer", "Populus", "Vacant")
+```
+
+2. Creat buffer zone near tree point (sample points)
+```{r}
+library(sp)
+library(sf)
+library(ggplot2)
+
+boundary_NY <- sf::read_sf('data/raw/NY/boundary/nybb_dissolved.shp')
+coordinates(df_tree) <- c("lon", "lat")
+point_tree <- st_as_sf(df_tree)
+
+# randomly pick
+set.seed(123)
+betula_points <- point_tree %>% filter(str_detect(taxa, "Betula")) 
+sample_points <- st_set_crs(sample_points, "EPSG:4326")
+
+# Transform the data to a new CRS with explicit units
+sample_points <- st_transform(sample_points, crs = st_crs("+proj=longlat +datum=WGS84 +units=m"))
+st_crs(sample_points)
+
+# Create buffer for height index
+buffers <- st_buffer(sample_points, dist = 200)
+
+# Visualize
+ggplot() +
+geom_sf(data = boundary_NY, fill = "white", color = "black") +
+  coord_sf(ylim = c(40.5, 40.9), xlim = c(-74.3, -73.6)) +
+  geom_sf(data = sample_points, color = "black", size=2, shape=17) +
+  scale_color_manual(values="darkgreen") +
+  theme_minimal() +
+  theme(legend.position="none") +
+  geom_sf(data = buffers, fill = "white", color = "red")
+
+```
+
+3. Insert building data / Intersection fail (prelimilary result from Arcgis)
+```{r}
+source("~/phenology-urban/script/faster_intersect.R")
+building_footprint <- sf::read_sf('~/phenology-urban/data/raw/NY/NY_building_footprint/geo_export_56deb8a8-0463-4f00-8f45-99e751e3b8e1.shp') %>%
+  st_make_valid(building_footprint) %>% select(base_bbl, bin, groundelev, heightroof)
+
+buffers <- st_transform(buffers, crs = st_crs(building_footprint))
+
+intersection_result <- faster_intersect(building_footprint, buffers)
+
+```
+
+4. building index for betula_200_buffer
+```{r}
+library(dplyr)
+library(foreign)
+
+dbf_file <- "~/phenology-urban/data/raw/NY/NY_building_footprint/inter_buffer_200_betula.dbf"
+intersect_200_bld_betula <- read.dbf(dbf_file)
+
+#BCR_betula_200
+bld_index_betula_200 <- intersect_200_bld_betula %>%
+  group_by(tree_id) %>%
+  summarise(BCR_betula_200 = sum(Shape_Ar_1) / (40000 * pi))
+
+#BVD_betula_200
+BVD_betula_200 <- intersect_200_bld_betula %>%
+  group_by(tree_id) %>%
+  summarise(BVD_betula_200 = sum(Shape_Ar_1 * heightroof) / (40000 * pi))
+
+bld_index_betula_200 <- left_join(bld_index_betula_200, BVD_betula_200, by = "tree_id")
+
+#BHD_betula_200
+BHD_betula_200 <- intersect_200_bld_betula %>%
+  group_by(tree_id) %>%
+  summarise(BHD_betula_200 = sum(heightroof) / (40000 * pi))
+
+bld_index_betula_200 <- left_join(bld_index_betula_200, BHD_betula_200, by = "tree_id")
+write.csv(bld_index_betula_200, file = "~/phenology-urban/result/bld_index/bld_index_betula_200.csv", row.names = FALSE)
+
+
+# sky view factor
+#data prepare
+betula_point <- point_tree %>% filter(str_detect(taxa, "Betula"))
+building_footprint <- sf::read_sf('~/phenology-urban/data/raw/NY/NY_building_footprint/geo_export_56deb8a8-0463-4f00-8f45-99e751e3b8e1.shp') %>%
+  st_make_valid(building_footprint)
+
+set.seed(123)
+betula_point_sp <- as(sample_points %>% sample_n(5), "Spatial") 
+building_footprint_sp <- as(building_footprint, "Spatial")
+
+projection_crs <- CRS("+proj=utm +zone=18 +datum=WGS84 +units=m +no_defs")
+proj4string(betula_point_sp) <- projection_crs
+proj4string(building_footprint_sp) <- projection_crs
+building_footprint_sp <- subset(building_footprint_sp, !is.na(heightroof))
+
+library(shadow)
+svf_betula <- SVF(
+  betula_point_cor, 
+  building_footprint_sp,
+  obstacles_height_field = "heightroof",
+  res_angle = 10,
+  b = 10,
+  parallel = getOption("mc.cores")
+)
+
+```
+
+5. visualize
+
+```{r}
+library(ggplot2)
+library(sf)
+library(dplyr)
+
+betula_point <- point_tree %>% filter(str_detect(taxa, "Betula"))
+bld_index <- read.csv("~/phenology-urban/result/bld_index/bld_index_betula_200.csv")
+merged_data <- merge(betula_point, bld_index, by.x = "id", by.y = "tree_id", all.x = TRUE)
+
+#plot buffer
+
+boundary_NY <- sf::read_sf('data/raw/NY/boundary/nybb_dissolved.shp')
+merged_data <- st_set_crs(merged_data, "EPSG:4326")
+# Transform the data to a new CRS with explicit units
+merged_data <- st_transform(merged_data, crs = st_crs("+proj=longlat +datum=WGS84 +units=m"))
+# Create buffer for height index
+buffers <- st_buffer(merged_data, dist = 200)
+
+plot <- ggplot() +
+  geom_sf(data = boundary_NY, fill = "white", color = "black") +
+  coord_sf(ylim = c(40.5, 40.9), xlim = c(-74.3, -73.6)) +
+  theme_minimal() +
+  theme(legend.position="none") +
+  geom_sf(data = buffers, fill = "white", color = "red")
+
+ggsave("result/bld_index/buffer_betula.jpg", plot, width = 8, height = 6, units = "in")
+
+# plot bld_index
+
+plot_BCR <- ggplot() +
+  geom_sf(data = boundary_NY, fill = "white", color = "black") +
+  coord_sf(ylim = c(40.5, 40.9), xlim = c(-74.3, -73.6)) +
+  geom_sf(data = merged_data, aes(color = BCR_betula_200), stroke = 0) +
+  theme_minimal() +
+  labs(color = "BCR for Betula within 200m buffer") +
+  scale_color_viridis_c(option = "inferno")
+
+ggsave("result/bld_index/BCR_betula_200.jpg", plot_BCR, width = 8, height = 6, units = "in")
+
+plot_BVD <- ggplot() +
+  geom_sf(data = boundary_NY, fill = "white", color = "black") +
+  coord_sf(ylim = c(40.5, 40.9), xlim = c(-74.3, -73.6)) +
+  geom_sf(data = merged_data, aes(color = BVD_betula_200), stroke = 0) +
+  theme_minimal() +
+  labs(color = "BVD for Betula within 200m buffer") +
+  scale_color_viridis_c(option = "inferno")
+
+ggsave("result/bld_index/BVD_betula_200.jpg", plot_BVD, width = 8, height = 6, units = "in")
+
+plot_BHD <- ggplot() +
+  geom_sf(data = boundary_NY, fill = "white", color = "black") +
+  coord_sf(ylim = c(40.5, 40.9), xlim = c(-74.3, -73.6)) +
+  geom_sf(data = merged_data, aes(color = BHD_betula_200), stroke = 0) +
+  theme_minimal() +
+  labs(color = "BHD for Betula within 200m buffer") +
+  scale_color_viridis_c(option = "inferno")
+
+ggsave("result/bld_index/BHD_betula_200.jpg", plot_BHD, width = 8, height = 6, units = "in")
+
+```
+
+
+
