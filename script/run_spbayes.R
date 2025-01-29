@@ -24,10 +24,11 @@ phe_type <- as.character(Sys.getenv("PHE_TYPE"))
 # city <- args[3]
 # phe_type <- args[4]
 
-# r_input_dir <- "~/urban_phenology_sp/input/"
+# r_input_dir <- "~/phenology-urban/data/proc/urban/"
 # r_output_dir <- "~/phenology-urban/data/proc/urban/sp_model/"
-# city <- "TP"
+# city <- "SIM"
 # phe_type <- "SOS"
+# genus = "sp_random_yr"
 
 #################### Read data ####################
 
@@ -92,7 +93,7 @@ for (genus in unique_genus) {
   } else {
     knots <- coords
     knots_dist_matrix <- dist_matrix
-    data_knots_dist_matrix <- as.matrix(dist(rbind(coords, knots)))[1:N, (N + 1):(N + N_knots)]
+    data_knots_dist_matrix <- dist_matrix
   }
     
   

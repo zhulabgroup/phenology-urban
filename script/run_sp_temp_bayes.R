@@ -28,6 +28,11 @@ phe_type <- as.character(Sys.getenv("PHE_TYPE"))
 # r_output_dir <- "~/phenology-urban/data/proc/urban/sp_model/"
 # city <- "NY"
 # phe_type <- "SOS"
+# r_input_dir <- "~/phenology-urban/data/proc/urban/"
+# r_output_dir <- "~/phenology-urban/data/proc/urban/sp_model/"
+# city <- "SIM"
+# phe_type <- "SOS"
+# genus = "joint_sp_yr"
 
 #################### Read data ####################
 
@@ -37,24 +42,20 @@ if (phe_type == "SOS") {
   phe_metric <- "doy"
   direction <- "up"
   thres <- 0.5
-  unique_genus = c("Ulmus", "Fraxinus", "Celtis", "Salix", "Alnus","Betula", "Morus", "Populus")
 } else if (phe_type == "EOS") {
   phe_metric <- "doy"
   direction <- "down"
   thres <- 0.5
-  unique_genus = c("Ulmus", "Fraxinus", "Celtis", "Salix", "Alnus")
 } else if (phe_type == "GreenUp") {
   phe_metric <- "doy_diff"
   direction <- "up"
   thres <- 0.2
   tavg_allyear_var$doy_diff <- as.numeric(tavg_allyear_var$doy_diff)
-  unique_genus = c("Ulmus", "Fraxinus", "Celtis", "Salix", "Alnus", "Morus")
 } else {
   phe_metric <- "doy_diff"
   direction <- "down"
   thres <- 0.2
   tavg_allyear_var$doy_diff <- as.numeric(tavg_allyear_var$doy_diff)
-  unique_genus = c("Ulmus", "Fraxinus", "Celtis", "Salix", "Alnus","Betula", "Morus", "Populus", "Juglans", "Liquidambar")
 }
 
 
@@ -189,8 +190,8 @@ for (genus in unique_genus) {
     stop("Unknown cov_type!")
   )
   
-  ni <- 20000   # nb iterations 
-  nt <- 1       # thinning interval
+  ni <- 10000   # nb iterations 
+  nt <- 50       # thinning interval
   nb <- ni / 2    # nb iterations as burn-in 
   nc <- 1         # nb chains
   
