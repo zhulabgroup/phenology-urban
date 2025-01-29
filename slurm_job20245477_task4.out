@@ -1,0 +1,8 @@
+[1] "City: TP Genus: Quercus ; metric: 1992"
+[1] "Type: GreenDown ; metric: doy_diff ; direction: down ; thres: 0.2"
+warning: value of deterministic node knots_cov_chol_inv[1:100, 1:100]: value is NA or NaN even after trying to calculate.
+warning: value of deterministic node cov_matrix[1:1992, 1:1992]: value is NA or NaN even after trying to calculate.
+warning: value of deterministic node lifted_chol_oPcov_matrix_oB1to1992_comma_1to1992_cB_cP[1:1992, 1:1992]: value is NA or NaN even after trying to calculate.
+warning: problem initializing stochastic node spatial_effect[1:1992]: logProb is NA or NaN.
+|-------------|-------------|-------------|-------------|
+|

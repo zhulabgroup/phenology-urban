@@ -1,0 +1,15 @@
+[1] "City: TP Genus: Betula ; metric: 136"
+[1] "Type: GreenUp ; metric: doy_diff ; direction: up ; thres: 0.2"
+[1] "a possible solution MIGHT be to scale semivariances and/or distances"
+[1] "a possible solution MIGHT be to scale semivariances and/or distances"
+|-------------|-------------|-------------|-------------|
+|-------------------------------------------------------|
+  [Warning] There are 1 individual pWAIC values that are greater than 0.4. This may indicate that the WAIC estimate is unstable (Vehtari et al., 2017), at least in cases without grouping of data nodes or multivariate data nodes.
+[1] "City: TP Genus: Ulmus ; metric: 595"
+[1] "Type: GreenUp ; metric: doy_diff ; direction: up ; thres: 0.2"
+warning: value of deterministic node knots_cov_chol_inv[1:100, 1:100]: value is NA or NaN even after trying to calculate.
+warning: value of deterministic node cov_matrix[1:595, 1:595]: value is NA or NaN even after trying to calculate.
+warning: value of deterministic node lifted_chol_oPcov_matrix_oB1to595_comma_1to595_cB_cP[1:595, 1:595]: value is NA or NaN even after trying to calculate.
+warning: problem initializing stochastic node spatial_effect[1:595]: logProb is NA or NaN.
+|-------------|-------------|-------------|-------------|
+|----------------------------------------

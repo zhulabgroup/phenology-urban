@@ -79,3 +79,40 @@ Compiling
   [Note] This may take a minute.
   [Note] Use 'showCompilerOutput = TRUE' to see C++ compilation details.
 running chain 1...
+Defining model
+Building model
+Setting data and initial values
+Running calculate on model
+  [Note] Any error reports that follow may simply reflect missing values in model variables.
+Error in chol.default(model$knots_cov_matrix[1:100, 1:100]) : 
+  the leading minor of order 2 is not positive definite
+
+Checking model sizes and dimensions
+  [Note] This model is not fully initialized. This is not an error.
+         To see which variables are not initialized, use model$initializeInfo().
+         For more information on model initialization, see help(modelInitialization).
+Checking model calculations
+Error in chol.default(model$knots_cov_matrix[1:100, 1:100]) : 
+  the leading minor of order 2 is not positive definite
+In addition: Warning messages:
+1: In fit.variogram(object, x, fit.sills = fit.sills, fit.ranges = fit.ranges,  :
+  No convergence after 200 iterations: try different initial values?
+2: In fit.variogram(object, model, fit.sills = fit.sills, fit.ranges = fit.ranges,  :
+  singular model in variogram fit
+3: In fit.variogram(object, x, fit.sills = fit.sills, fit.ranges = fit.ranges,  :
+  singular model in variogram fit
+4: In fit.variogram(object, x, fit.sills = fit.sills, fit.ranges = fit.ranges,  :
+  No convergence after 200 iterations: try different initial values?
+5: In fit.variogram(object, x, fit.sills = fit.sills, fit.ranges = fit.ranges,  :
+  singular model in variogram fit
+Error in chol.default(model$knots_cov_matrix[1:100, 1:100]) : 
+  the leading minor of order 2 is not positive definite
+  [Note] Cannot calculate logProb for node knots_cov_chol_inv[1:100, 1:100].
+Error in chol.default(model$cov_matrix[1:2431, 1:2431]) : 
+  the leading minor of order 1 is not positive definite
+  [Note] Cannot calculate logProb for node lifted_chol_oPcov_matrix_oB1to2431_comma_1to2431_cB_cP[1:2431, 1:2431].
+[Note] NAs were detected in model variables: knots_cov_chol_inv, cov_matrix, lifted_chol_oPcov_matrix_oB1to2431_comma_1to2431_cB_cP, logProb_spatial_effect.
+Compiling
+  [Note] This may take a minute.
+  [Note] Use 'showCompilerOutput = TRUE' to see C++ compilation details.
+running chain 1...

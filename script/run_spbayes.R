@@ -24,9 +24,9 @@ phe_type <- as.character(Sys.getenv("PHE_TYPE"))
 # city <- args[3]
 # phe_type <- args[4]
 
-# r_input_dir <- "~/phenology-urban/data/proc/urban/"
+# r_input_dir <- "~/urban_phenology_sp/input/"
 # r_output_dir <- "~/phenology-urban/data/proc/urban/sp_model/"
-# city <- "ST"
+# city <- "TP"
 # phe_type <- "SOS"
 
 #################### Read data ####################
@@ -59,6 +59,10 @@ if (phe_type == "SOS") {
 unique_genus <- unique(tavg_allyear_var$genus)
 
 for (genus in unique_genus) {
+  model_path <- paste0(r_output_dir, city, "_", genus, "_tavg_", phe_type,  ".rds")
+  if (file.exists(model_path)) {
+    next  # Skip the current iteration of the loop
+  }
   tavg_phe <- tavg_allyear_var %>%
     filter(direction == !!direction & thres == !!thres & genus == !!genus) %>%
     na.omit()
@@ -80,10 +84,17 @@ for (genus in unique_genus) {
   dist_matrix <- as.matrix(dist(coords))
   N_knots = 100
   N <- nrow(tavg_phe)
-  knots <- kmeans(coords, centers = N_knots)$centers
-  knots_dist_matrix <- as.matrix(dist(knots))
-  data_knots_dist_matrix <- as.matrix(dist(rbind(coords, knots)))[1:N, (N + 1):(N + N_knots)]
-  
+  N_unique = nrow(unique(coords))
+  if (N_knots <= N_unique){
+    knots <- kmeans(coords, centers = N_knots)$centers
+    knots_dist_matrix <- as.matrix(dist(knots))
+    data_knots_dist_matrix <- as.matrix(dist(rbind(coords, knots)))[1:N, (N + 1):(N + N_knots)]
+  } else {
+    knots <- coords
+    knots_dist_matrix <- dist_matrix
+    data_knots_dist_matrix <- as.matrix(dist(rbind(coords, knots)))[1:N, (N + 1):(N + N_knots)]
+  }
+    
   
   tavg_phe_df <- as.data.frame(tavg_phe)
   sp_formula <- as.formula(paste0(phe_metric, " ~ AvgTemp_mean + Sum_mm_sum + srad_mean"))
@@ -145,7 +156,7 @@ for (genus in unique_genus) {
     
     
     # Choose the covariance function based on variogram fitting
-    if (N_knots <= N){
+    if (N_knots <= N_unique){
       if (cov_type == "Mat") {
         knots_cov_matrix[1:N_knots, 1:N_knots] <- matern_covariance(knots_dist_matrix[1:N_knots, 1:N_knots], range, sigma.sq, nu) + I[1:N_knots, 1:N_knots]
         data_knots_cov_matrix[1:N, 1:N_knots] <- matern_covariance(data_knots_dist_matrix[1:N, 1:N_knots], range, sigma.sq, nu)
@@ -216,7 +227,7 @@ for (genus in unique_genus) {
   )
   
   ### Change based on semi-variogram fitting
-  constants <- list(N = N, N_knots = N_knots, P = ncol(X), Mu = rep(0, N), nyears = nyears, 
+  constants <- list(N = N, N_knots = N_knots, N_unique = N_unique, P = ncol(X), Mu = rep(0, N), nyears = nyears, 
                     dist_matrix = dist_matrix, knots_dist_matrix = knots_dist_matrix, 
                     data_knots_dist_matrix = data_knots_dist_matrix,
                     year = year_index, I = diag(1e-6,N), cov_type = cov_type)  # Add 'year' to constants
@@ -256,7 +267,7 @@ for (genus in unique_genus) {
   #   theme(plot.title = element_text(hjust = 0.5)) +
   #   annotate("text", x = beta_median, y = 0, label = paste0("Median: ", round(beta_median, 2)),vjust = -1.5, color = "red", size = 4)
   # 
-  model_path <- paste0(r_output_dir, city, "_", genus, "_tavg_", phe_type,  ".rds")
+  
   saveRDS(modelMCMCrun, file = model_path)
 }
 

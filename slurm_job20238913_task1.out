@@ -5,4 +5,9 @@ warning: value of deterministic node cov_matrix[1:2355, 1:2355]: value is NA or 
 warning: value of deterministic node lifted_chol_oPcov_matrix_oB1to2355_comma_1to2355_cB_cP[1:2355, 1:2355]: value is NA or NaN even after trying to calculate.
 warning: problem initializing stochastic node spatial_effect[1:2355]: logProb is NA or NaN.
 |-------------|-------------|-------------|-------------|
-|
+|-------------------------------------------------------|
+  [Warning] There are 7 individual pWAIC values that are greater than 0.4. This may indicate that the WAIC estimate is unstable (Vehtari et al., 2017), at least in cases without grouping of data nodes or multivariate data nodes.
+[1] "City: DV Genus: Platanus ; metric: 2513"
+[1] "Type: SOS ; metric: doy ; direction: up ; thres: 0.5"
+|-------------|-------------|-------------|-------------|
+|--------------------------------------
