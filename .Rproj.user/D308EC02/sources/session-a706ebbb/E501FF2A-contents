@@ -21,7 +21,7 @@ phe_type <- as.character(Sys.getenv("PHE_TYPE"))
 # 
 # r_input_dir <- args[1]
 # r_output_dir <- args[2]
-# city <- args[3]
+# city <- args[3]xs
 # phe_type <- args[4]
 
 # r_input_dir <- "~/phenology-urban/data/proc/urban/NY/"

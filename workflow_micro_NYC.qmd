@@ -959,11 +959,11 @@ sim_data <- data.frame(
   lon = lon,
   lat = lat,
   year = year,
-  tavg = tavg,
-  precp = precp,
-  srad = srad,
+  AvgTemp_mean = tavg,
+  Sum_mm_sum = precp,
+  srad_mean = srad,
   spatial_effect = spatial_effect,
-  y = y
+  doy = y
 )
 ################ Result form Nimble using 4 model ################
 
