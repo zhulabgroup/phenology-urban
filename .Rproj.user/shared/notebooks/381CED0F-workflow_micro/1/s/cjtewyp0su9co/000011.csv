@@ -1,0 +1,11 @@
+"0","# write_csv(points_in_buffer, ""~/phenology-urban/data/proc/nyc/tree_WU_500_buffer_PS.csv"")
+points_in_buffer <- read_csv(""data/proc/nyc/tree_WU_500_buffer_PS.csv"")
+"
+"2","[1mRows: [22m[34m423467[39m [1mColumns: [22m[34m13[39m"
+"2","[36m──[39m [1mColumn specification[22m [36m─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[39m
+[1mDelimiter:[22m "",""
+[31mchr[39m (6): taxa, site, genus, direction, geometry, Site
+[32mdbl[39m (7): ...1, id, year, start, end, thres, doy"
+"2","
+[36mℹ[39m Use `spec()` to retrieve the full column specification for this data.
+[36mℹ[39m Specify the column types or set `show_col_types = FALSE` to quiet this message."

@@ -1,0 +1,7 @@
+"0","#| label: read_wu_data"
+"0","#| include: true"
+"0","#| warning: false"
+"0",""
+"0","# all_sites_temp <- read_clean_WU(city = ""ST"", run_checks = TRUE)"
+"0","all_sites_temp <- readRDS(paste0(""~/urban-cooling/data/raw/WU/"",city,""/"",city,""_wu.rds"")) %>%"
+"0","  dplyr::select(c(Date, HighTemp, AvgTemp, LowTemp, Sum_mm, name))"

@@ -1,0 +1,126 @@
+library(terra)
+library(sf)
+# download the Daymet data
+library(daymetr)  # for getting Daymet data
+library(ncdf4)  # for processing .nc data
+library(janitor)  # for detecting cols with all records empty
+library(gstat)  # for interpolation
+library(sp)
+library(sf)
+library(raster)
+
+
+city = "AT"
+folder.raw <- paste0("~/phenology-urban/data/raw/", city, "/Daymet/daily2016-2024")
+download_Daymet <- TRUE
+
+################# based on the boundary of the city #################
+us_boundary <- sf::read_sf("~/urban-cooling/data/raw/WU/AT/TxDOT_City_Boundaries/Cities.shp") %>%
+  filter(CITY_NM == "Austin")
+  
+us_boundary <- us_boundary %>% st_transform(4326)
+
+################# larege area #################
+
+if (download_Daymet) {
+  bbox <- as.vector(terra::ext(us_boundary))
+  n_rows <- 5
+  n_cols <- 10
+  x_seq <- seq(bbox["xmin"], bbox["xmax"], length.out = n_cols + 1)
+  y_seq <- seq(bbox["ymin"], bbox["ymax"], length.out = n_rows + 1)
+  for (i in seq_len(length(x_seq) - 1)) {
+    for (j in seq_len(length(y_seq) - 1)) {
+      sub_bbox <- c(
+        ymax = y_seq[j + 1],
+        ymin = y_seq[j],
+        xmax = x_seq[i + 1],
+        xmin = x_seq[i]
+      )
+      folder.sub <- paste0(folder.raw, "/region_", i, "_", j)
+      if (!dir.exists(folder.sub)) {
+        dir.create(folder.sub, recursive = TRUE)
+      }
+      download_daymet_ncss(location = sub_bbox[c("ymax", "xmin", "ymin", "xmax")],
+                           start = 2016, end = 2024,
+                           frequency = "daily",
+                           param = c("srad"),
+                           path = folder.sub)
+    }
+  }
+}
+
+############# city area #############
+
+if (download_Daymet){
+  # get LST extent
+  bbox <- as.vector(terra::ext(us_boundary))
+  # download Daymet data
+  download_daymet_ncss(location = bbox[c('ymax', 'xmin', 'ymin', 'xmax')],
+                       start = 2016, end = 2023,
+                       frequency = "daily",
+                       param = c("srad"),
+                       path=folder.raw)
+}
+
+
+# 
+# 
+# folder.raw <- "data/raw/CONUS/Daymet/annual1980-2023/"
+# output_folder <- "~/phenology-urban/data/proc/daymet/conus/"
+# 
+# 
+# calculate_and_save_tavg_tif <- function(year) {
+#   tmin_file <- paste0(folder.raw, "tmin_annavg_", year, "_ncss.nc")
+#   tmax_file <- paste0(folder.raw, "tmax_annavg_", year, "_ncss.nc")
+#   tmin.nc <- terra::rast(tmin_file)
+#   tmax.nc <- terra::rast(tmax_file)
+#   usboun_reproj <- sf::st_transform(us_boundary, crs = sf::st_crs(terra::crs(tmax.nc, proj = TRUE)))
+#   
+#   tmax <- terra::project(terra::mask(terra::crop(tmax.nc, terra::ext(usboun_reproj)), usboun_reproj), terra::crs(us_boundary))
+#   tmin <- terra::project(terra::mask(terra::crop(tmin.nc, terra::ext(usboun_reproj)), usboun_reproj), terra::crs(us_boundary))
+#   
+#   tavg_ann <- (tmax[[1]] + tmin[[1]]) / 2
+#   output_file <- paste0(output_folder, "tavg_ann_", year, ".tif")
+#   terra::writeRaster(tavg_ann, output_file, overwrite = TRUE)
+# }
+# 
+# years <- 1980:2023
+# lapply(years, calculate_and_save_tavg_tif)
+
+
+
+
+############# clean srad #############
+
+data_dir <- paste0("~/phenology-urban/data/raw/", city, "/Daymet/daily2016-2024/")
+file_list <- list.files(data_dir, pattern = "srad_daily_\\d{4}_ncss\\.nc$", full.names = TRUE)
+
+result <- NULL
+
+points_in_buffer <- read_csv(paste0("~/phenology-urban/data/proc/urban/", city, "/tree_WU_500_buffer_PS.csv"), show_col_types = FALSE)
+points <- points_in_buffer %>%
+  group_by(id) %>%
+  summarise(geometry = first(geometry))
+coords <- do.call(rbind, lapply(points$geometry, function(x) {
+  as.numeric(unlist(strsplit(gsub("c\\(|\\)", "", x), ", ")))
+}))
+points_vect <- vect(coords, crs = "EPSG:4326")
+
+for (file in file_list) {
+  srad_nc <- terra::rast(file)
+  extracted_values <- terra::extract(srad_nc, points_vect) %>%
+    dplyr::select(-ID)
+  colnames(extracted_values) <- as.character(srad_nc@ptr[["time"]])
+  temp_result <- cbind(points["id"], extracted_values) %>%
+    pivot_longer(
+      cols = -id,
+      names_to = "time",
+      values_to = "value"
+    ) %>%
+    mutate(
+      date = as.Date(as.POSIXct(as.numeric(time), origin = "1970-01-01", tz = "UTC"))
+    )
+  result <- bind_rows(result, temp_result)
+}
+
+saveRDS(result, paste0("~/phenology-urban/data/raw/", city, "/Daymet/daily2016-2024/srad_daily_2016-2023.rds"))

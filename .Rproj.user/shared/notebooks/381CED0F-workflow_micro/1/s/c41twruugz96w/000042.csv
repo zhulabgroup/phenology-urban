@@ -1,0 +1,8 @@
+"0",""
+"0",""
+"0","create_scatter_plot("
+"0","  data = growing_temp_doy, "
+"0","  x_var = ""LowTemp_mean"", "
+"0","  y_var = ""time_length"","
+"0","  title = ""Relationship between growing temperature and spring phenology"""
+"0",")"

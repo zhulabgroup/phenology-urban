@@ -1,8 +1,0 @@
-[1] "City: ST Genus: Ulmus ; metric: 2846"
-[1] "Type: GreenUp ; metric: doy_diff ; direction: up ; thres: 0.2"
-warning: value of deterministic node knots_cov_chol_inv[1:100, 1:100]: value is NA or NaN even after trying to calculate.
-warning: value of deterministic node cov_matrix[1:2846, 1:2846]: value is NA or NaN even after trying to calculate.
-warning: value of deterministic node lifted_chol_oPcov_matrix_oB1to2846_comma_1to2846_cB_cP[1:2846, 1:2846]: value is NA or NaN even after trying to calculate.
-warning: problem initializing stochastic node spatial_effect[1:2846]: logProb is NA or NaN.
-|-------------|-------------|-------------|-------------|
-|----------------------------------------------------

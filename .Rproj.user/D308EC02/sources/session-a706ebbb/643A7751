@@ -1,0 +1,28 @@
+{
+    "id": "643A7751",
+    "path": null,
+    "project_path": null,
+    "type": "object_explorer",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1737929632411.0,
+    "source_on_save": false,
+    "relative_order": 13,
+    "properties": {
+        "id": "f4c7a794202d4477a9016ca93e60f102",
+        "name": "partial_corr",
+        "title": "partial_corr",
+        "language": "R",
+        "source_window_id": "",
+        "Source": "Source"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 0,
+    "encoding": "",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1737929632411,
+    "read_only": false,
+    "read_only_alternatives": []
+}

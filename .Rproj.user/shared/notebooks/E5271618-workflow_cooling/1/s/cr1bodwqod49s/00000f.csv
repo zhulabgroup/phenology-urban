@@ -1,0 +1,5 @@
+"0","Forestry_Planting_Spaces <- read_csv(""~/urban-cooling/data/raw/NYC/intrumental/planting/Forestry_Planting_Spaces_20241204.csv"", col_types = cols(CreatedDate = col_datetime(format = ""%Y-%m-%d %H:%M"")))
+"
+"2","Warning: [38;5;232mOne or more parsing issues, call `problems()` on your data frame for details, e.g.:
+  dat <- vroom(...)
+  problems(dat)[39m"

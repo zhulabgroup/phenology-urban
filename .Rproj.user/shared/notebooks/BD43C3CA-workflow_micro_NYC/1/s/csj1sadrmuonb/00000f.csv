@@ -1,0 +1,4 @@
+"0","tavg_allyear_var <- readRDS(""~/phenology-urban/data/proc/urban/NY/tavg_allyear_var.rds"")
+"
+"2","Error in gzfile(file, ""rb"") : cannot open the connection
+"

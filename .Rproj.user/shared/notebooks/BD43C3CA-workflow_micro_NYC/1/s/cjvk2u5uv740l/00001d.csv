@@ -1,0 +1,7 @@
+"0",""
+"0","create_scatter_plot("
+"0","  data = growing_doy_spring, "
+"0","  x_var = ""Sum_mm_sum"", "
+"0","  y_var = ""time_length"","
+"0","  title = ""Relationship between growing temperature and spring phenology"""
+"0",")"

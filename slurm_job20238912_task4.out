@@ -1,9 +1,0 @@
-[1] "City: DV Genus: Celtis ; metric: 2704"
-[1] "Type: GreenDown ; metric: doy_diff ; direction: down ; thres: 0.2"
-|-------------|-------------|-------------|-------------|
-|-------------------------------------------------------|
-  [Warning] There are 2 individual pWAIC values that are greater than 0.4. This may indicate that the WAIC estimate is unstable (Vehtari et al., 2017), at least in cases without grouping of data nodes or multivariate data nodes.
-[1] "City: DV Genus: Platanus ; metric: 2904"
-[1] "Type: GreenDown ; metric: doy_diff ; direction: down ; thres: 0.2"
-|-------------|-------------|-------------|-------------|
-|--------------------------------------

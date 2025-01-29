@@ -1,0 +1,7 @@
+"0",""
+"0","create_scatter_plot("
+"0","  data = seasonal_temp_doy, "
+"0","  x_var = ""Sum_Sum_mm_summer"", "
+"0","  y_var = ""doy"","
+"0","  title = ""Relationship between seasonal temperature and fall phenology"""
+"0",")"
