@@ -107,7 +107,7 @@ points_in_buffer <- tree_location %>%
 #| include: true
 #| fig-cap: "Location of WU sites and trees"
 #| warning: false
-
+city = "DV"
 points_in_buffer <- read_csv(paste0("~/phenology-urban/data/proc/urban/",city,"/tree_WU_500_buffer_PS.csv"), show_col_types = FALSE)
 
 points_in_buffer_sf <- points_in_buffer %>%
@@ -723,9 +723,7 @@ eos_p + greendown_p + plot_layout(guides = "collect") & theme(legend.position = 
 
 First, I fitted a linear mixed-effects model for each genus with environmental variables (`AvgTemp_mean`, `Sum_mm_sum`, and `srad_mean`) as predictors, with random effects for `year` and `id`, which represent temporal (`(1 | year)`) and spatial (`(1 | id)`) randomness, respectively.
 
-Then I conducted a variance decomposition analysis and compared the proportion of total variance explained by spatial effects and temporal effects respectively. 
-Generally, spatial and temporal variations are both present, but their contributions vary across different genera. Some genera show higher spatial effects, while others have more balanced contributions from spatial and year components.
-
+Then I conducted a variance decomposition analysis and compared the proportion of total variance explained by spatial effects and temporal effects respectively. Generally, spatial and temporal variations are both present, but their contributions vary across different genera. Some genera show higher spatial effects, while others have more balanced contributions from spatial and year components.
 
 ```{r}
 #| label: check_variance
@@ -839,15 +837,17 @@ kable(variogram_summary, caption = "Fitted semivariogram model for each genus")
 
 ### 3.2 Spatial statistical model
 
-I modeled the relationship between the phenology and environmental covariates using a spatial hierarchical model. The response variable (phenology parameter) at location $\mathbf{s}_i$, denoted as $y(\mathbf{s}_i)$, was modeled as follows:
+I modeled the relationship between the phenology and environmental covariates using a spatial hierarchical model. The response variable (phenology parameter) at location $\mathbf{s}_i$ and in year $\mathbf{t}$, denoted as $y(\mathbf{s}_i, \mathbf{t})$, was modeled as following candidate model:
 
-$$y(\mathbf{s}_i) = \mu(\mathbf{s}_i) + w(\mathbf{s}_i) + u_{\text{year}(i)} + \epsilon(\mathbf{s}_i)$$
+*Model 1: (current use)*
+
+$$y(\mathbf{s}_i, \mathbf{t}) = \mu(\mathbf{s}_i,\mathbf{t}) + w(\mathbf{s}_i) + u(\mathbf{t}) + \epsilon(\mathbf{s}_i, \mathbf{t})$$
 
 where:
 
--   **Fixed Effects**: $$\mu(\mathbf{s}_i) = \mathbf{X}_i \boldsymbol{\beta}$$
+-   **Fixed Effects**: $$\mu(\mathbf{s}_i,\mathbf{t}) = \mathbf{X}_{\mathbf{s}_i,\mathbf{t}} \boldsymbol{\beta}$$
 
-    -   $\mathbf{X}_i = [1, \text{AvgTemp}, \text{Precp}, \text{srad}]$ is the design matrix of predictors.
+    -   $\mathbf{X}_{\mathbf{s}_i,\mathbf{t}} = [1, \text{AvgTemp}_{\mathbf{s}_i,\mathbf{t}}, \text{Precp}_{\mathbf{s}_i,\mathbf{t}}, \text{srad}_{\mathbf{s}_i,\mathbf{t}}]$ is the design matrix of predictors.
     -   $\boldsymbol{\beta} = [\beta_0, \beta_1, \beta_2, \beta_3]$ are the regression coefficients for the intercept and covariates.
 
 -   **Spatially Correlated Random Effect**: $$w(\mathbf{s}_i) \sim \text{MVN}(\mathbf{0}, \mathbf{R})$$
@@ -868,35 +868,30 @@ where:
             0, & D_{ij} > \rho
             \end{cases}$$
 
--   **Year-specific Random Effect**: $$u_{\text{year}(i)} \sim \text{N}(0, \tau^2_{\text{year}})$$
+-   **Year-specific Random Effect**: $$u(\mathbf{t}_j) \sim \text{N}(0, \tau^2_{\mathbf{t}})$$
 
-    -   $u_{\text{year}(i)}$ captures year-to-year variability, with $\tau^2_{\text{year}}$ being the variance of the year effect.
+    -   $u_{\mathbf{t}_j}$ captures year-to-year variability, with $\tau^2_{\mathbf{t}}$ being the variance of the year effect.
 
 -   **Independent Nugget Effect**: $$\epsilon(\mathbf{s}_i) \sim \text{N}(0, \tau^2)$$
 
-    -   $\epsilon(\mathbf{s}_i)$ accounts for measurement error or small-scale variability.
+    -   $\epsilon(\mathbf{s}_i, \mathbf{t})$ accounts for measurement error or small-scale variability.
+    
+*Model 2: (checked)*
 
-------------------------------------------------------------------------
+$$y(\mathbf{s}_i, \mathbf{t}) = \mu(\mathbf{s}_i,\mathbf{t}) + w(\mathbf{s}_i, \mathbf{t}) + \epsilon(\mathbf{s}_i, \mathbf{t})$$
 
-**Prior Distributions**
+where:
 
-$$\boldsymbol{\beta} \sim \text{MVN}(\mathbf{0}, 1000\mathbf{I})$$
+-   **Fixed Effects**: $$\mu(\mathbf{s}_i,\mathbf{t}) = \mathbf{X}_{\mathbf{s}_i,\mathbf{t}} \boldsymbol{\beta}$$
 
-$$\sigma^2 \sim \text{Inverse-Gamma}(2.5, 120)$$
+    -   $\mathbf{X}_{\mathbf{s}_i,\mathbf{t}} = [1, \text{AvgTemp}_{\mathbf{s}_i,\mathbf{t}}, \text{Precp}_{\mathbf{s}_i,\mathbf{t}}, \text{srad}_{\mathbf{s}_i,\mathbf{t}}]$ is the design matrix of predictors.
+    -   $\boldsymbol{\beta} = [\beta_0, \beta_1, \beta_2, \beta_3]$ are the regression coefficients for the intercept and covariates.
 
-$$\phi \sim \text{Uniform}(5, 50) \quad \text{(Exponential or Gaussian covariance)}$$
+-   **Spatially Correlated Random Effect**: $$w(\mathbf{s}_i) \sim \text{MVN}(\mathbf{0}, \mathbf{R})$$
 
-$$\nu \sim \text{Uniform}(0.5, 5) \quad \text{(Matérn covariance only)}$$
 
-$$\rho \sim \text{Uniform}(0, 1) \quad \text{(Matérn or Spherical covariance)}$$
-
-$$\tau^2 \sim \text{Inverse-Gamma}(0.001, 0.001)$$
-
-$$\tau^2_{\text{year}} \sim \text{Inverse-Gamma}(2.001, 0.667)$$
 
 ##### 3.2.0 Simulation for canndidate models
-
-
 
 ```{r}
 #| label: model_simulate
@@ -973,8 +968,6 @@ sim_data <- data.frame(
 
 
 ```
-
-
 
 ##### 3.2.1 Nimble model code (run in separate script)
 
@@ -1061,13 +1054,13 @@ Most genera showed negative association between temperature and the start of sea
 #| warning: false
 
 
-dir_path <- "~/phenology-urban/data/proc/urban/sp_model/"
-files <- list.files(dir_path, pattern = "^NY.*SOS\\.rds$", full.names = TRUE)
+dir_path <- "~/phenology-urban/data/proc/urban/sp_model/year_random/"
+files <- list.files(dir_path, pattern = "^HT.*SOS\\.rds$", full.names = TRUE)
 plots <- list()
 
 for (file in files) {
   model_data <- readRDS(file)
-  genus <- sub(".*NY_(.*?)_tavg_SOS\\.rds", "\\1", basename(file))
+  genus <- sub(".*HT_(.*?)_tavg_SOS\\.rds", "\\1", basename(file))
   beta_label <- data.frame(Parameter = "beta[2]", Label = "AvgTemp")
   param_data <- ggs(model_data$samples, par_labels = beta_label) %>%
     filter(Parameter == "AvgTemp")
@@ -1084,6 +1077,33 @@ for (file in files) {
 combined_plot <- wrap_plots(plots, ncol = 3)
 combined_plot
 ```
+
+```{r}
+dir_path <- "~/phenology-urban/data/proc/urban/sp_model/year_random/"
+files <- list.files(dir_path, pattern = "^TP.*SOS\\.rds$", full.names = TRUE)
+plots <- list()
+
+for (file in files) {
+  model_data <- readRDS(file)
+  genus <- sub(".*TP_(.*?)_tavg_SOS\\.rds", "\\1", basename(file))
+  beta_label <- data.frame(Parameter = "beta[2]", Label = "AvgTemp")
+  param_data <- ggs(model_data$samples, par_labels = beta_label) %>%
+    filter(Parameter == "AvgTemp")
+  beta_median <- median(param_data$value)
+  p <- param_data %>%
+    ggs_density() +
+    theme_bw() +
+    ggtitle(paste("Genus:", genus)) +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    annotate("text", x = beta_median, y = 0, label = paste0("Median: ", round(beta_median, 2)),vjust = -1.5, color = "red", size = 4)
+  plots[[genus]] <- p
+}
+
+combined_plot <- wrap_plots(plots, ncol = 3)
+combined_plot
+```
+
+
 
 ##### 3.2.3 EOS in NYC
 
@@ -1335,7 +1355,7 @@ ggplot(summary_data, aes(x = Parameter, y = mean_value, color = phe_type)) +
 
 ```
 
-### 3.3 
+### 3.3
 
 ## 4 Conclusion and next step
 
@@ -1353,5 +1373,5 @@ Next steps:
 
 -   Future steps:
     -   Interspecific difference:
-        
+
     -   Add more taxa (data in DataDen and download latest PS images)

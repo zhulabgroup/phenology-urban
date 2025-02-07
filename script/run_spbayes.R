@@ -28,7 +28,8 @@ phe_type <- as.character(Sys.getenv("PHE_TYPE"))
 # r_output_dir <- "~/phenology-urban/data/proc/urban/sp_model/"
 # city <- "SIM"
 # phe_type <- "SOS"
-# genus = "sp_random_yr"
+# genus = "sp_random_yr"\
+# cov_type = c("Mat", "Exp", "Gau", "Sph")
 
 #################### Read data ####################
 

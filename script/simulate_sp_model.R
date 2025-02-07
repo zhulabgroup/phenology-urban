@@ -6,13 +6,26 @@ library(sp)
 set.seed(2025)
 lon_range <- c(-74.25156, -73.70623)
 lat_range <- c(40.50458, 40.91093)
-N <- 200 
-lon <- runif(N, min = lon_range[1], max = lon_range[2])
-lat <- runif(N, min = lat_range[1], max = lat_range[2])
 
+N <- 1000       # Total points
+N_unique <- 500 # Unique locations
+N_duplicate <- N - N_unique
+
+
+lon_unique <- runif(N_unique, min = lon_range[1], max = lon_range[2])
+lat_unique <- runif(N_unique, min = lat_range[1], max = lat_range[2])
+duplicate_indices <- sample(1:N_unique, N_duplicate, replace = TRUE)
+lon <- c(lon_unique, lon_unique[duplicate_indices])
+lat <- c(lat_unique, lat_unique[duplicate_indices])
 years <- 2017:2023
 nyears <- length(years)
-year <- sample(years, N, replace = TRUE)
+
+# Assign years to unique locations first
+year_unique <- sample(years, N_unique, replace = TRUE)
+year_duplicate <- sapply(duplicate_indices, function(idx) {
+  sample(setdiff(years, year_unique[idx]), 1)  # Ensure different year
+})
+year <- c(year_unique, year_duplicate)
 
 # fix effects: intercept, tavg, precp, srad
 intercept <- 120

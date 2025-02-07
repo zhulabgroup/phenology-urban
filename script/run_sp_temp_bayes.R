@@ -21,7 +21,7 @@ phe_type <- as.character(Sys.getenv("PHE_TYPE"))
 # 
 # r_input_dir <- args[1]
 # r_output_dir <- args[2]
-# city <- args[3]
+# city <- args[3]xs
 # phe_type <- args[4]
 
 # r_input_dir <- "~/phenology-urban/data/proc/urban/NY/"
@@ -33,6 +33,7 @@ phe_type <- as.character(Sys.getenv("PHE_TYPE"))
 # city <- "SIM"
 # phe_type <- "SOS"
 # genus = "joint_sp_yr"
+# cov_type = c("Mat", "Exp", "Gau", "Sph")
 
 #################### Read data ####################
 
@@ -61,17 +62,20 @@ if (phe_type == "SOS") {
 
 #################### Find the optimal cov model ####################
 
-# unique_genus <- unique(tavg_allyear_var$genus)
+unique_genus <- unique(tavg_allyear_var$genus)
 
 for (genus in unique_genus) {
+  model_path <- paste0(r_output_dir, city, "_", genus, "_tavg_", phe_type, "_", cov_type,  ".rds")
+  if (file.exists(model_path)) {
+    next  # Skip the current iteration of the loop
+  }
   tavg_phe <- tavg_allyear_var %>%
     filter(direction == !!direction & thres == !!thres & genus == !!genus) %>%
     na.omit()
-  print(nrow(tavg_phe))
+  print(paste("City:",city, "Genus:",genus, "; metric:", nrow(tavg_phe)))
   print(paste("Type:", phe_type, "; metric:", phe_metric, "; direction:", direction, "; thres:", thres))
   if (nrow(tavg_phe) == 0) next
-  tavg_phe$year <- as.factor(tavg_phe$year)
-  tavg_phe$genus <- as.factor(tavg_phe$genus)
+  
   OLS_formula <- as.formula(paste0(phe_metric, " ~ AvgTemp_mean + Sum_mm_sum + srad_mean + (1|year)"))
   random_OLS <- lmer(OLS_formula, data = tavg_phe)
   tavg_phe$residual_random <- tavg_phe[[phe_metric]] - fitted(random_OLS)
@@ -90,27 +94,60 @@ for (genus in unique_genus) {
   tavg_phe_df_ori[, c("lon", "lat", "year")] <- scale(tavg_phe_df_ori[, c("lon", "lat", "year")])
   sp_formula <- as.formula(paste0(phe_metric, " ~ AvgTemp_mean + Sum_mm_sum + srad_mean"))
   
+  spatio_temp_coords <- tavg_phe_df_ori[, c("lon", "lat", "year")]
+  dist_matrix <- as.matrix(dist(spatio_temp_coords))
+
+  N_knots = 100
+  N <- nrow(tavg_phe)
+  N_unique = nrow(unique(spatio_temp_coords))
+  if (N_knots <= N_unique){
+    knots <- kmeans(spatio_temp_coords, centers = N_knots)$centers
+    knots_dist_matrix <- as.matrix(dist(knots))
+    data_knots_dist_matrix <- as.matrix(dist(rbind(spatio_temp_coords, knots)))[1:N, (N + 1):(N + N_knots)]
+  } else {
+    knots <- spatio_temp_coords
+    knots_dist_matrix <- dist_matrix
+    data_knots_dist_matrix <- dist_matrix
+  }
+  
   # Define covariance functions
   
   spherical_covariance <- nimbleFunction(
-    run = function(d = double(0), range = double(0), sigma.sq = double(0)) {
-      returnType(double(0)) 
-      if (d <= range) {
-        return (sigma.sq * (1 - (3 * d / (2 * range)) + (d^3 / (2 * range^3))))
-      } else {
-        return(0.0)
+    run = function(d = double(2), range = double(0), sigma.sq = double(0)) {
+      returnType(double(2))  # Return type is a matrix
+      nrow_d <- dim(d)[1]
+      ncol_d <- dim(d)[2]
+      result <- matrix(0, nrow_d, ncol_d)  # Initialize result matrix
+      for (i in 1:nrow_d) {
+        for (j in 1:ncol_d) {
+          if (d[i, j] <= range) {
+            result[i, j] = sigma.sq * (1 - (3 * d[i, j] / (2 * range)) + (d[i, j]^3 / (2 * range^3)))
+          } else {
+            result[i, j] = 0.0
+          }
+        }
       }
+      return(result)
     }
   )
+  
   matern_covariance <- nimbleFunction(
-    run = function(d = double(0), range = double(0), sigma.sq = double(0), nu = double(0)) {
-      returnType(double(0))
-      if (d == 0) {
-        return(sigma.sq)
-      } else {
-        part <- (2^(1 - nu)) / gamma(nu)  * (sqrt(2 * nu) * d / range)^nu
-        return(sigma.sq * part * besselK(d / range, nu))
-      }
+    run = function(d = double(2), range = double(0), sigma.sq = double(0), nu = double(0)) {
+      returnType(double(2))
+      nrow_d <- dim(d)[1]
+      ncol_d <- dim(d)[2]
+      result <- matrix(0, nrow_d, ncol_d)  # Initialize result matrix
+      for (i in 1:nrow_d) {
+        for (j in 1:ncol_d) {
+          if (d[i, j] == 0) {
+            result[i, j] = 0.0
+          } else {
+            part <- (2^(1 - nu)) / gamma(nu)  * (sqrt(2 * nu) * d[i, j] / range)^nu
+            result[i,j] = sigma.sq * part * besselK(d[i, j] / range, nu)
+          }
+        }
+      }  
+      return(result)
     }
   )
   # matern_covariance <- nimbleFunction(
@@ -136,21 +173,33 @@ for (genus in unique_genus) {
     }
     spatial_temporal_effect[1:N] ~ dmnorm(Mu[1:N], cov = cov_matrix[1:N, 1:N])
     # Choose the covariance function based on variogram fitting
-    if (cov_type == "Mat") {
-      for (m in 1:N) {
-        for (n in 1:N) {
-          cov_matrix[m, n] <- matern_covariance(dist_matrix[m, n], range, sigma.sq, nu)
-        }
+    if (N_knots <= N_unique){
+      if (cov_type == "Mat") {
+        knots_cov_matrix[1:N_knots, 1:N_knots] <- matern_covariance(knots_dist_matrix[1:N_knots, 1:N_knots], range, sigma.sq, nu) + I[1:N_knots, 1:N_knots]
+        data_knots_cov_matrix[1:N, 1:N_knots] <- matern_covariance(data_knots_dist_matrix[1:N, 1:N_knots], range, sigma.sq, nu)
+      } else if (cov_type == "Gau") {
+        knots_cov_matrix[1:N_knots, 1:N_knots] <- sigma.sq * exp(-phi * knots_dist_matrix[1:N_knots, 1:N_knots]^2) + I[1:N_knots, 1:N_knots]
+        data_knots_cov_matrix[1:N, 1:N_knots] <- sigma.sq * exp(-phi * data_knots_dist_matrix[1:N, 1:N_knots]^2)
+      } else if (cov_type == "Exp") {
+        knots_cov_matrix[1:N_knots, 1:N_knots] <- sigma.sq * exp(-phi * knots_dist_matrix[1:N_knots, 1:N_knots]) + I[1:N_knots, 1:N_knots]
+        data_knots_cov_matrix[1:N, 1:N_knots] <- sigma.sq * exp(-phi * data_knots_dist_matrix[1:N, 1:N_knots])
+      } else if (cov_type == "Sph") {
+        knots_cov_matrix[1:N_knots, 1:N_knots] <- spherical_covariance(knots_dist_matrix[1:N_knots, 1:N_knots], range, sigma.sq) + I[1:N_knots, 1:N_knots]
+        data_knots_cov_matrix[1:N, 1:N_knots] <- spherical_covariance(data_knots_dist_matrix[1:N, 1:N_knots], range, sigma.sq)
       }
-    } else if (cov_type == "Gau") {
-      cov_matrix[1:N, 1:N] <- sigma.sq * exp(-phi * dist_matrix[1:N, 1:N]^2)
-    } else if (cov_type == "Exp") {
-      cov_matrix[1:N, 1:N] <- sigma.sq * exp(-phi * dist_matrix[1:N, 1:N])
-    } else if (cov_type == "Sph") {
-      for (m in 1:N) {
-        for (n in 1:N) {
-          cov_matrix[m, n] <- spherical_covariance(dist_matrix[m, n], range, sigma.sq)
-        }
+      knots_cov_chol_inv[1:N_knots, 1:N_knots] <- inverse(chol(knots_cov_matrix[1:N_knots, 1:N_knots]))
+      cov_matrix[1:N, 1:N] <- data_knots_cov_matrix[1:N, 1:N_knots] %*% 
+        knots_cov_chol_inv[1:N_knots, 1:N_knots] %*% t(knots_cov_chol_inv[1:N_knots, 1:N_knots]) %*% 
+        t(data_knots_cov_matrix[1:N, 1:N_knots]) + I[1:N, 1:N]
+    } else {
+      if (cov_type == "Mat") {
+        cov_matrix[1:N, 1:N] <-  matern_covariance(dist_matrix[1:N, 1:N], range, sigma.sq, nu) + I[1:N, 1:N]
+      } else if (cov_type == "Gau") {
+        cov_matrix[1:N, 1:N] <- sigma.sq * exp(-phi * dist_matrix[1:N, 1:N]^2) + I[1:N, 1:N]
+      } else if (cov_type == "Exp") {
+        cov_matrix[1:N, 1:N] <- sigma.sq * exp(-phi * dist_matrix[1:N, 1:N]) + I[1:N, 1:N]
+      } else if (cov_type == "Sph") {
+        cov_matrix[1:N, 1:N] <- spherical_covariance(dist_matrix[1:N, 1:N], range, sigma.sq) + I[1:N, 1:N]
       }
     }
     tau ~ dgamma(0.001, 0.001)
@@ -166,9 +215,6 @@ for (genus in unique_genus) {
   X <- model.matrix(sp_formula, data = tavg_phe_df_ori)
   y <- tavg_phe_df_ori[[all.vars(sp_formula)[1]]]
   
-  spatio_temp_coords <- tavg_phe_df_ori[, c("lon", "lat", "year")]
-  dist_matrix <- as.matrix(dist(spatio_temp_coords))
-  
   data <- list(y = y, X = X) 
   inits <- list(
     beta = rep(0, ncol(X)),
@@ -179,8 +225,11 @@ for (genus in unique_genus) {
   )
   
   ### Change based on semi-variogram fitting
-  constants <- list(N = N, P = ncol(X), Mu = rep(0, N), dist_matrix = dist_matrix,
-                    I = diag(1,N), cov_type = cov_type) 
+  constants <- list(N = N, N_knots = N_knots, N_unique = N_unique, 
+                    P = ncol(X), Mu = rep(0, N), 
+                    dist_matrix = dist_matrix, knots_dist_matrix = knots_dist_matrix, 
+                    data_knots_dist_matrix = data_knots_dist_matrix,
+                    I = diag(1e-6,N), cov_type = cov_type) 
   monitors <- switch(
     cov_type,
     "Mat" = c("beta", "range", "sigma.sq", "nu", "spatial_temporal_effect"),
@@ -206,18 +255,17 @@ for (genus in unique_genus) {
                              summary = TRUE, 
                              WAIC = TRUE)
   
-  # beta_label <- data.frame(Parameter = "beta[2]", Label = "AvgTemp")
-  # param_data <- ggs(modelMCMCrun$samples, par_labels = beta_label) %>%
-  #   filter(Parameter == "AvgTemp")
-  # beta_mean <- mean(param_data$value)
-  # param_data %>%
-  #   ggs_density() +
-  #   theme_bw() +
-  #   ggtitle(paste("Genus:", genus)) +
-  #   theme(plot.title = element_text(hjust = 0.5)) +
-  #   annotate("text", x = beta_mean, y = 0, label = paste0("Mean: ", round(beta_mean, 2)),vjust = -1.5, color = "red", size = 4)
-  # 
-  
-  model_path <- paste0(r_output_dir, city, "_", genus, "_tavg_", phe_type,  ".rds")
+  beta_label <- data.frame(Parameter = "beta[2]", Label = "AvgTemp")
+  param_data <- ggs(modelMCMCrun$samples, par_labels = beta_label) %>%
+    filter(Parameter == "AvgTemp")
+  beta_mean <- mean(param_data$value)
+  param_data %>%
+    ggs_density() +
+    theme_bw() +
+    ggtitle(paste("Genus:", genus)) +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    annotate("text", x = beta_mean, y = 0, label = paste0("Mean: ", round(beta_mean, 2)),vjust = -1.5, color = "red", size = 4)
+
+
   saveRDS(modelMCMCrun, file = model_path)
 }
