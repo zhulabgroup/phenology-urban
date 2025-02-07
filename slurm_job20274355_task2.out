@@ -1,7 +1,0 @@
-[1] "City: DV Genus: Juglans ; metric: 153"
-[1] "Type: EOS ; metric: doy ; direction: down ; thres: 0.5"
-|-------------|-------------|-------------|-------------|
-|-------------------------------------------------------|
-  [Warning] There are 4 individual pWAIC values that are greater than 0.4. This may indicate that the WAIC estimate is unstable (Vehtari et al., 2017), at least in cases without grouping of data nodes or multivariate data nodes.
-[1] "City: DV Genus: Acer ; metric: 3248"
-[1] "Type: EOS ; metric: doy ; direction: down ; thres: 0.5"

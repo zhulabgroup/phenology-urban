@@ -1,9 +1,0 @@
-[1] "City: HT Genus: Betula ; metric: 278"
-[1] "Type: GreenUp ; metric: doy_diff ; direction: up ; thres: 0.2"
-|-------------|-------------|-------------|-------------|
-|-------------------------------------------------------|
-  [Warning] There are 4 individual pWAIC values that are greater than 0.4. This may indicate that the WAIC estimate is unstable (Vehtari et al., 2017), at least in cases without grouping of data nodes or multivariate data nodes.
-[1] "City: HT Genus: Salix ; metric: 246"
-[1] "Type: GreenUp ; metric: doy_diff ; direction: up ; thres: 0.2"
-|-------------|-------------|-------------|-------------|
-|-------------------------------
