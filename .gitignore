@@ -1,4 +1,4 @@
-
+.RDataTmp
 .Rhistory
 .RData
 .Ruserdata
@@ -24,3 +24,5 @@
 *.knit.md
 *.utf8.md
 cache/
+.RData
+.RDataTmp

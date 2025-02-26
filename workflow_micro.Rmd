@@ -764,12 +764,6 @@ create_scatter_plot(
 
 
 
-
-
-
-
-
-
 # 2. Creat buffer zone near tree point (sample points)
 ```{r}
 library(sp)
@@ -799,38 +793,40 @@ source("~/phenology-urban/script/faster_intersect.R")
 building_footprint <- sf::read_sf('~/phenology-urban/data/raw/NY/NY_building_footprint/geo_export_56deb8a8-0463-4f00-8f45-99e751e3b8e1.shp') %>%
   st_make_valid() %>% select(base_bbl, bin, groundelev, heightroof)
 points_in_buffer <- st_transform(points_in_buffer, st_crs(building_footprint))
-merged_polygon <- st_transform(merged_polygon, st_crs(building_footprint)) %>%
-  st_make_valid() %>%
-  st_cast("POLYGON") %>%
-  st_as_sf()
+# merged_polygon <- st_transform(merged_polygon, st_crs(building_footprint)) %>%
+#   st_make_valid() %>%
+#   st_cast("POLYGON") %>%
+#   st_as_sf()
+# 
+# 
+# # Loop through each row in points_in_buffer
+# for (i in 1:nrow(merged_polygon)) {
+#   point <- merged_polygon[i, ]
+#   cat("Processing row:", i, "of", nrow(merged_polygon), "\n")
+#   filtered_building_footprint1 <- building_footprint %>%
+#     st_crop(st_bbox(point))
+#   intersect_50_bld <- st_intersection(point, filtered_building_footprint1) %>%
+#     st_make_valid()
+#   results[[i]] <- intersect_50_bld
+# }
+# 
+# step1_build <- do.call(rbind, results)
+# 
+
 
 
 results <- list()
 # Loop through each row in points_in_buffer
-for (i in 1:nrow(merged_polygon)) {
-  point <- merged_polygon[i, ]
-  cat("Processing row:", i, "of", nrow(merged_polygon), "\n")
+for (i in 78:nrow(points_in_buffer)) {
+  point <- points_in_buffer[i, ]
+  cat("Processing row:", i, "of", nrow(points_in_buffer), "\n")
   filtered_building_footprint1 <- building_footprint %>%
     st_crop(st_bbox(point))
   intersect_50_bld <- st_intersection(point, filtered_building_footprint1) %>%
     st_make_valid()
-  results[[i]] <- intersect_50_bld
-}
-step1_build <- do.call(rbind, results)
-
-
-
-
-results <- list()
-# Loop through each row in points_in_buffer
-for (i in 1:nrow(points_in_buffer)) {
-  point <- points_in_buffer[i, ]
-  cat("Processing row:", i, "of", nrow(points_in_buffer), "\n")
-  filtered_building_footprint1 <- step1_build %>%
-    st_crop(st_bbox(point))
-  intersect_50_bld <- st_intersection(point, filtered_building_footprint1) %>%
-    st_make_valid()
-  intersect_50_bld$area_size <- st_area(intersect_50_bld)
+  
+  if (dim(intersect_50_bld)[1] != 0){
+     intersect_50_bld$area_size <- st_area(intersect_50_bld)
   intersect_50_bld_BVD <- intersect_50_bld %>%
     as.data.frame() %>%
     group_by(id) %>%
@@ -840,10 +836,16 @@ for (i in 1:nrow(points_in_buffer)) {
     id = point$id,
     BVD = intersect_50_bld_BVD$BVD
   )
+  } else {
+  results[[i]] <- data.frame(
+    id = point$id,
+    BVD = 0
+  )}
+  
 }
 final_results <- do.call(rbind, results)
   
-
+saveRDS(final_results, "~/phenology-urban/data/proc/urban/NY/tree_50_building_foorprint.rds")
 
 
 ```
