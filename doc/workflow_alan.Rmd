@@ -1,0 +1,301 @@
+1. Download alan data
+
+```{r}
+library(blackmarbler)
+library(geodata)
+library(sf)
+library(sp)
+library(raster)
+library(ggplot2)
+library(lubridate)
+
+bearer <- "eyJ0eXAiOiJKV1QiLCJvcmlnaW4iOiJFYXJ0aGRhdGEgTG9naW4iLCJzaWciOiJlZGxqd3RwdWJrZXlfb3BzIiwiYWxnIjoiUlMyNTYifQ.eyJ0eXBlIjoiVXNlciIsInVpZCI6ImppYWxpejk4IiwiZXhwIjoxNzQxNjMzMjIxLCJpYXQiOjE3MzY0NDkyMjEsImlzcyI6Imh0dHBzOi8vdXJzLmVhcnRoZGF0YS5uYXNhLmdvdiIsImlkZW50aXR5X3Byb3ZpZGVyIjoiZWRsX29wcyIsImFjciI6ImVkbCIsImFzc3VyYW5jZV9sZXZlbCI6M30.Gzvc-3Jes6R91nm-CEjvwxl1hq72fB_ly6OkEoGQ6Jjhm1MgF1XxwQE_EMLps8ictr1YMgCa9jaIv8dPjTttElxCZW8xGpPLKjVD0d86X8YcpmIfMiLl-BwdUwHiAhyJn7gZCCJsoic0G39LxWlfllCAcOwL-ghxtH0EybOlfvECEXdE1nDjha1Hv-MiNVXVlzZDP6VSBERKsA0qzq-Ghe43Xd3tq7f2_uW-ETfZ0cU2d3mCpFVzwuanhWUfxFvpQhw7n2uZT2ntoDvCOlsVOcXyJiDSOo_ToAb6lE57mefZlYJBSrwF-gLTT_vefytf6VGD8DcRyW0RtCuxqYPpWA"
+roi_sf <- sf::read_sf('data/raw/CONUS/boundary/us_boundarydissolve.shp')
+us_boundary <- st_transform(roi_sf, crs = st_crs(4326))
+
+
+bm_raster(roi_sf = us_boundary,
+          product_id = "VNP46A3",
+          date = seq.Date(from = ymd("2012-01-01"), to = ymd("2022-12-01"), by = "month"),
+          bearer = bearer,
+          output_location_type = "file",
+          quality_flag_rm = 2,
+          file_dir = "~/phenology-urban/data/raw/CONUS/ALAN",
+          check_all_tiles_exist = FALSE,
+          variable = "NearNadir_Composite_Snow_Free") # defult, different angle, snow cover
+```
+2. Map
+
+```{r}
+source("script/read_tree_inventory.R")
+cityoi <- "NY"
+df_tree <- read_tree_inventory(city = cityoi)
+coordinates(df_tree) <- c("lon", "lat")
+point_tree <- st_as_sf(df_tree)
+point_tree <- st_set_crs(point_tree, "EPSG:4326")
+
+betula_point <- point_tree %>% filter(str_detect(taxa, "Betula"))
+bld_index <- read.csv("~/phenology-urban/result/bld_index/bld_index_betula_200.csv")
+merged_data <- merge(betula_point, bld_index, by.x = "id", by.y = "tree_id", all.x = TRUE)
+#plot buffer
+us_boundary <- sf::read_sf('data/raw/CONUS/boundary/us_boundary.shp')
+us_boundary <- st_set_crs(us_boundary, "EPSG:4326")
+
+
+##### Map
+p <- ggplot() +
+  geom_tile(data = r_df,  aes(x = x, y = y,  fill = value_adj)) +
+  scale_fill_gradientn(colors = c("black", "yellow"), name = "Nighttime ALAN (2018, Betula)") +
+  theme_minimal() +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+
+
+p <- p + geom_sf(data = betula_point, color = "red", size = 0.02)
+p
+ggsave("~/phenology-urban/result/alan/alan_2018_betula.jpg", p, width = 8, height = 6, units = "in")
+
+
+```
+
+
+3. Add temperature - 2018 Birch - daymet
+```{r}
+# open the netCDF variables
+tmax.nc <- terra::rast("~/phenology-urban/data/raw/CONUS/Daymet/tmax_monavg_2018_ncss.nc")
+tmin.nc <- terra::rast("~/phenology-urban/data/raw/CONUS/Daymet/tmin_monavg_2018_ncss.nc")
+
+usboun_reproj <- sf::st_transform(us_boundary, crs = sf::st_crs(terra::crs(tmax.nc,proj = T)))
+
+tmax <- terra::project(terra::mask (terra::crop(tmax.nc, terra::ext(usboun_reproj)),
+                                    usboun_reproj), terra::crs(us_boundary))
+tmin <- terra::project(terra::mask (terra::crop(tmin.nc, terra::ext(usboun_reproj)), 
+                                    usboun_reproj), terra::crs(us_boundary))
+
+tmax_spring <- (tmax[[3]]+tmax[[4]]+tmax[[5]])/3
+tmin_spring <- (tmin[[3]]+tmin[[4]]+tmin[[5]])/3
+
+tmax_summer <- (tmax[[6]]+tmax[[7]]+tmax[[8]])/3
+tmin_summer <- (tmin[[6]]+tmin[[7]]+tmin[[8]])/3
+
+tmax_autumn <- (tmax[[9]]+tmax[[10]]+tmax[[11]])/3
+tmin_autumn <- (tmin[[9]]+tmin[[10]]+tmin[[11]])/3
+
+
+tavg_ann <- (tmax[[1]] + tmin[[1]])/2
+tavg_spring <- (tmax_spring + tmin_spring)/2
+tavg_summer <- (tmax_summer + tmin_summer)/2
+tavg_autumn <- (tmax_autumn + tmin_autumn)/2
+
+writeRaster(tavg_autumn, filename = "data/proc/daymet/conus/tavg_autumn_2018.tif")
+```
+
+4. Add temperature - 2018 Birch - landsat
+
+```{r}
+library(sp)
+library(sf)
+
+lst_2018 <- raster("~/phenology-urban/data/raw/NY/LST_L8/year_mean/2018.tif")
+lst_2018_betula <- extract(lst_2018, betula_points)
+betula_points$lst_2018 <- lst_2018_betula
+hist(lst_2018_betula)
+
+r_df <- rasterToPoints(lst_2018, spatial = TRUE) |> as.data.frame()
+names(r_df) <- c("value", "x", "y")
+betula_200_bld_forstats_alan <- left_join(betula_200_bld_forstats_alan, betula_points, by = "id")%>%
+  select(-taxa.y) %>%
+  select(-site.y) %>%
+  select(-geometry.y)
+```
+
+
+5. Relationship - visualize
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(ggpmisc)
+library(gridExtra)
+source("script/read_tree_inventory.R")
+cityoi <- "NY"
+df_tree <- read_tree_inventory(city = cityoi)
+coordinates(df_tree) <- c("lon", "lat")
+point_tree <- st_as_sf(df_tree)
+point_tree <- st_set_crs(point_tree, "EPSG:4326")
+
+str_taxa = "Vacant"
+# v_taxa <- c("Quercus", "Morus", "Ulmus", "Fraxinus", "Betula", "Acer", "Populus", "Vacant")
+point_tree <- point_tree %>% filter(str_detect(taxa, str_taxa))
+
+taxa_alan_temp <- extract_temp_alan(point_tree)
+p <- plot_function(taxa = taxa, dataframe=taxa_alan_temp, taxa_alan_temp$alan_2018, taxa_alan_temp$up_05_2018, "ALAN_2018", "green_up_doy")
+p2 <- plot_function(taxa = taxa, dataframe=taxa_alan_temp, taxa_alan_temp$alan_2018, taxa_alan_temp$down_05_2018, "ALAN_2018", "green_down_doy")
+grid.arrange(p, p2, ncol = 2)
+
+
+# making groups and display
+p <- make_group_display(point = taxa_alan_temp, trend = "up_05_2018", temp = "tavg_ann_2018") 
+#tavg_ann_2018, tavg_spr_2018, tavg_sum_2018, lst_2018
+ggsave(str_c("~/phenology-urban/result/alan/bin_daymet_2018_",taxa,"_50up.jpg"), p, width = 8, height = 6, units = "in")
+
+p
+```
+
+6. analyze CONUS site
+
+```{r}
+#point of NEON
+source("script/extract_temp_alan.R")
+all_site <- read.csv("~/phenology-batchplanet/alldata/NEON/metadata.csv") %>%
+  filter(!is.na(lon))
+taxa_data <- all_site# different growth form
+coordinates(taxa_data) <- c("lon", "lat")
+neon_tree <- st_as_sf(taxa_data)
+neon_tree <- st_set_crs(neon_tree, "EPSG:4326")
+neon_tree_alan_temp <- extract_temp_alan(neon_tree)
+
+folder_path <- "~/phenology-batchplanet/alldata/NEON/doy"
+file_names <- list.files(folder_path, full.names = TRUE)
+
+doy_df <- data.frame()
+site_names <- unique(substring(neon_tree_alan_temp$id, 14, 17))
+for (site_name in site_names) {
+  pattern <- paste0("doy_", site_name, "_all.rds")
+  matching_file <- file_names[grep(pattern, file_names)]
+  if (length(matching_file) > 0) {
+    data <- readRDS(matching_file)
+    if (nrow(data) > 0) { 
+      filtered_data <- subset(data, year == 2018 & thres == 0.5)  # Set year and threshold
+      if (nrow(filtered_data) > 0) {  
+        doy_df <- rbind(doy_df, filtered_data)
+        cat("\n",site_name)
+      }
+    }
+  }
+}
+
+up_doy <- subset(doy_df, direction == "up" , select = c(id, doy)) %>% rename(up = doy)
+down_doy <- subset(doy_df, direction == "down" , select = c(id, doy)) %>% rename(down = doy)
+neon_tree_alan_temp <- neon_tree_alan_temp %>%
+    inner_join(up_doy, by = "id") %>%
+    inner_join(down_doy, by = "id")
+
+saveRDS(neon_tree_alan_temp,"~/phenology-urban/result/neon_tree_alan_temp1.rds")
+
+
+data <- readRDS("result/neon_tree_alan_temp1.rds")
+acer_species <- data[grep("Acer", data$species), ]
+
+source("~/phenology-urban/script/plot_scatter.R")
+
+p <- plot_function(taxa = "Acer", dataframe=acer_species, acer_species$tavg_ann_2018, acer_species$down, "Tavg_2018", "green_down_doy")
+p
+
+
+ggsave("result/temperature/temp_2018_green_down_doy_Deciduous_neon2018.jpg", p, width = 9, height = 6, units = "in")
+```
+
+```{r}
+#point of all city - based on taxa!
+library(dplyr)
+library(sp)
+library(sf)
+library(raster)
+library(ggplot2)
+library(ggpmisc)
+library(stringr)
+
+source("~/phenology-urban/script/extract_doy_all_cities.R")
+acer_doy_df <- extract_doy_all_cities("Acer", x = 2018, threshold = 0.5)
+
+coordinates(acer_doy_df) <- c("lon", "lat")
+all_city_tree <- st_as_sf(acer_doy_df)
+all_city_tree <- st_set_crs(all_city_tree, "EPSG:4326")
+
+
+source("~/phenology-urban/script/extract_temp_alan.R") #just 2018 data
+all_city_alan_temp <- extract_temp_alan(all_city_tree)
+
+source("~/phenology-urban/script/plot_scatter.R")
+p <- plot_function(taxa = "Acer", dataframe=all_city_alan_temp, all_city_alan_temp$tavg_ann_2018, all_city_alan_temp$up, "Tavg_2018", "green_up_doy")
+p
+ggsave("result/alan/ALAN_2018_green_up_doy_Acer_allcity2018.jpg", p, width = 8, height = 6, units = "in")
+
+
+p <- make_group_display(point = all_city_alan_temp, trend = "up", temp = "tavg_ann_2018") 
+p
+plot(all_city_alan_temp)
+
+
+hist_temp <- ggplot(all_city_alan_temp, aes(x = tavg_spr_2018, color = city, fill = city)) +
+  geom_density(alpha = 0.3) +
+  scale_fill_manual(values = rainbow(length(unique(all_city_alan_temp$city)))) +
+  scale_color_manual(values = rainbow(length(unique(all_city_alan_temp$city)))) +
+  labs(x = "Spring Temperature", y = "Density", fill = "City", color = "City") +
+  theme_classic()
+
+hist_alan <- ggplot(all_city_alan_temp, aes(x = alan_2018, color = city, fill = city)) +
+  geom_density(alpha = 0.3) +
+  scale_fill_manual(values = rainbow(length(unique(all_city_alan_temp$city)))) +
+  scale_color_manual(values = rainbow(length(unique(all_city_alan_temp$city)))) +
+  labs(x = "ALAN", y = "Density", fill = "City", color = "City") +
+  theme_classic()
+
+
+hist_alan <- ggplot(data_neon, aes(x = tavg_ann_2018, color = growth_form, fill = growth_form)) +
+  geom_density(alpha = 0.3) +
+  scale_fill_manual(values = rainbow(length(unique(data_neon$growth_form)))) +
+  scale_color_manual(values = rainbow(length(unique(data_neon$growth_form)))) +
+  labs(x = "Temperature", y = "Density", fill = "growthform", color = "growthform") +
+  theme_classic()
+hist_alan <- ggplot(data_neon, aes(x = tavg_ann_2018, color = species, fill = species)) +
+  geom_density(alpha = 0.3) +
+  scale_fill_manual(values = rainbow(length(unique(data_neon$species)))) +
+  scale_color_manual(values = rainbow(length(unique(data_neon$species)))) +
+  labs(x = "Temperature", y = "Density", fill = "species", color = "species") +
+  theme_classic()
+
+ggsave("result/alan/hist_alan_acer_neon_2018.jpg", hist_alan, width = 10, height = 6, units = "in")
+  
+source("~/phenology-urban/script/plot_scatter.R")
+
+
+```
+
+compare the relationship (doy~temp)
+```{r}
+data <- readRDS("result/neon_tree_alan_temp.rds")
+data_neon <- data[grep("Acer", data$species), ]
+
+# just for acer
+data_city <- readRDS("result/allcity_tree_alan_temp_acer.rds")
+
+source("~/phenology-urban/script/extract_doy_all_cities.R")
+acer_doy_df <- extract_doy_all_cities("Morus", x = 2018, threshold = 0.5) #
+coordinates(acer_doy_df) <- c("lon", "lat")
+all_city_tree <- st_as_sf(acer_doy_df)
+all_city_tree <- st_set_crs(all_city_tree, "EPSG:4326")
+source("~/phenology-urban/script/extract_temp_alan.R") #just 2018 data
+data_city <- extract_temp_alan(all_city_tree)
+
+
+
+bootstrap_lm <- function(data, formula, num_iterations) {
+  coefficients <- matrix(NA, nrow = num_iterations, ncol = length(coef(lm(formula, data))))
+  for (i in 1:num_iterations) {
+    bootstrap_sample <- data[sample(nrow(data), replace = TRUE), ]
+    coefficients[i, ] <- coef(lm(formula, data = bootstrap_sample))
+  }
+  return(coefficients)
+}
+
+num_iterations <- 1000
+coefficients_lm1 <- bootstrap_lm(data_neon, down ~ tavg_ann_2018, num_iterations)
+coefficients_lm2 <- bootstrap_lm(data_city, down ~ tavg_ann_2018, num_iterations)
+diff_coefficients <- coefficients_lm1 - coefficients_lm2
+confidence_interval <- apply(diff_coefficients, 2, function(x) quantile(x, c(0.025, 0.975)))
+print(confidence_interval)
+
+```
+
+

@@ -1,0 +1,842 @@
+# 1. Prepare
+## 1.1 insert data
+```{r}
+library(readr)
+library(tidyr)
+library(dplyr)
+library(sf)
+library(sp)
+library(raster)
+library(stringr)
+library(ggplot2)
+library(ggpmisc)
+library(nimble)
+library(patchwork)
+library(purrr)
+library(coda)
+
+individual_phenometrics_data <- read_csv("~/phenology-urban/data/raw/CONUS/NPN/NPN1722/individual_phenometrics_data.csv")
+individual_leaf_bud <- subset(individual_phenometrics_data, Phenophase_Description == "Breaking leaf buds")
+individual_color_leaf <- subset(individual_phenometrics_data, Phenophase_Description == "Colored leaves")
+```
+
+## 1.2 average with sites/species/year (avg.individual)
+```{r}
+individual_leaf_bud_filter <- individual_leaf_bud %>%
+  group_by(Individual_ID, First_Yes_Year) %>%
+  summarise(First_Yes_DOY = min(First_Yes_DOY, na.rm = TRUE)) %>%
+  left_join(individual_leaf_bud, by = c("Individual_ID", "First_Yes_Year", "First_Yes_DOY"))%>%
+  filter(First_Yes_DOY <= 183)
+
+individual_color_leaf_filter <- individual_color_leaf %>%
+  group_by(Individual_ID, First_Yes_Year) %>%
+  summarise(First_Yes_DOY = min(First_Yes_DOY, na.rm = TRUE)) %>%
+  left_join(individual_color_leaf, by = c("Individual_ID", "First_Yes_Year", "First_Yes_DOY")) %>%
+  filter(First_Yes_DOY >= 182)
+
+# breaking leaf buds (species) >= 80
+individual_leaf_bud_filter2 <- individual_leaf_bud_filter %>%
+    group_by(Genus, Species) %>%
+    count() %>%
+    filter(n >= 80) %>%
+    inner_join(individual_leaf_bud_filter, by = c("Genus", "Species"))
+
+# colored leaves (species) >= 40
+individual_color_leaf_filter2 <- individual_color_leaf_filter %>%
+    group_by(Genus, Species) %>%
+    count() %>%
+    filter(n >= 40) %>%
+    inner_join(individual_color_leaf_filter, by = c("Genus", "Species"))
+
+coordinates(individual_leaf_bud_filter) <- c("Longitude", "Latitude")
+species_leaf_bud_site <- st_as_sf(individual_leaf_bud_filter) %>% st_set_crs("EPSG:4326")
+
+coordinates(individual_color_leaf_filter) <- c("Longitude", "Latitude")
+species_color_leaf_site <- st_as_sf(individual_color_leaf_filter) %>% st_set_crs("EPSG:4326")
+
+## save as shp.
+write_sf(species_leaf_bud_site, "~/phenology-urban/data/proc/conus/npn/leaf_bud_1222.shp")
+write_sf(species_color_leaf_site, "~/phenology-urban/data/proc/conus/npn/color_leaf_1222.shp")
+
+# # species-site-year average doy for leaf-bud
+# species_leaf_bud <- individual_leaf_bud_filter2 %>%
+#   group_by(Site_ID, Latitude, Longitude,
+#            Genus, Species, First_Yes_Year,
+#            Tmin_Winter, Tmin_Spring, Tmin_Summer, Tmin_Fall,
+#            Tmax_Winter, Tmax_Spring, Tmax_Summer, Tmax_Fall) %>%
+#   summarise(First_Yes_DOY = mean(First_Yes_DOY, na.rm = TRUE))
+# 
+# # species-site-year average doy for color_leaf
+# species_color_leaf <- individual_color_leaf_filter2 %>%
+#   group_by(Site_ID, Latitude, Longitude,
+#            Genus, Species, First_Yes_Year,
+#            Tmin_Winter, Tmin_Spring, Tmin_Summer, Tmin_Fall,
+#            Tmax_Winter, Tmax_Spring, Tmax_Summer, Tmax_Fall) %>%
+#   summarise(First_Yes_DOY = mean(First_Yes_DOY, na.rm = TRUE))
+```
+
+## 1.3 extract ALAN
+```{r}
+# coordinates(species_leaf_bud) <- c("Longitude", "Latitude")
+# species_leaf_bud_site <- st_as_sf(species_leaf_bud) %>% st_set_crs("EPSG:4326")
+# 
+# coordinates(species_color_leaf) <- c("Longitude", "Latitude")
+# species_color_leaf_site <- st_as_sf(species_color_leaf) %>% st_set_crs("EPSG:4326")
+# 
+# for (y in 2017:2022){
+#   ## insert alan
+#   raster_file <- str_c("~/phenology-urban/data/raw/CONUS/ALAN/VNP46A4_t",y,".tif")
+#   alan_year <- raster(raster_file)
+#   ## Remove very low values of NTL; can be considered noise
+#   alan_year[alan_year <= 2] <- 0
+#   ## Distribution is skewed, so log
+#   alan_year <- log(alan_year + 1)
+# 
+#   extract_alan <- extract(alan_year, species_leaf_bud_site)
+#   species_leaf_bud_site <- cbind(species_leaf_bud_site, setNames(list(extract_alan), paste0("alan_", y)))
+# }
+# 
+# for (y in 2017:2022){
+#   ## insert alan
+#   raster_file <- str_c("~/phenology-urban/data/raw/CONUS/ALAN/VNP46A4_t",y,".tif")
+#   alan_year <- raster(raster_file)
+#   ## Remove very low values of NTL; can be considered noise
+#   alan_year[alan_year <= 2] <- 0
+#   ## Distribution is skewed, so log
+#   alan_year <- log(alan_year + 1)
+# 
+#   extract_alan <- extract(alan_year, species_color_leaf_site)
+#   species_color_leaf_site <- cbind(species_color_leaf_site, setNames(list(extract_alan), paste0("alan_", y)))
+# }
+# 
+# saveRDS(species_leaf_bud_site, "data/proc/conus/npn_meng/leaf_bud_1722.rds")
+# saveRDS(species_color_leaf_site, "data/proc/conus/npn_meng/color_leaf_1722.rds")
+```
+
+## 1.4 processing
+```{r}
+species_leaf_bud <- readRDS("leaf_bud_1222.rds")
+species_color_leaf <- readRDS("color_leaf_1222.rds")
+cols_to_check <- c("First_Yes_Year", "Tmin_Winter", "Tmin_Spring", "Tmin_Summer", "Tmin_Fall", "Tmax_Winter", "Tmax_Spring", "Tmax_Summer", "Tmax_Fall")
+
+
+species_leaf_bud <- species_leaf_bud %>%
+  filter_at(vars(one_of(cols_to_check)), all_vars(. != -9999)) %>%
+  mutate(alan = case_when(
+    First_Yes_Year == 2012 ~ alan_2012,
+    First_Yes_Year == 2013 ~ alan_2013,
+    First_Yes_Year == 2014 ~ alan_2014,
+    First_Yes_Year == 2015 ~ alan_2015,
+    First_Yes_Year == 2016 ~ alan_2016,
+    First_Yes_Year == 2017 ~ alan_2017,
+    First_Yes_Year == 2018 ~ alan_2018,
+    First_Yes_Year == 2019 ~ alan_2019,
+    First_Yes_Year == 2020 ~ alan_2020,
+    First_Yes_Year == 2021 ~ alan_2021,
+    First_Yes_Year == 2022 ~ alan_2022,
+    TRUE ~ NA_real_
+  )) %>% na.omit()
+
+species_color_leaf <- species_color_leaf %>%
+  filter_at(vars(one_of(cols_to_check)), all_vars(. != -9999)) %>%
+  mutate(alan = case_when(
+    First_Yes_Year == 2012 ~ alan_2012,
+    First_Yes_Year == 2013 ~ alan_2013,
+    First_Yes_Year == 2014 ~ alan_2014,
+    First_Yes_Year == 2015 ~ alan_2015,
+    First_Yes_Year == 2016 ~ alan_2016,
+    First_Yes_Year == 2017 ~ alan_2017,
+    First_Yes_Year == 2018 ~ alan_2018,
+    First_Yes_Year == 2019 ~ alan_2019,
+    First_Yes_Year == 2020 ~ alan_2020,
+    First_Yes_Year == 2021 ~ alan_2021,
+    First_Yes_Year == 2022 ~ alan_2022,
+    TRUE ~ NA_real_
+  )) %>% na.omit()
+
+unique_alan <- rbind(species_leaf_bud, species_color_leaf) %>%
+  group_by(geometry, First_Yes_Year) %>%
+  summarize(alan_avg = mean(alan, na.rm = TRUE))
+threshold <- quantile(unique_alan$alan_avg, 0.75, na.rm = TRUE)[[1]]
+
+# analyze_leaf_bud <- filter(species_leaf_bud, alan >= threshold | alan == 0) %>%
+#   mutate(group = case_when(
+#     alan >= threshold ~ "ALAN",
+#     alan == 0 ~ "No ALAN"
+#     )) %>%
+#   mutate(Tavg_Winter = (Tmin_Winter + Tmax_Winter) / 2) %>%
+#   mutate(Tavg_Spring = (Tmin_Spring + Tmax_Spring) / 2) %>%
+#   mutate(Tavg_Summer = (Tmin_Summer + Tmax_Summer) / 2) %>%
+#   mutate(Tavg_Fall = (Tmin_Fall + Tmax_Fall) / 2)%>%
+#   filter(Genus  == "Acer")
+# 
+# analyze_color_leaf <- filter(species_color_leaf, alan >= threshold | alan == 0) %>%
+#   mutate(group = case_when(
+#     alan >= threshold ~ "ALAN",
+#     alan == 0 ~ "No ALAN"
+#     )) %>%
+#   mutate(Tavg_Winter = (Tmin_Winter + Tmax_Winter) / 2) %>%
+#   mutate(Tavg_Spring = (Tmin_Spring + Tmax_Spring) / 2) %>%
+#   mutate(Tavg_Summer = (Tmin_Summer + Tmax_Summer) / 2) %>%
+#   mutate(Tavg_Fall = (Tmin_Fall + Tmax_Fall) / 2) %>%
+#   filter(Genus  == "Acer")
+# map
+# us_boundary <- sf::read_sf('data/raw/CONUS/boundary/us_boundarydissolve.shp')
+# 
+# p <- ggplot()+
+#   geom_sf(data = rural, color = "green", size = 0.2) +
+#   geom_sf(data = us_boundary, fill = "transparent") +
+#   labs(x = "Longitude", y = "Latitude", title = "Rural points") +
+#   theme_classic()
+# p
+
+```
+
+
+# 2. Reproduce results from Meng
+
+## 2.1 visualize Fig.2 - Bud break
+```{r}
+bins_bud <- seq(floor(min(analyze_leaf_bud$Tavg_Spring)), ceiling(max(analyze_leaf_bud$Tavg_Spring)), by = 100) 
+# bins_color <- seq(floor(min(analyze_color_leaf$Tavg_Summer)), ceiling(max(analyze_color_leaf$Tavg_Summer)), by = 1)
+# analyze_color_leaf_bin <- analyze_color_leaf %>% mutate(summer_bin = cut(analyze_color_leaf$Tavg_Summer, breaks = bins_color))
+
+analyze_leaf_bud_bin <- analyze_leaf_bud %>% mutate(spring_bin = cut(analyze_leaf_bud$Tavg_Spring, breaks = bins_bud)) %>%
+  filter(spring_bin != "(21,22]")%>%
+  group_by(spring_bin, group) %>%
+  summarise(
+    mean = mean(First_Yes_DOY, na.rm = TRUE),
+    sd = sd(First_Yes_DOY, na.rm = TRUE),
+    n = n(),
+    se = sd / sqrt(n),
+    ci = qt(0.975, df = n-1) * se
+  ) %>%
+  ungroup()
+
+plot_bin <- ggplot(analyze_leaf_bud_bin, aes(x = spring_bin, y = mean, color = group)) +
+  geom_point(position = position_dodge(0.2), size = 3) +
+  geom_errorbar(aes(ymin = mean - ci, ymax = mean + ci), width = 0.2, position = position_dodge(0.2)) +
+  geom_line(aes(group = group), position = position_dodge(0.2)) +
+  labs(color = "Group") +
+  scale_color_manual(values = c("red", "blue")) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ggtitle(str_c("Spring Temperature - Bud Break"))
+
+plot_bin
+ggsave("~/phenology-urban/result/npn_meng/Fig2_bud.jpg", plot_bin, width = 8, height = 6, units = "in")
+```
+
+## 2.2 visualize Fig.2 - Colored leaf
+```{r}
+library(ggplot2)
+library(ggpmisc)
+
+bins_color <- seq(floor(min(analyze_color_leaf$Tavg_Summer)), ceiling(max(analyze_color_leaf$Tavg_Summer)), by = 1)
+# analyze_color_leaf_bin <- analyze_color_leaf %>% mutate(summer_bin = cut(analyze_color_leaf$Tavg_Summer, breaks = bins_color))
+
+analyze_color_leaf_bin <- analyze_color_leaf %>% mutate(summer_bin = cut(analyze_color_leaf$Tavg_Summer, breaks = bins_color)) %>%
+  filter(summer_bin != "(27,28]")%>%
+  group_by(summer_bin, group) %>%
+  summarise(
+    mean = mean(First_Yes_DOY, na.rm = TRUE),
+    sd = sd(First_Yes_DOY, na.rm = TRUE),
+    n = n(),
+    se = sd / sqrt(n),
+    ci = qt(0.975, df = n-1) * se
+  ) %>%
+  ungroup()
+
+plot_bin_c <- ggplot(analyze_color_leaf_bin, aes(x = summer_bin, y = mean, color = group)) +
+  geom_point(position = position_dodge(0.2), size = 3) +
+  geom_errorbar(aes(ymin = mean - ci, ymax = mean + ci), width = 0.2, position = position_dodge(0.2)) +
+  geom_line(aes(group = group), position = position_dodge(0.2)) +
+  labs(color = "Group") +
+  scale_color_manual(values = c("red", "blue")) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ggtitle(str_c("Summer Temperature - Colored leaf"))
+
+plot_bin_c
+ggsave("~/phenology-urban/result/npn_meng/Fig2_color.jpg", plot_bin_c, width = 8, height = 6, units = "in")
+```
+
+## 2.3 model Table1 Fig3 - Bud break (confusing about the bin)
+```{r}
+library(lmerTest)
+
+mod <- lmer(First_Yes_DOY ~ Tavg_Spring + alan + Tavg_Spring*alan +(1 | Species) + (1 | First_Yes_Year), data = analyze_leaf_bud)
+summary(mod)
+library(stargazer)
+table <- stargazer(mod, type = 'html')
+writeLines(table, 'tablemod.html')
+# just the line for bud break model
+
+# Step 1: Calculate the quantiles of temperature
+quantiles <- quantile(analyze_leaf_bud$Tavg_Spring, probs = c(0.25, 0.5, 0.75))
+# Step 2: Create a prediction dataset
+log_alan_seq <- seq(min((analyze_leaf_bud$alan)), max((analyze_leaf_bud$alan)), length.out = 100)
+prediction_data <- expand.grid(
+  Tavg_Spring = quantiles,
+  alan = log_alan_seq
+)
+# Step 3: Generate predictions and confidence intervals
+# Assuming 'mod' is your mixed-effects model from lmer
+prediction_data$prediction <- predict(mod, newdata = prediction_data, re.form = NA)
+
+# Get the confidence intervals
+ci <- predict(mod, newdata = prediction_data, re.form = NA, se.fit = TRUE)
+prediction_data$ci_upper <- prediction_data$prediction + 1.96 * ci$se.fit
+prediction_data$ci_lower <- prediction_data$prediction - 1.96 * ci$se.fit
+
+# Step 4: Plot the predictions
+bud <- ggplot(prediction_data, aes(x = alan, y = prediction, color = as.factor(Tavg_Spring))) +
+  geom_line(aes(color = as.factor(Tavg_Spring))) +
+  geom_ribbon(aes(ymin = ci_lower, ymax = ci_upper, fill = as.factor(Tavg_Spring)), alpha = 0.2) +
+  scale_color_manual(values = c("blue", "grey", "red")) +
+  scale_fill_manual(values = c("blue", "grey", "red")) +
+  theme_minimal() +
+  labs(x = "Log(ALAN)", y = "Phenology (DOY)", color = "Temperature Quantile", fill = "Temperature Quantile")
+
+# ggsave("~/phenology-urban/result/npn_meng/Fig3_model_bud.jpg", bud, width = 8, height = 6, units = "in")
+```
+
+## 2.4 model Table1 Fig3 - Colored leaf
+```{r}
+
+mod2 <- lmer(First_Yes_DOY ~ Tavg_Summer + alan + Tavg_Summer*alan +(1 | Species) + (1 | First_Yes_Year), data = analyze_color_leaf)
+summary(mod2)
+class(mod2)
+library(stargazer)
+table <- stargazer(summary(mod2), type = 'html')
+writeLines(table, 'tablemod2.html')
+# just the line for colored leaf model
+
+# Step 1: Calculate the quantiles of temperature
+quantiles <- quantile(analyze_color_leaf$Tavg_Summer, probs = c(0.25, 0.5, 0.75))
+# Step 2: Create a prediction dataset
+log_alan_seq <- seq(min((analyze_color_leaf$alan)), max((analyze_color_leaf$alan)), length.out = 100)
+prediction_data <- expand.grid(
+  Tavg_Summer = quantiles,
+  alan = log_alan_seq
+)
+# Step 3: Generate predictions and confidence intervals
+# Assuming 'mod' is your mixed-effects model from lmer
+prediction_data$prediction <- predict(mod2, newdata = prediction_data, re.form = NA)
+
+# Get the confidence intervals
+ci <- predict(mod2, newdata = prediction_data, re.form = NA, se.fit = TRUE)
+prediction_data$ci_upper <- prediction_data$prediction + 1.96 * ci$se.fit
+prediction_data$ci_lower <- prediction_data$prediction - 1.96 * ci$se.fit
+
+# Step 4: Plot the predictions
+color <- ggplot(prediction_data, aes(x = alan, y = prediction, color = as.factor(Tavg_Summer))) +
+  geom_line(aes(color = as.factor(Tavg_Summer))) +
+  geom_ribbon(aes(ymin = ci_lower, ymax = ci_upper, fill = as.factor(Tavg_Summer)), alpha = 0.2) +
+  scale_color_manual(values = c("blue", "grey", "red")) +
+  scale_fill_manual(values = c("blue", "grey", "red")) +
+  theme_minimal() +
+  labs(x = "Log(ALAN)", y = "Phenology (DOY)", color = "Temperature Quantile", fill = "Temperature Quantile")
+
+# ggsave("~/phenology-urban/result/npn_meng/Fig3_model_color.jpg", color, width = 8, height = 6, units = "in")
+
+```
+
+
+
+
+
+# 3. Additional steps
+
+## 3.1 compare the CI of slope
+```{r}
+# bud
+source("~/phenology-urban/script/stat_slope_CI.R")
+
+analyze_leaf_bud <- filter(species_leaf_bud, alan >= threshold | alan == 0)  %>%
+  mutate(group = case_when(
+    alan >= threshold ~ "ALAN",
+    alan == 0 ~ "No ALAN"
+    )) %>%
+  mutate(Tavg_Winter = (Tmin_Winter + Tmax_Winter) / 2) %>%
+  mutate(Tavg_Spring = (Tmin_Spring + Tmax_Spring) / 2) %>%
+  mutate(Tavg_Summer = (Tmin_Summer + Tmax_Summer) / 2) %>%
+  mutate(Tavg_Fall = (Tmin_Fall + Tmax_Fall) / 2)%>%
+  mutate(Tavg_Year = (Tmin_Winter + Tmax_Winter + Tmin_Spring + Tmax_Spring+ Tmin_Summer + Tmax_Summer + Tmin_Fall + Tmax_Fall) / 8)%>%
+  filter(Genus  == "Acer")
+
+plot_sca <- analyze_stat_slopeCI(analyze_leaf_bud, "Tavg_Spring", "First_Yes_DOY", "Temp - bud break")
+ggsave("1722/all_bud.jpg", plot_sca, width = 8, height = 6, units = "in")
+
+# color
+analyze_color_leaf <- filter(species_color_leaf, alan >= threshold | alan == 0) %>%
+  mutate(group = case_when(
+    alan >= threshold ~ "ALAN",
+    alan == 0 ~ "No ALAN"
+    )) %>%
+  mutate(Tavg_Winter = (Tmin_Winter + Tmax_Winter) / 2) %>%
+  mutate(Tavg_Spring = (Tmin_Spring + Tmax_Spring) / 2) %>%
+  mutate(Tavg_Summer = (Tmin_Summer + Tmax_Summer) / 2) %>%
+  mutate(Tavg_Fall = (Tmin_Fall + Tmax_Fall) / 2)%>%
+  mutate(Tavg_Year = (Tmin_Winter + Tmax_Winter + Tmin_Spring + Tmax_Spring+ Tmin_Summer + Tmax_Summer + Tmin_Fall + Tmax_Fall) / 8)%>%
+  filter(Genus  == "Acer")
+
+plot_sca_c <- analyze_stat_slopeCI(analyze_color_leaf, "Tmin_Summer", "First_Yes_DOY", "Temp - colored leaf")
+plot_sca_c
+ggsave("1722/all_color.jpg", plot_sca_c, width = 8, height = 6, units = "in")
+```
+## 3.2 Using the bayesian model
+```{r}
+source("stat_slope_bayes.R")
+
+# color
+genus_counts <- table(species_color_leaf$Genus)
+large_genus <- names(genus_counts[genus_counts > 100])
+color_list <- map(large_genus, function(genus) {
+  species_color_leaf %>%
+    filter(alan >= threshold | alan == 0) %>%
+    mutate(group = case_when(
+    alan >= threshold ~ "ALAN",
+    alan == 0 ~ "No ALAN"
+    )) %>%
+    mutate(Tavg_Winter = (Tmin_Winter + Tmax_Winter) / 2) %>%
+    mutate(Tavg_Spring = (Tmin_Spring + Tmax_Spring) / 2) %>%
+    mutate(Tavg_Summer = (Tmin_Summer + Tmax_Summer) / 2) %>%
+    mutate(Tavg_Fall = (Tmin_Fall + Tmax_Fall) / 2)%>%
+    mutate(Tavg_Year = (Tmin_Winter + Tmax_Winter + Tmin_Spring + Tmax_Spring+ Tmin_Summer + Tmax_Summer + Tmin_Fall + Tmax_Fall) / 8)%>%
+    filter(Genus == genus)
+})
+
+plots <- lapply(seq_along(color_list), function(i) {
+  cat("Processing dataset", i, "of", length(color_list), "\n")  
+  data <- color_list[[i]] 
+  result <- stat_slope_delta(data) 
+  return(result) 
+})
+
+combined_plot <- reduce(plots, `+`) + plot_layout(ncol = 1)
+print(combined_plot)
+```
+
+                                              
+# 4. Comparison
+
+## 4.1 build Daijiang's model
+alan as urbanizaition
+
+### 4.1.1 model in paper
+```{r}
+library(tidyverse)
+library(sf)
+library(mgcv)
+library(effects)
+library(phyr)
+
+convert_pop_back = function(modx, msdpop, to = FALSE){
+  if(to){
+    x = (log10(modx + 1) - msdpop[1]) / msdpop[2]
+  } else {
+    x = 10^(modx * msdpop[2] + msdpop[1]) -1
+  }
+  x
+}
+
+convert_temp_back = function(modx, msdpop){
+  modx * msdpop[2] + msdpop[1]
+}
+
+sum_lmm_fix = function(x, m = "Temp. × Pop."){
+  broom.mixed::tidy(x, "fixed") %>% 
+    mutate(p = ifelse(p.value < 0.001, "***", 
+                      ifelse(p.value < 0.01, "**", 
+                             ifelse(p.value < 0.05, "*", ""))),
+           est = paste0(round(estimate, 3), p),
+           model = m) %>% 
+    dplyr::select(model, term, est)
+}
+
+dat_leaf_aggr <- readRDS("D:/01Research/00urban_phenology/04project/R/dat_leaf_aggr.rds")
+envi_cells <- readRDS("D:/01Research/00urban_phenology/04project/R/envi_cells.rds")
+  all(unique(dat_leaf_aggr$nth_cell) %in% unique(envi_cells$nth_cell))
+  n_distinct(dat_leaf_aggr$nth_cell)
+  dat_leaf_aggr = left_join(dat_leaf_aggr,
+                            filter(envi_cells, nth_cell %in% unique(dat_leaf_aggr$nth_cell)) %>% 
+                              dplyr::select(nth_cell, pop_km2:HFI_2009) %>% distinct())
+  
+  all(dat_leaf_aggr$temp == dat_leaf_aggr$temp_5_10_ave_delaware)
+  
+  
+  # try annual temp of 2011, instead of May to October? ----
+  names(dat_leaf_aggr)
+  dat_leaf_aggr = mutate(dat_leaf_aggr, 
+                         temp_raw = temp, 
+                         pop_km2_log10 = log10(pop_km2 + 1)) 
+  dat_leaf_aggr = drop_na(dat_leaf_aggr, temp_ave_delaware, pop_km2_log10, HFI_2009, UHI_LST)
+  # so that all models are fit to the same data
+  
+  # range(dat_leaf_aggr$temp)
+  # range(dat_leaf_aggr$pop_km2)
+  # mean(dat_leaf_aggr$temp) # 14.87096 # May to October
+  # sd(dat_leaf_aggr$temp) # 2.4985
+  # mean(dat_leaf_aggr$temp_ave_delaware, na.rm = T) # 8.8807 annual average temp
+  # sd(dat_leaf_aggr$temp_ave_delaware, na.rm = T) # 2.3699
+  # mean(dat_leaf_aggr$pop_km2_log10) # 2.3362
+  # sd(dat_leaf_aggr$pop_km2_log10) # 0.5712
+  # mean(dat_leaf_aggr$HFI_2009) # 21.06645
+  # sd(dat_leaf_aggr$HFI_2009) # 10.37657
+  # mean(dat_leaf_aggr$UHI_LST) # 0.2497
+  # sd(dat_leaf_aggr$UHI_LST) # 0.5243
+  
+  dat_leaf_aggr[, c("temp", "temp_ave_delaware", "pop_km2_log10", "day_length", "UHI_LST", "HFI_2009")] = 
+    scale(dat_leaf_aggr[, c("temp", "temp_ave_delaware", "pop_km2_log10", "day_length", "UHI_LST", "HFI_2009")])
+  
+
+hist(dat_leaf_aggr$doy_median, xlab = "Leaf senescence (day of year)", main = "")
+# fine to use normal distribution (LMM)
+
+# don't use day length
+plot(dat_leaf_aggr$day_length, dat_leaf_aggr$doy_median, xlab = "Day length", ylab = "Leaf senescence (day of year)")
+
+
+
+mod_1 = lmerTest::lmer(doy_median ~ temp_ave_delaware + 
+                         (1 | sp) + (1|nth_cell) + 
+                         (0 + temp_ave_delaware | sp),
+                       data = dat_leaf_aggr)
+summary(mod_1)
+AIC(mod_1)
+
+mod_2 = lmerTest::lmer(doy_median ~ pop_km2_log10 + 
+                         (1 | sp) + (1|nth_cell) + 
+                         (0 + pop_km2_log10 | sp),
+                       data = dat_leaf_aggr)
+summary(mod_2)
+
+mod_3 = lmerTest::lmer(doy_median ~ temp_ave_delaware + pop_km2_log10 + 
+                         (1 | sp) + (1|nth_cell) + 
+                         (0 + temp_ave_delaware | sp) +
+                         (0 + pop_km2_log10 | sp),
+                       data = dat_leaf_aggr)
+summary(mod_3)
+
+mod_4 = lmerTest::lmer(doy_median ~ temp_ave_delaware * pop_km2_log10 + 
+                         (1 | sp) + (1|nth_cell) + 
+                         (0 + temp_ave_delaware | sp) +
+                         (0 + pop_km2_log10 | sp) +
+                         (0 + temp_ave_delaware:pop_km2_log10 | sp),
+                       data = dat_leaf_aggr)
+
+summary(mod_4)
+MuMIn::r.squaredGLMM(mod_4) 
+
+xaic = AIC(mod_1, mod_2, mod_3, mod_4) %>% as.data.frame()
+xaic$delta = xaic$AIC - min(xaic$AIC)
+xaic$w = as.vector(MuMIn::Weights(AIC(mod_1, mod_2, mod_3, mod_4)))
+
+x = effects::effect("temp_ave_delaware:pop_km2_log10", mod_4)
+plot(x, multiline = T)
+
+plot_orig <- as_tibble(x) %>% 
+  mutate(pop_raw = convert_temp_back(pop_km2_log10, c(2.3362, 0.5172)),
+         temp_raw = convert_temp_back(temp_ave_delaware, c(8.8807, 2.3699))) %>%
+  ggplot(aes(x = pop_raw, y = fit, group = temp_raw, color  = temp_raw)) +
+  geom_line() +
+  # geom_rug(data = dat_leaf_aggr, aes(x = log10(pop_km2 + 1)), alpha = 0.8, size = 0.15, inherit.aes = F) +
+  labs(x = "Log10-transformed human population density (per square km)",
+       y = "Leaf senescence (day of year)",
+       color = "Annual Average\nTemperature (°C)") +
+  colorspace::scale_color_continuous_sequential(palette = "Viridis", n_interp = 4, rev = F) +
+  cowplot::theme_cowplot(font_size = 15) +
+  theme(legend.position = c(0.7, .25))
+
+plot <- as_tibble(x) %>% 
+  mutate(pop_raw = convert_temp_back(pop_km2_log10, c(2.3362, 0.5172)),
+         temp_raw = convert_temp_back(temp_ave_delaware, c(8.8807, 2.3699))) %>%
+  ggplot(aes(x = temp_raw, y = fit, group = pop_raw, color  = pop_raw)) +
+  geom_line() +
+  # geom_rug(data = dat_leaf_aggr, aes(x = log10(pop_km2 + 1)), alpha = 0.8, size = 0.15, inherit.aes = F) +
+  labs(x = "Annual Average\nTemperature (°C)",
+       y = "Leaf senescence (day of year)",
+       color = "Log10-transformed\nhuman population\ndensity (per square km)") +
+  colorspace::scale_color_continuous_sequential(palette = "Viridis", n_interp = 4, rev = F) +
+  cowplot::theme_cowplot(font_size = 15) +
+  theme(legend.position = c(0.7, .25))
+
+# table 1
+mod_all_sene_empi = bind_rows(sum_lmm_fix(mod_1, "Temp. only"),
+                              sum_lmm_fix(mod_2, "Pop. only"),
+                              sum_lmm_fix(mod_3, "Temp. + Pop."),
+                              sum_lmm_fix(mod_4, "Temp. × Pop.")) %>% 
+  pivot_wider(id_cols = "model", names_from = "term", values_from = est) %>% 
+  bind_cols(xaic) %>% 
+  dplyr::select(-df) %>% 
+  rename(Intercept = "(Intercept)",
+         Temp. = temp_ave_delaware, Pop. = pop_km2_log10,
+         `Temp. : Pop.` = "temp_ave_delaware:pop_km2_log10",
+         `AIC` = delta, `Model weight` = w)
+
+```
+
+### 4.1.2 use his data for my analysis
+
+```{r}
+data_us <- dat_leaf_aggr %>%
+  filter(startsWith(nth_cell, "us")) %>% 
+  separate(sp, into = c("Genus", "sp"), sep = " ", remove = FALSE) %>%
+  mutate(log_pop = log10(pop_km2 + 1))
+
+unique_pop <- data_us %>% 
+  group_by(nth_cell) %>%
+  summarize(pop_avg = mean(log_pop, na.rm = TRUE))
+threshold <- quantile(unique_pop$pop_avg, 0.4, na.rm = TRUE)[[1]]
+
+
+analyze_data_us <- data_us %>%
+  mutate(group = case_when(
+    log_pop >= threshold ~ "Urban",
+    log_pop < threshold ~ "Rural"
+    )) %>% filter(Genus  == "Cornus")
+
+plot_sca <- analyze_stat_slopeCI(analyze_data_us, "temp", "doy_median", "Temp - colored leaf")
+plot_sca
+```
+
+
+## 4.2 using my data
+```{r}
+dataset <- filter(species_color_leaf) %>%
+  mutate(Tavg_Winter = (Tmin_Winter + Tmax_Winter) / 2) %>%
+  mutate(Tavg_Spring = (Tmin_Spring + Tmax_Spring) / 2) %>%
+  mutate(Tavg_Summer = (Tmin_Summer + Tmax_Summer) / 2) %>%
+  mutate(Tavg_Fall = (Tmin_Fall + Tmax_Fall) / 2)%>%
+  mutate(Tavg_Year = (Tmin_Summer + Tmax_Summer + Tmin_Fall + Tmax_Fall) / 4)
+```
+
+### 4.2.1 Figure 1 - some sp.
+
+Acer rubrum
+Acer saccharum
+Quercus rubra
+Liriodendron tulipifera
+Cornus florida
+
+```{r}
+acer_df <- dataset %>%
+  filter(Genus == "Acer" & Species == "saccharum")
+
+unique_temp <- acer_df %>% group_by(geometry, First_Yes_Year) %>%
+  summarize(temp_avg = mean(Tavg_Year, na.rm = TRUE))
+threshold <- median(unique_temp$temp_avg, na.rm = TRUE)
+
+acer_df <- acer_df %>%
+  mutate(group = case_when(Tavg_Year >= threshold ~ "Warm", Tavg_Year < threshold ~ "Cold"))
+
+plot_acer <- analyze_stat_slopeCI(acer_df, "alan", "First_Yes_DOY", "Cornus florida- colored leaf")
+plot_acer
+```
+
+
+
+### 4.2.2 Figure 2  
+```{r}
+control = lme4::lmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 100000))
+mod_1 = lmerTest::lmer(First_Yes_DOY ~ Tavg_Summer + 
+                        (1 | Genus) + (1 | First_Yes_Year) + 
+                        (0 + Tavg_Summer | Genus),
+                        data = dataset, control = control)
+summary(mod_1)
+# Warning in checkConv(attr(opt, "derivs"), opt$par, ctrl = control$checkConv  Model failed to converge with max|grad| = 0.00376962 (tol = 0.002, component 1)
+
+mod_2 = lmerTest::lmer(First_Yes_DOY ~ alan + 
+                         (1 | Genus) + (1|First_Yes_Year) + 
+                         (0 + alan | Genus),
+                       data = dataset)
+summary(mod_2)
+
+mod_3 = lmerTest::lmer(First_Yes_DOY ~ Tavg_Summer + alan + 
+                         (1 | Genus) + (1|First_Yes_Year) + 
+                         (0 + Tavg_Summer | Genus) +
+                         (0 + alan | Genus),
+                       data = dataset)
+summary(mod_3)
+# isSingular
+
+mod_4 = lmerTest::lmer(First_Yes_DOY ~ Tavg_Summer * alan + 
+                         (1 | Genus) + (1|First_Yes_Year) + 
+                         (0 + Tavg_Summer | Genus) +
+                         (0 + alan | Genus) +
+                         (0 + Tavg_Summer:alan | Genus),
+                       data = dataset)
+
+summary(mod_4)
+# isSingular
+
+MuMIn::r.squaredGLMM(mod_4) 
+
+xaic = AIC(mod_1, mod_2, mod_3, mod_4) %>% as.data.frame()
+xaic$delta = xaic$AIC - min(xaic$AIC)
+xaic$w = as.vector(MuMIn::Weights(AIC(mod_1, mod_2, mod_3, mod_4)))
+
+x = effects::effect("Tavg_Summer:alan", mod_4)
+plot(x, multiline = T)
+
+
+plot <- as_tibble(x) %>% 
+  ggplot(aes(x = Tavg_Summer, y = fit, group = alan, color  = alan)) +
+  geom_line() +
+  # geom_rug(data = dat_leaf_aggr, aes(x = log10(pop_km2 + 1)), alpha = 0.8, size = 0.15, inherit.aes = F) +
+  labs(x = "Summer Average\nTemperature (°C)",
+       y = "Colored leaf (day of year)",
+       color = "Log10-transformed\nALAN (nW/cm^2/sr)") +
+  colorspace::scale_color_continuous_sequential(palette = "Viridis", n_interp = 4, rev = F) +
+  cowplot::theme_cowplot(font_size = 15) +
+  theme(legend.position = c(0.7, .25))
+
+plot2 <- as_tibble(x) %>% 
+  ggplot(aes(x = alan, y = fit, group = Tavg_Summer, color  = Tavg_Summer)) +
+  geom_line() +
+  # geom_rug(data = dat_leaf_aggr, aes(x = log10(pop_km2 + 1)), alpha = 0.8, size = 0.15, inherit.aes = F) +
+  labs(x = "Log10-transformed ALAN (nW/cm^2/sr)",
+       y = "Colored leaf (day of year)",
+       color = "Summer Average\nTemperature (°C)") +
+  colorspace::scale_color_continuous_sequential(palette = "Viridis", n_interp = 4, rev = F) +
+  cowplot::theme_cowplot(font_size = 15) +
+  theme(legend.position = c(0.7, .25))
+
+# table 1
+mod_all_sene_empi = bind_rows(sum_lmm_fix(mod_1, "Temp. only"),
+                              sum_lmm_fix(mod_2, "ALAN only"),
+                              sum_lmm_fix(mod_3, "Temp. + ALAN"),
+                              sum_lmm_fix(mod_4, "Temp. × ALAN")) %>% 
+  pivot_wider(id_cols = "model", names_from = "term", values_from = est) %>% 
+  bind_cols(xaic) %>% 
+  dplyr::select(-df) %>% 
+  rename(Intercept = "(Intercept)",
+         Temp. = Tavg_Summer, ALAN = alan,
+         `Temp. : ALAN` = "Tavg_Summer:alan",
+         `delta AIC` = delta, `Model weight` = w)
+# test
+
+```
+
+# 5 Add LST data
+
+## leaf_bud
+```{r}
+bud_sf <- sf::st_read("~/phenology-urban/data/proc/conus/npn/12_22/leaf_bud/leafWithId_shapefile.shp")
+
+filefolder <- "~/phenology-urban/data/proc/conus/npn/12_22/leaf_bud/leaf_LST"
+lst_files <- list.files(path = filefolder, pattern = "\\.csv$", full.names = TRUE)
+
+leaf_lst <- lapply(lst_files, function(file) {
+  data <- read.csv(file)
+  
+  required_columns <- c("id", "source",
+                        "year", "month","day", 
+                        "lst", ".geo")
+  
+  if (!all(required_columns %in% colnames(data))) {
+    message("Skipping file due to missing columns: ", file)
+    return(NULL)
+  }
+  data %>%
+    dplyr::select(all_of(required_columns)) 
+})
+
+leaf_lst <- Filter(Negate(is.null), leaf_lst)
+leaf_lst <- do.call(rbind, leaf_lst)
+
+leaf_each <- leaf_lst %>%
+  mutate(
+    season = case_when(
+      month %in% c(3, 4, 5) ~ "spring",
+      month %in% c(12, 1, 2) ~ "winter",
+      TRUE ~ "other"
+    ),
+    date = as.Date(paste(year, month, day, sep = "-"))
+  ) %>%
+  group_by(id, season) %>%
+  summarize(
+    lst_seasonal = mean(lst, na.rm = TRUE),
+    .groups = "drop_last" # Keeps grouping by `id`
+  ) %>%
+  filter(season %in% c("spring", "winter")) %>%
+  pivot_wider(
+    names_from = season,
+    values_from = lst_seasonal,
+    names_prefix = "mean_"
+  ) %>%
+  ungroup() %>%
+  left_join(
+    leaf_lst %>%
+      mutate(date = as.Date(paste(year, month, day, sep = "-"))) %>%
+      group_by(id) %>%
+      slice_max(order_by = date, with_ties = FALSE) %>%
+      dplyr::select(id, lst),
+    by = "id"
+  ) %>%
+  rename(lst_recent = lst)
+
+bud_sf <- left_join(bud_sf, leaf_each, by = "id")
+```
+
+## color_leaf
+
+```{r}
+color_sf <- sf::st_read("~/phenology-urban/data/proc/conus/npn/12_22/color_leaf/colorWithId_shapefile.shp")
+
+filefolder <- "~/phenology-urban/data/proc/conus/npn/12_22/color_leaf/color_LST"
+lst_files <- list.files(path = filefolder, pattern = "\\.csv$", full.names = TRUE)
+
+color_lst <- lapply(lst_files, function(file) {
+  data <- read.csv(file)
+  
+  required_columns <- c("id", "source",
+                        "year", "month","day", 
+                        "lst", ".geo")
+  
+  if (!all(required_columns %in% colnames(data))) {
+    message("Skipping file due to missing columns: ", file)
+    return(NULL)
+  }
+  data %>%
+    dplyr::select(all_of(required_columns)) 
+})
+
+color_lst <- Filter(Negate(is.null), color_lst)
+color_lst <- do.call(rbind, color_lst)
+
+color_each <- color_lst %>%
+  mutate(
+    season = case_when(
+      month %in% c(3, 4, 5) ~ "spring",
+      month %in% c(12, 1, 2) ~ "winter",
+      month %in% c(6, 7, 8) ~ "summer",
+      month %in% c(9, 10, 11) ~ "fall",
+      TRUE ~ "other"
+    ),
+    date = as.Date(paste(year, month, day, sep = "-"))
+  ) %>%
+  group_by(id, season) %>%
+  summarize(
+    lst_seasonal = mean(lst, na.rm = TRUE),
+    .groups = "drop_last" # Keeps grouping by `id`
+  ) %>%
+  filter(season %in% c("spring", "winter")) %>%
+  pivot_wider(
+    names_from = season,
+    values_from = lst_seasonal,
+    names_prefix = "mean_"
+  ) %>%
+  ungroup() %>%
+  left_join(
+    color_lst %>%
+      mutate(date = as.Date(paste(year, month, day, sep = "-"))) %>%
+      group_by(id) %>%
+      slice_max(order_by = date, with_ties = FALSE) %>%
+      dplyr::select(id, lst),
+    by = "id"
+  ) %>%
+  rename(lst_recent = lst)
+
+color_sf <- left_join(color_sf, color_each, by = "id")

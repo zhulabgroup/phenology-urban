@@ -1,0 +1,979 @@
+---
+title: "urban-planet"
+author: "Jiali Zhu"
+date: "2023-10-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(zhulabtools)
+load_packages(c("dplyr","lubridate", "ggplot2", "sf", "readr", "purrr", "stringr","glue", "tidyr", "broom","lme4", "knitr", "broom.mixed"))
+```
+
+# 1. Insert tree id base on WU data
+
+## 1.1 select the all points within 100 buffer (action: download the PS)
+
+```{r}
+metadata <- read_csv("~/lab-data/datasets/vegetation/PS/urban/metadata.csv") %>%
+  filter(site == "NY")
+
+file_list <- list.files(path = "~/lab-data/datasets/vegetation/PS/urban/doy/", pattern = "^doy_NY_.*\\.rds$", full.names = TRUE)
+data_list <- file_list %>%
+  map(~ readRDS(.x) %>% filter(direction == "up" & thres == 0.5 & year ==2020))
+ny_now <- bind_rows(data_list)
+
+tree_location <- metadata %>%
+  mutate(genus = str_extract(taxa, "^[^ ]+")) %>%
+  # left_join(ny_now, by = "id") %>%
+  # filter(!is.na(doy)) %>%
+  st_as_sf(coords = c("lon", "lat"), crs = 4326)
+
+wu_location <- read_csv("~/urban-cooling/data/raw/WU/NY/location.csv") %>%
+  st_as_sf(coords = c("Lon", "Lat"), crs = 4326)
+wu_buffer <- st_buffer(wu_location, dist = 100)
+
+intersects <- st_intersects(tree_location, wu_buffer)
+points_in_buffer <- tree_location[lengths(intersects) > 0, ]
+points_in_buffer <- tree_location %>%
+  mutate(buffer_id = sapply(intersects, function(x) if (length(x) > 0) x[1] else NA)) %>% 
+  left_join(wu_buffer %>% st_drop_geometry() %>% mutate(buffer_id = row_number()), by = "buffer_id") %>%
+  filter(!is.na(buffer_id)) %>%
+  select(-buffer_id)
+
+# write_csv(points_in_buffer, "~/phenology-urban/data/proc/nyc/tree_WU_100_buffer.csv")
+```
+
+
+## 1.2 select current points wihtin 500 buffer
+
+```{r}
+################ For phenology data ################
+
+metadata <- read_csv("~/lab-data/datasets/vegetation/PS/urban/metadata.csv") %>%
+  filter(site == "NY")
+
+file_list <- list.files(path = "~/lab-data/datasets/vegetation/PS/urban/doy/", pattern = "^doy_NY_.*\\.rds$", full.names = TRUE)
+data_list <- file_list %>%
+  map(~ readRDS(.x))
+ny_now <- bind_rows(data_list)
+
+tree_location <- metadata %>%
+  mutate(genus = str_extract(taxa, "^[^ ]+")) %>%
+  left_join(ny_now, by = "id") %>%
+  filter(!is.na(doy)) %>%
+  st_as_sf(coords = c("lon", "lat"), crs = 4326)
+
+wu_location <- read_csv("~/urban-cooling/data/raw/NYC/WU/location.csv") %>%
+  st_as_sf(coords = c("Lon", "Lat"), crs = 4326)
+wu_buffer <- st_buffer(wu_location, dist = 500)
+
+intersects <- st_intersects(tree_location, wu_buffer)
+points_in_buffer <- tree_location[lengths(intersects) > 0, ]
+points_in_buffer <- tree_location %>%
+  mutate(buffer_id = sapply(intersects, function(x) if (length(x) > 0) x[1] else NA)) %>% 
+  left_join(wu_buffer %>% st_drop_geometry() %>% mutate(buffer_id = row_number()), by = "buffer_id") %>%
+  filter(!is.na(buffer_id)) %>%
+  select(-buffer_id)
+
+# write_csv(points_in_buffer, "~/phenology-urban/data/proc/nyc/tree_WU_500_buffer_PS.csv")
+points_in_buffer <- read_csv("data/proc/nyc/tree_WU_500_buffer_PS.csv")
+```
+
+# 2. Creat the climate variable
+
+## 2.1 Read and clean the WU data (based on GHCNd)
+
+```{r}
+source("script/read_clean_WU.R")
+# all_sites_temp <- read_clean_WU(city = "NY", run_checks = TRUE)
+all_sites_temp <- readRDS("~/urban-cooling/data/raw/WU/NY/NY_wu.rds") %>%
+  select(c(Date, HighTemp, AvgTemp, LowTemp, Sum_mm, name))
+```  
+ 
+## 2.2 Seasonal variable
+
+The seasonal variable is calculated for each site, year, and season. The season is defined as Winter: December(last year) to February, Spring: March to May, Summer: June to August, Fall: September to November. 
+
+```{r}
+filtered_seasonal_data <- all_sites_temp %>%
+  mutate(
+    year = year(Date),
+    month = month(Date),
+    season = case_when(
+      month %in% 3:5 ~ "spring",
+      month %in% 6:8 ~ "summer",
+      month %in% 9:11 ~ "fall",
+      TRUE ~ "winter"
+    ),
+    year = if_else(month == 12, year + 1, year)
+  ) %>%
+  group_by(name, year, season, month) %>%
+  summarise(
+    across(c(HighTemp, AvgTemp, LowTemp, Sum_mm), ~ sum(!is.na(.)), .names = "count_{.col}"),
+    .groups = "drop"
+  ) %>%
+  group_by(name, year, season) %>%
+  summarise(
+    across(starts_with("count_"), ~ sum(. >= 10), .names = "valid_months_{.col}"),
+    .groups = "drop"
+  )
+
+seasonal_temp <- all_sites_temp %>%
+  mutate(
+    year = year(Date),
+    month = month(Date),
+    season = case_when(
+      month %in% 3:5 ~ "spring",
+      month %in% 6:8 ~ "summer",
+      month %in% 9:11 ~ "fall",
+      TRUE ~ "winter"
+    ),
+    year = if_else(month == 12, year + 1, year)  # 12月归入下一年
+  ) %>%
+  # semi_join(valid_combinations, by = c("name", "year", "season")) %>%
+  group_by(name, year, season) %>%
+  summarise(
+    Avg_HighTemp = mean(HighTemp, na.rm = TRUE),
+    Avg_AvgTemp = mean(AvgTemp, na.rm = TRUE),
+    Avg_LowTemp = mean(LowTemp, na.rm = TRUE),
+    Sum_Sum_mm = sum(Sum_mm, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  left_join(
+    filtered_seasonal_data,
+    by = c("name", "year", "season")
+  ) %>%
+  mutate(
+    Avg_HighTemp = if_else(valid_months_count_HighTemp == 3, Avg_HighTemp, NA_real_),
+    Avg_AvgTemp = if_else(valid_months_count_AvgTemp == 3, Avg_AvgTemp, NA_real_),
+    Avg_LowTemp = if_else(valid_months_count_LowTemp == 3, Avg_LowTemp, NA_real_),
+    Sum_Sum_mm = if_else(valid_months_count_Sum_mm == 3, Sum_Sum_mm, NA_real_)
+  ) %>%
+  select(name, year, season, Avg_HighTemp, Avg_AvgTemp, Avg_LowTemp, Sum_Sum_mm) %>%
+  pivot_wider(
+    names_from = season,
+    values_from = c(Avg_HighTemp, Avg_AvgTemp, Avg_LowTemp, Sum_Sum_mm),
+    names_glue = "{.value}_{season}"
+  )
+
+seasonal_temp_doy <- points_in_buffer %>%
+  left_join(seasonal_temp, by = c("Site" = "name", "year" = "year"))
+
+saveRDS(seasonal_temp_doy, "~/phenology-urban/data/proc/nyc/seasonal_doy.rds")
+```
+
+
+## 2.3 Growing variable
+
+The growing variable is calculated for each site, year, and growing period. The growing period is defined as the period between the start of the growing season and the day of year when the tree reaches the threshold. The threshold is defined as the day of year when the tree reaches 50% of its full leaf-out. 
+
+```{r}
+growing_temp_doy <- points_in_buffer %>%
+  mutate(
+    start_date = make_date(year) + days(start - 1), 
+    end_date = make_date(year) + days(doy - 1)
+  ) %>%
+  rowwise() %>%
+  mutate(
+    stats = list({
+      current_index <- cur_group_id()
+      if (current_index %% 2000 == 0) {
+        cat("Processing row:", current_index, "out of", nrow(points_in_buffer), "\n")
+      }
+      all_sites_temp %>%
+        filter(
+          name == Site,
+          Date >= start_date & Date <= end_date
+        ) %>%
+        summarise(
+          LowTemp_mean = mean(LowTemp, na.rm = TRUE),
+          LowTemp_count = sum(!is.na(LowTemp)),
+          AvgTemp_mean = mean(AvgTemp, na.rm = TRUE),
+          AvgTemp_count = sum(!is.na(AvgTemp)),
+          HighTemp_mean = mean(HighTemp, na.rm = TRUE),
+          HighTemp_count = sum(!is.na(HighTemp)),
+          Sum_mm_sum = sum(Sum_mm, na.rm = TRUE),
+          Sum_mm_count = sum(!is.na(Sum_mm))
+        )
+    })
+  ) %>%
+  unnest(stats)%>%
+  mutate(
+    time_length = as.numeric(end_date - start_date, units = "days")
+  )
+
+saveRDS(growing_temp_doy, "~/phenology-urban/data/proc/nyc/growing_doy.rds")
+
+growing_temp_doy_desc <- points_in_buffer %>%
+  mutate(
+    start_date = make_date(year) + days(doy - 1), 
+    end_date = make_date(year) + days(end - 1)
+  ) %>%
+  rowwise() %>%
+  mutate(
+    stats = list({
+      current_index <- cur_group_id()
+      if (current_index %% 2000 == 0) {
+        cat("Processing row:", current_index, "out of", nrow(points_in_buffer), "\n")
+      }
+      all_sites_temp %>%
+        filter(
+          name == Site,
+          Date >= start_date & Date <= end_date
+        ) %>%
+        summarise(
+          LowTemp_mean = mean(LowTemp, na.rm = TRUE),
+          LowTemp_count = sum(!is.na(LowTemp)),
+          AvgTemp_mean = mean(AvgTemp, na.rm = TRUE),
+          AvgTemp_count = sum(!is.na(AvgTemp)),
+          HighTemp_mean = mean(HighTemp, na.rm = TRUE),
+          HighTemp_count = sum(!is.na(HighTemp)),
+          Sum_mm_sum = sum(Sum_mm, na.rm = TRUE),
+          Sum_mm_count = sum(!is.na(Sum_mm))
+        )
+    })
+  ) %>%
+  unnest(stats)%>%
+  mutate(
+    time_length = as.numeric(end_date - start_date, units = "days")
+  )
+
+saveRDS(growing_temp_doy_desc, "~/phenology-urban/data/proc/nyc/growing_doy_desc.rds")
+```
+
+## 2.4 Explore the relationship between temperature and phenology
+
+The function for simple scatter plot
+
+```{r}
+create_scatter_plot <- function(data, x_var, y_var, title) {
+  # Fit the linear model
+  formula <- as.formula(paste(y_var, "~", x_var))
+  lm_model <- lm(formula, data = data)
+  
+  # Extract slope and p-value
+  slope <- coef(lm_model)[2]
+  p_value <- summary(lm_model)$coefficients[2, 4]
+  
+  # Create scatter plot
+  scatter_plot <- data %>%
+    ggplot(aes(x = .data[[x_var]], y = .data[[y_var]])) +
+    geom_point() +
+    geom_smooth(method = "lm", se = TRUE) +
+    labs(
+      x = x_var,
+      y = y_var,
+      title = paste(title)
+    ) +
+    annotate(
+      "text",
+      x = min(data[[x_var]], na.rm = TRUE),
+      y = max(data[[y_var]], na.rm = TRUE),
+      label = paste0(
+        "Slope: ", round(slope, 2), 
+        "\nP-value: ", signif(p_value, 3)
+      ),
+      hjust = 0,
+      vjust = 1,
+      color = "red"
+    ) +
+    theme_classic()
+  
+  return(scatter_plot)
+}
+```
+
+### 2.4.1 Seasonal climate variables
+
+
+
+```{r}
+seasonal_temp_doy <- readRDS("~/phenology-urban/data/proc/nyc/seasonal_doy.rds") %>%
+  mutate(time_length = doy - start) %>%
+  filter(direction =="up" & thres == 0.5 & genus == "Acer")
+
+create_scatter_plot(
+  data = seasonal_temp_doy, 
+  x_var = "Avg_AvgTemp_spring", 
+  y_var = "doy",
+  title = "Relationship between seasonal temperature and spring phenology"
+)
+
+create_scatter_plot(
+  data = seasonal_temp_doy, 
+  x_var = "Avg_AvgTemp_winter", 
+  y_var = "doy",
+  title = "Relationship between seasonal temperature and spring phenology"
+)
+
+create_scatter_plot(
+  data = seasonal_temp_doy, 
+  x_var = "Avg_LowTemp_spring", 
+  y_var = "doy",
+  title = "Relationship between seasonal temperature and spring phenology"
+)
+
+create_scatter_plot(
+  data = seasonal_temp_doy, 
+  x_var = "Avg_LowTemp_winter", 
+  y_var = "doy",
+  title = "Relationship between seasonal temperature and spring phenology"
+)
+
+create_scatter_plot(
+  data = seasonal_temp_doy, 
+  x_var = "Avg_HighTemp_spring", 
+  y_var = "doy",
+  title = "Relationship between seasonal temperature and spring phenology"
+)
+
+create_scatter_plot(
+  data = seasonal_temp_doy, 
+  x_var = "Avg_HighTemp_winter", 
+  y_var = "doy",
+  title = "Relationship between seasonal temperature and spring phenology"
+)
+
+create_scatter_plot(
+  data = seasonal_temp_doy, 
+  x_var = "Sum_Sum_mm_spring", 
+  y_var = "doy",
+  title = "Relationship between seasonal temperature and spring phenology"
+)
+
+create_scatter_plot(
+  data = seasonal_temp_doy, 
+  x_var = "Sum_Sum_mm_winter", 
+  y_var = "doy",
+  title = "Relationship between seasonal temperature and spring phenology"
+)
+```
+
+```{r}
+seasonal_temp_doy <- readRDS("~/phenology-urban/data/proc/nyc/seasonal_doy.rds") %>%
+  mutate(time_length = doy - start) %>%
+  filter(direction =="down" & thres == 0.5 & genus == "Acer")
+
+create_scatter_plot(
+  data = seasonal_temp_doy, 
+  x_var = "Avg_AvgTemp_summer", 
+  y_var = "doy",
+  title = "Relationship between seasonal temperature and fall phenology"
+)
+
+create_scatter_plot(
+  data = seasonal_temp_doy, 
+  x_var = "Avg_AvgTemp_fall", 
+  y_var = "doy",
+  title = "Relationship between seasonal temperature and fall phenology"
+)
+
+create_scatter_plot(
+  data = seasonal_temp_doy, 
+  x_var = "Avg_LowTemp_summer", 
+  y_var = "doy",
+  title = "Relationship between seasonal temperature and fall phenology"
+)
+
+create_scatter_plot(
+  data = seasonal_temp_doy, 
+  x_var = "Avg_LowTemp_fall", 
+  y_var = "doy",
+  title = "Relationship between seasonal temperature and fall phenology"
+)
+
+create_scatter_plot(
+  data = seasonal_temp_doy, 
+  x_var = "Avg_HighTemp_summer", 
+  y_var = "doy",
+  title = "Relationship between seasonal temperature and fall phenology"
+)
+
+create_scatter_plot(
+  data = seasonal_temp_doy, 
+  x_var = "Avg_HighTemp_fall", 
+  y_var = "doy",
+  title = "Relationship between seasonal temperature and fall phenology"
+)
+
+create_scatter_plot(
+  data = seasonal_temp_doy, 
+  x_var = "Sum_Sum_mm_summer", 
+  y_var = "doy",
+  title = "Relationship between seasonal temperature and fall phenology"
+)
+
+create_scatter_plot(
+  data = seasonal_temp_doy, 
+  x_var = "Sum_Sum_mm_fall", 
+  y_var = "doy",
+  title = "Relationship between seasonal temperature and fall phenology"
+)
+
+```
+
+### 2.4.2 Seasonal climate correlation value
+
+For spring phenology
+
+```{r}
+seasonal_temp_doy <- readRDS("~/phenology-urban/data/proc/nyc/seasonal_doy.rds") %>%
+  mutate(time_length = doy - start) %>%
+  filter(direction =="up" & thres == 0.5)
+
+model <- lmer(doy ~ Avg_AvgTemp_winter  + Sum_Sum_mm_winter  +
+                (1 | genus), 
+              data = seasonal_temp_doy)
+
+fixed_effects <- tidy(model, effects = "fixed")
+
+fixed_effects_table <- fixed_effects %>%
+  select(term, estimate, std.error, statistic) %>%
+  mutate(
+    estimate = round(estimate, 3),
+    std.error = round(std.error, 3),
+    p.value = signif(2 * (1 - pnorm(abs(statistic))), 3)
+  )
+
+kable(fixed_effects_table, format = "markdown", col.names = c("Term", "Estimate", "Std. Error", "t value", "P-Value"))
+
+```
+```{r}
+model <- lmer(doy ~  Avg_HighTemp_winter  + Avg_LowTemp_winter + 
+                Sum_Sum_mm_winter  +
+                (1 | genus), 
+              data = seasonal_temp_doy)
+
+fixed_effects <- tidy(model, effects = "fixed")
+
+fixed_effects_table <- fixed_effects %>%
+  select(term, estimate, std.error, statistic) %>%
+  mutate(
+    estimate = round(estimate, 3),
+    std.error = round(std.error, 3),
+    p.value = signif(2 * (1 - pnorm(abs(statistic))), 3)
+  )
+
+kable(fixed_effects_table, format = "markdown", col.names = c("Term", "Estimate", "Std. Error", "t value", "P-Value"))
+```
+For fall phenology
+
+```{r}
+seasonal_temp_doy <- readRDS("~/phenology-urban/data/proc/nyc/seasonal_doy.rds") %>%
+  mutate(time_length = doy - start) %>%
+  filter(direction =="down" & thres == 0.5)
+
+model <- lmer(doy ~ Avg_AvgTemp_summer  + Sum_Sum_mm_summer  +
+                (1 | genus), 
+              data = seasonal_temp_doy)
+
+fixed_effects <- tidy(model, effects = "fixed")
+
+fixed_effects_table <- fixed_effects %>%
+  select(term, estimate, std.error, statistic) %>%
+  mutate(
+    estimate = round(estimate, 3),
+    std.error = round(std.error, 3),
+    p.value = signif(2 * (1 - pnorm(abs(statistic))), 3)
+  )
+
+kable(fixed_effects_table, format = "markdown", col.names = c("Term", "Estimate", "Std. Error", "t value", "P-Value"))
+
+```
+
+```{r}
+model <- lmer(doy ~  Avg_HighTemp_summer  + Avg_LowTemp_summer + 
+                Sum_Sum_mm_summer  +
+                (1 | genus), 
+              data = seasonal_temp_doy)
+
+fixed_effects <- tidy(model, effects = "fixed")
+
+fixed_effects_table <- fixed_effects %>%
+  select(term, estimate, std.error, statistic) %>%
+  mutate(
+    estimate = round(estimate, 3),
+    std.error = round(std.error, 3),
+    p.value = signif(2 * (1 - pnorm(abs(statistic))), 3)
+  )
+
+kable(fixed_effects_table, format = "markdown", col.names = c("Term", "Estimate", "Std. Error", "t value", "P-Value"))
+```
+
+
+### 2.4.3 Growing temperature
+
+The same growing period. Not use doy, because later doy means more warmer temperature.
+Use time_length instead
+
+```{r}
+growing_temp_doy <- readRDS("~/phenology-urban/data/proc/nyc/growing_doy.rds") %>%
+  filter(time_length != 0 & direction =="up" & thres == 0.5 & genus == "Acer")
+
+create_scatter_plot(
+  data = growing_temp_doy, 
+  x_var = "AvgTemp_mean", 
+  y_var = "time_length",
+  title = "Relationship between growing temperature and spring phenology"
+)
+
+create_scatter_plot(
+  data = growing_temp_doy, 
+  x_var = "HighTemp_mean", 
+  y_var = "time_length",
+  title = "Relationship between growing temperature and spring phenology"
+)
+
+
+create_scatter_plot(
+  data = growing_temp_doy, 
+  x_var = "LowTemp_mean", 
+  y_var = "time_length",
+  title = "Relationship between growing temperature and spring phenology"
+)
+
+create_scatter_plot(
+  data = growing_temp_doy, 
+  x_var = "Sum_mm_sum", 
+  y_var = "time_length",
+  title = "Relationship between growing temperature and spring phenology"
+)
+```
+
+This relationship is not significant for seasonal temperature.
+
+```{r}
+
+seasonal_temp_doy <- readRDS("~/phenology-urban/data/proc/nyc/seasonal_doy.rds") %>%
+  mutate(time_length = doy - start) %>%
+  filter(direction =="up" & thres == 0.5 & genus == "Acer")
+
+create_scatter_plot(
+  data = seasonal_temp_doy, 
+  x_var = "Avg_AvgTemp_spring", 
+  y_var = "time_length",
+  title = "Relationship between seasonal temperature and spring phenology"
+)
+
+create_scatter_plot(
+  data = seasonal_temp_doy, 
+  x_var = "Avg_AvgTemp_winter", 
+  y_var = "time_length",
+  title = "Relationship between seasonal temperature and spring phenology"
+)
+```
+
+
+```{r}
+growing_temp_doy <- readRDS("~/phenology-urban/data/proc/nyc/growing_doy.rds") %>%
+  filter(time_length != 0 & direction =="down" & thres == 0.5 & genus == "Acer")
+
+create_scatter_plot(
+  data = growing_temp_doy, 
+  x_var = "AvgTemp_mean", 
+  y_var = "time_length",
+  title = "Relationship between growing temperature and fall phenology"
+)
+
+create_scatter_plot(
+  data = growing_temp_doy, 
+  x_var = "HighTemp_mean", 
+  y_var = "time_length",
+  title = "Relationship between growing temperature and fall phenology"
+)
+
+
+create_scatter_plot(
+  data = growing_temp_doy, 
+  x_var = "LowTemp_mean", 
+  y_var = "time_length",
+  title = "Relationship between growing temperature and fall phenology"
+)
+
+create_scatter_plot(
+  data = growing_temp_doy, 
+  x_var = "Sum_mm_sum", 
+  y_var = "time_length",
+  title = "Relationship between growing temperature and fall phenology"
+)
+```
+
+The climate condition in the previous growing period.
+
+```{r}
+growing_temp_doy <- readRDS("~/phenology-urban/data/proc/nyc/growing_doy.rds") %>%
+  filter(thres == 0.5) %>%
+  select(id, genus, year, direction, doy, time_length)
+growing_temp_doy_desc <- readRDS("~/phenology-urban/data/proc/nyc/growing_doy_desc.rds") %>%
+  filter(thres == 0.5) %>%
+  select(id, genus, year, direction, LowTemp_mean, LowTemp_count, AvgTemp_mean, AvgTemp_count, HighTemp_mean, HighTemp_count, Sum_mm_sum, Sum_mm_count) %>%
+  mutate(
+   join_year = case_when(
+     direction == "up" ~ year,
+     direction == "down" ~ year + 1
+   ),
+   join_direction = case_when(
+     direction == "up" ~ "down",
+     direction == "down" ~ "up"
+   ) 
+  ) %>%
+  select(-year, -direction)
+
+growing_doy_join <- growing_temp_doy %>%
+  left_join(growing_temp_doy_desc, by = c("id" = "id", "genus" = "genus", "year" = "join_year", "direction" = "join_direction"))
+```
+
+For spring phenology
+
+```{r}
+growing_doy_spring <- growing_doy_join %>%
+  filter(direction == "up") %>%
+  filter(genus == "Acer")
+
+create_scatter_plot(
+  data = growing_doy_spring, 
+  x_var = "AvgTemp_mean", 
+  y_var = "doy",
+  title = "Relationship between growing temperature and spring phenology"
+)
+
+create_scatter_plot(
+  data = growing_doy_spring, 
+  x_var = "HighTemp_mean", 
+  y_var = "doy",
+  title = "Relationship between growing temperature and spring phenology"
+)
+
+
+create_scatter_plot(
+  data = growing_doy_spring, 
+  x_var = "LowTemp_mean", 
+  y_var = "doy",
+  title = "Relationship between growing temperature and spring phenology"
+)
+
+create_scatter_plot(
+  data = growing_doy_spring, 
+  x_var = "Sum_mm_sum", 
+  y_var = "doy",
+  title = "Relationship between growing temperature and spring phenology"
+)
+
+create_scatter_plot(
+  data = growing_doy_spring, 
+  x_var = "AvgTemp_mean", 
+  y_var = "time_length",
+  title = "Relationship between growing temperature and spring phenology"
+)
+
+create_scatter_plot(
+  data = growing_doy_spring, 
+  x_var = "HighTemp_mean", 
+  y_var = "time_length",
+  title = "Relationship between growing temperature and spring phenology"
+)
+
+
+create_scatter_plot(
+  data = growing_doy_spring, 
+  x_var = "LowTemp_mean", 
+  y_var = "time_length",
+  title = "Relationship between growing temperature and spring phenology"
+)
+
+create_scatter_plot(
+  data = growing_doy_spring, 
+  x_var = "Sum_mm_sum", 
+  y_var = "time_length",
+  title = "Relationship between growing temperature and spring phenology"
+)
+```
+
+For fall phenology
+
+```{r}
+growing_doy_fall <- growing_doy_join %>%
+  filter(direction == "down") %>%
+  filter(genus == "Acer")
+
+create_scatter_plot(
+  data = growing_doy_fall, 
+  x_var = "AvgTemp_mean", 
+  y_var = "doy",
+  title = "Relationship between growing temperature and fall phenology"
+)
+
+create_scatter_plot(
+  data = growing_doy_fall, 
+  x_var = "HighTemp_mean", 
+  y_var = "doy",
+  title = "Relationship between growing temperature and fall phenology"
+)
+
+
+create_scatter_plot(
+  data = growing_doy_fall, 
+  x_var = "LowTemp_mean", 
+  y_var = "doy",
+  title = "Relationship between growing temperature and fall phenology"
+)
+
+create_scatter_plot(
+  data = growing_doy_fall, 
+  x_var = "Sum_mm_sum", 
+  y_var = "doy",
+  title = "Relationship between growing temperature and fall phenology"
+)
+
+create_scatter_plot(
+  data = growing_doy_fall, 
+  x_var = "AvgTemp_mean", 
+  y_var = "time_length",
+  title = "Relationship between growing temperature and fall phenology"
+)
+
+create_scatter_plot(
+  data = growing_doy_fall, 
+  x_var = "HighTemp_mean", 
+  y_var = "time_length",
+  title = "Relationship between growing temperature and fall phenology"
+)
+
+
+create_scatter_plot(
+  data = growing_doy_fall, 
+  x_var = "LowTemp_mean", 
+  y_var = "time_length",
+  title = "Relationship between growing temperature and fall phenology"
+)
+
+create_scatter_plot(
+  data = growing_doy_fall, 
+  x_var = "Sum_mm_sum", 
+  y_var = "time_length",
+  title = "Relationship between growing temperature and fall phenology"
+)
+```
+
+
+# 3. Current conclusion for phenology ~ temperature within NYC
+
+
+
+
+
+
+# 2. Creat buffer zone near tree point (sample points)
+```{r}
+library(sp)
+library(sf)
+library(ggplot2)
+
+buffer_size = 50
+
+points_in_buffer <- read_csv(paste0("~/phenology-urban/data/proc/urban/NY/tree_WU_500_buffer_PS.csv"), show_col_types = FALSE) %>%
+  group_by(id) %>%
+  slice(1) %>%
+  ungroup() %>%
+  st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
+  st_buffer(dist = buffer_size)
+
+merged_polygon <- st_union(points_in_buffer)
+
+boundary <- st_read("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp") %>%
+  st_transform(4326)
+
+ggplot() +
+  # geom_sf(data = boundary, fill = "grey") +
+  geom_sf(data = merged_polygon, fill = "red") +
+  theme_minimal()
+
+source("~/phenology-urban/script/faster_intersect.R")
+building_footprint <- sf::read_sf('~/phenology-urban/data/raw/NY/NY_building_footprint/geo_export_56deb8a8-0463-4f00-8f45-99e751e3b8e1.shp') %>%
+  st_make_valid() %>% select(base_bbl, bin, groundelev, heightroof)
+points_in_buffer <- st_transform(points_in_buffer, st_crs(building_footprint))
+# merged_polygon <- st_transform(merged_polygon, st_crs(building_footprint)) %>%
+#   st_make_valid() %>%
+#   st_cast("POLYGON") %>%
+#   st_as_sf()
+# 
+# 
+# # Loop through each row in points_in_buffer
+# for (i in 1:nrow(merged_polygon)) {
+#   point <- merged_polygon[i, ]
+#   cat("Processing row:", i, "of", nrow(merged_polygon), "\n")
+#   filtered_building_footprint1 <- building_footprint %>%
+#     st_crop(st_bbox(point))
+#   intersect_50_bld <- st_intersection(point, filtered_building_footprint1) %>%
+#     st_make_valid()
+#   results[[i]] <- intersect_50_bld
+# }
+# 
+# step1_build <- do.call(rbind, results)
+# 
+
+
+
+results <- list()
+# Loop through each row in points_in_buffer
+for (i in 78:nrow(points_in_buffer)) {
+  point <- points_in_buffer[i, ]
+  cat("Processing row:", i, "of", nrow(points_in_buffer), "\n")
+  filtered_building_footprint1 <- building_footprint %>%
+    st_crop(st_bbox(point))
+  intersect_50_bld <- st_intersection(point, filtered_building_footprint1) %>%
+    st_make_valid()
+  
+  if (dim(intersect_50_bld)[1] != 0){
+     intersect_50_bld$area_size <- st_area(intersect_50_bld)
+  intersect_50_bld_BVD <- intersect_50_bld %>%
+    as.data.frame() %>%
+    group_by(id) %>%
+    summarise(BVD = sum(as.numeric(area_size) * heightroof) / (buffer_size * buffer_size * pi))
+  
+  results[[i]] <- data.frame(
+    id = point$id,
+    BVD = intersect_50_bld_BVD$BVD
+  )
+  } else {
+  results[[i]] <- data.frame(
+    id = point$id,
+    BVD = 0
+  )}
+  
+}
+final_results <- do.call(rbind, results)
+  
+saveRDS(final_results, "~/phenology-urban/data/proc/urban/NY/tree_50_building_foorprint.rds")
+
+
+```
+
+# 3. Insert building data / Intersection fail (prelimilary result from Arcgis)
+```{r}
+
+
+```
+
+# 4. building index for betula_200_buffer
+```{r}
+library(dplyr)
+library(foreign)
+
+dbf_file <- "~/phenology-urban/data/raw/NY/NY_building_footprint/inter_buffer_200_betula.dbf"
+intersect_200_bld_betula <- read.dbf(dbf_file)
+
+#BCR_betula_200
+bld_index_betula_200 <- intersect_200_bld_betula %>%
+  group_by(tree_id) %>%
+  summarise(BCR_betula_200 = sum(Shape_Ar_1) / (40000 * pi))
+
+#BVD_betula_200
+BVD_betula_200 <- intersect_200_bld_betula %>%
+  group_by(tree_id) %>%
+  summarise(BVD_betula_200 = sum(Shape_Ar_1 * heightroof) / (40000 * pi))
+
+bld_index_betula_200 <- left_join(bld_index_betula_200, BVD_betula_200, by = "tree_id")
+
+#BHD_betula_200
+BHD_betula_200 <- intersect_200_bld_betula %>%
+  group_by(tree_id) %>%
+  summarise(BHD_betula_200 = sum(heightroof) / (40000 * pi))
+
+bld_index_betula_200 <- left_join(bld_index_betula_200, BHD_betula_200, by = "tree_id")
+write.csv(bld_index_betula_200, file = "~/phenology-urban/result/bld_index/bld_index_betula_200.csv", row.names = FALSE)
+
+
+# sky view factor
+#data prepare
+betula_point <- point_tree %>% filter(str_detect(taxa, "Betula"))
+building_footprint <- sf::read_sf('~/phenology-urban/data/raw/NY/NY_building_footprint/geo_export_56deb8a8-0463-4f00-8f45-99e751e3b8e1.shp') %>%
+  st_make_valid(building_footprint)
+
+set.seed(123)
+betula_point_sp <- as(sample_points %>% sample_n(5), "Spatial") 
+building_footprint_sp <- as(building_footprint, "Spatial")
+
+projection_crs <- CRS("+proj=utm +zone=18 +datum=WGS84 +units=m +no_defs")
+proj4string(betula_point_sp) <- projection_crs
+proj4string(building_footprint_sp) <- projection_crs
+building_footprint_sp <- subset(building_footprint_sp, !is.na(heightroof))
+
+library(shadow)
+svf_betula <- SVF(
+  betula_point_cor, 
+  building_footprint_sp,
+  obstacles_height_field = "heightroof",
+  res_angle = 10,
+  b = 10,
+  parallel = getOption("mc.cores")
+)
+
+```
+
+# 5. visualize
+
+```{r}
+library(ggplot2)
+library(sf)
+library(dplyr)
+
+betula_point <- point_tree %>% filter(str_detect(taxa, "Betula"))
+bld_index <- read.csv("~/phenology-urban/result/bld_index/bld_index_betula_200.csv")
+merged_data <- merge(betula_point, bld_index, by.x = "id", by.y = "tree_id", all.x = TRUE)
+
+#plot buffer
+
+boundary_NY <- sf::read_sf('data/raw/NY/boundary/nybb_dissolved.shp')
+merged_data <- st_set_crs(merged_data, "EPSG:4326")
+# Transform the data to a new CRS with explicit units
+merged_data <- st_transform(merged_data, crs = st_crs("+proj=longlat +datum=WGS84 +units=m"))
+# Create buffer for height index
+buffers <- st_buffer(merged_data, dist = 200)
+
+plot <- ggplot() +
+  geom_sf(data = boundary_NY, fill = "white", color = "black") +
+  coord_sf(ylim = c(40.5, 40.9), xlim = c(-74.3, -73.6)) +
+  theme_minimal() +
+  theme(legend.position="none") +
+  geom_sf(data = buffers, fill = "white", color = "red")
+
+ggsave("result/bld_index/buffer_betula.jpg", plot, width = 8, height = 6, units = "in")
+
+# plot bld_index
+
+plot_BCR <- ggplot() +
+  geom_sf(data = boundary_NY, fill = "white", color = "black") +
+  coord_sf(ylim = c(40.5, 40.9), xlim = c(-74.3, -73.6)) +
+  geom_sf(data = merged_data, aes(color = BCR_betula_200), stroke = 0) +
+  theme_minimal() +
+  labs(color = "BCR for Betula within 200m buffer") +
+  scale_color_viridis_c(option = "inferno")
+
+ggsave("result/bld_index/BCR_betula_200.jpg", plot_BCR, width = 8, height = 6, units = "in")
+
+plot_BVD <- ggplot() +
+  geom_sf(data = boundary_NY, fill = "white", color = "black") +
+  coord_sf(ylim = c(40.5, 40.9), xlim = c(-74.3, -73.6)) +
+  geom_sf(data = merged_data, aes(color = BVD_betula_200), stroke = 0) +
+  theme_minimal() +
+  labs(color = "BVD for Betula within 200m buffer") +
+  scale_color_viridis_c(option = "inferno")
+
+ggsave("result/bld_index/BVD_betula_200.jpg", plot_BVD, width = 8, height = 6, units = "in")
+
+plot_BHD <- ggplot() +
+  geom_sf(data = boundary_NY, fill = "white", color = "black") +
+  coord_sf(ylim = c(40.5, 40.9), xlim = c(-74.3, -73.6)) +
+  geom_sf(data = merged_data, aes(color = BHD_betula_200), stroke = 0) +
+  theme_minimal() +
+  labs(color = "BHD for Betula within 200m buffer") +
+  scale_color_viridis_c(option = "inferno")
+
+ggsave("result/bld_index/BHD_betula_200.jpg", plot_BHD, width = 8, height = 6, units = "in")
+
+```
+
+
+

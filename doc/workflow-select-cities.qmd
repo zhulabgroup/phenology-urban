@@ -1,0 +1,572 @@
+---
+title: "Selection of representative U.S. cities for urban tree phenology analysis"
+author: "Jiali Zhu"
+date: "today"
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup}
+#| echo: false
+#| include: false
+#| warning: false
+
+library(zhulabtools)
+# Check and  load required packages
+check_install_packages(c("dplyr", "here", "sf", "viridis", "leaflet","terra", "patchwork", "data.table", "plotly"))
+if (!require(plotbiomes)) {
+  devtools::install_github("valentinitnelav/plotbiomes")
+}
+load_packages(c("dplyr", "here", "sf","viridis", "leaflet", "cli", "terra","patchwork", "data.table", "plotly"))
+
+create_symlink_turbo("data/raw/CONUS/StreetTrees", "datasets/vegetation/StreetTrees/")
+create_symlink_turbo("data/raw/CONUS/boundary", "datasets/boundary/USAdministrative/")
+```
+
+## Introduction
+
+This document outlines the selection of representative cities in the United States for the urban tree phenology project. The current selection is based on two key considerations:
+
+1.  **Availability of existing tree inventories**: I prioritized cities with comprehensive tree inventories that include georeferenced data on tree locations and species composition, which are essential for phenological and ecological analyses.
+
+2.  **City charateristics**: I aim to include cities that capture the diversity of urbanization patterns and geographic variation across the U.S. This includes differences in urban form, climate (e.g., temperature and precipitation), and population density.
+
+This document is also intended to solicit feedback and suggestions from Prof. Seto and Juwon, particularly regarding the features considered in the current analysis and strategies for selecting additional representative cities.
+
+## Availability of existing tree inventories
+
+There are two datasets that have already provide tree inventories in some cities:
+
+1.  **5 million city trees across 63 US cities**: This dataset is from the paper @mccoy_species_2022. The dataset claimed that it includes tree inventories from 63 cities in the US, with a total of 5 million trees.
+
+2.  **OpenTrees**: This is a public dataset that collects tree inventories from cities around the world. The dataset claimed that it includes 13,910,944 open data trees from 192 sources in 19 countries. The dataset is available at [OpenTrees.org](https://opentrees.org).
+
+Since McCoy et al indeed contacted a relevant state official with an inquiry about tree inventory and made data cleaning, I believe this dataset is more reliable than OpenTrees. Therefore, I will use the McCoy et al. dataset as the primary source for tree inventories. However, I will also check the OpenTrees dataset to see if there are any additional cities that are not included in the McCoy et al. dataset.
+
+### 5 million city trees across 63 US cities - McCoy et al., 2022
+
+I first downloaded the dataset from @mccoy_species_2022. Through filtering out records with coordinates, there are 43 cities with valid tree inventories. The size of the circle represents the number of trees in the city.
+
+```{r fig-elife}
+#| warning: false
+#| fig-cap: "Spatial distribution of cities from McCoy et al. (2022)."
+
+
+source(here("script/tidy_elife.R"))
+city_elife <- tidy_elife()|>
+  filter(city_combine.x != "Honolulu")
+
+city_elife_cen <- city_elife  |>
+  st_centroid()
+
+leaflet(data = city_elife_cen) %>%
+  addProviderTiles(providers$OpenStreetMap, options = providerTileOptions(opacity = 0.9)) %>%
+  addCircleMarkers(
+    popup = ~ paste0(
+      "<strong>", city_combine.x, "</strong><br>",
+      "Num trees: ", TreeCount, "<br>"
+    ),
+    radius = ~ sqrt(TreeCount) / 50,
+    stroke = FALSE, fillOpacity = 0.7,
+    color = "green"
+  )
+```
+
+### OpenTrees.org
+
+After filtering the OpenTrees datasets with tree coordiates, I found that it offers tree inventories in 55 cities in the US. The size of the circle represents the number of trees in the city.
+
+```{r fig-opentree}
+#| warning: false
+#| fig-cap: "Spatial distribution of cities from OpenTrees."
+
+
+source(here("script/tidy_opentree.R"))
+city_opentree <- tidy_opentree()
+city_opentree_cen <- city_opentree |>
+  st_transform(3857) |>         # project to planar coordinates
+  st_centroid() |>              # compute centroid
+  st_transform(4326)            # reproject back to lon/lat if needed
+
+leaflet(data = city_opentree_cen) %>%
+  addProviderTiles(providers$OpenStreetMap, options = providerTileOptions(opacity = 0.9)) %>%
+  addCircleMarkers(
+    popup = ~ paste0(
+      "<strong>", city_name, "</strong><br>",
+      "Num trees: ", TreeCount, "<br>"
+    ),
+    radius = ~ sqrt(TreeCount) / 50,
+    stroke = FALSE, fillOpacity = 0.7,
+    color = "blue"
+  )
+
+```
+
+### Combination of both
+
+Then, I combined the two datasets. I use the McCoy et al. dataset as the primary source for tree inventories. Then I add additional cities from Opencity that are not included in the McCoy et al. dataset.
+
+There are total of 77 cities with tree inventories. The following code will plot the cities on a geographical map as well as a climatic map. The size of the circle represents the number of trees in the city.
+
+```{r}
+#| warning: false
+#| fig-cap: "Spatial distribution of cities with tree inventories from both datasets."
+
+
+city_combine <- city_elife |>
+  rename(city = city_combine.x) |>
+  mutate(source = "elife") |>
+  bind_rows(city_opentree |>
+              rename(city = city_name) |>
+              mutate(source = "opentree")) |>
+  group_by(city) |>
+  arrange(desc(source == "elife")) |>  # prioritize rows with source == "elife"
+  slice_head(n = 1) |>
+  ungroup()  |>
+  filter(city != "HudsonRiverPark") # part of NYC
+
+city_combine_cen <- city_combine |>
+  st_transform(3857) |>         # project to planar coordinates
+  st_centroid() |>              # compute centroid
+  st_transform(4326)            # reproject back to lon/lat if needed
+  
+leaflet(data = city_combine_cen) %>%
+  addProviderTiles(providers$OpenStreetMap, options = providerTileOptions(opacity = 0.9)) %>%
+  addCircleMarkers(
+    popup = ~ paste0(
+      "<strong>", city, "</strong><br>",
+      "Num trees: ", TreeCount, "<br>"
+    ),
+    radius = ~ sqrt(TreeCount) / 50,
+    stroke = FALSE, fillOpacity = 0.7,
+    color = "red"
+  )
+
+```
+
+## City characteristics
+
+In order to select additional representative cities, I need to consider the following characteristics of cities:
+
+-   **Climate**: The climatic conditions of the city, such as temperature and precipitation, can affect the growth and phenology of trees. Therefore, I need to select cities that represent a range of climatic conditions.
+-   **Urban form**: The urban form of the city, eapecially building height, can affect the microclimate and phenology of trees. Therefore, I need to select cities that represent a range of urban forms.
+-   **Population**: The population size of a city may influence both the availability of resources for urban tree growth and the number of people who benefit from the resulting ecosystem services. Therefore, I need to select cities that represent a range of population sizes.
+
+I first explore the climate, building height, and population distributions of the 77 cities with available tree inventories (as identified in the previous section). Then I compare them to a broader list of cities from the [U.S. Census Bureau](https://www2.census.gov/geo/maps/DC2020/UA20/UA_2020_WallMap.pdf) (2585 in total). The goal is to assess whether the current inventory cities are biased and to identify potential additional candidates for inclusion.
+
+### Climate
+
+The climatic data is from the [CHELSA](https://chelsa-climate.org/) bioclim dataset @karger_climatologies_2017. I plot the cities on a Whittaker biome map, which is a classification of biomes based on mean annual temperature and precipitation.
+
+Those cities with inventories are clustered in the 5 biomes of temperate seasonal forest, temperate grassland/desert, tropical seasonal forest/savanna, subtropical desert, and woodlandshrubland ([@fig-climate], left panel).
+
+```{r}
+#| warning: false
+
+source(here("script/process_chelsa.R"))
+chelsa_dir <- "~/lab-data/datasets/climate/CHELSA/bioclim"
+chelsa_ras <- load_chelsa(chelsa_vars = c("bio1", "bio12"), chelsa_dir = chelsa_dir)
+city_combine_list <- city_combine_cen |>
+  mutate(longitude = st_coordinates(st_transform(st_as_sf(geometry), 4326))[, 1],
+         latitude = st_coordinates(st_transform(st_as_sf(geometry), 4326))[, 2]) |>
+  select(-geometry)
+
+city_chelsa <- extract_chelsa(chelsa_ras, city_combine_list, lon_col = "longitude", lat_col = "latitude")
+
+suppressWarnings(
+  climate1 <- plotbiomes::whittaker_base_plot() +
+  geom_point(
+    data = city_chelsa,
+    mapping = aes(
+      x = bio1,
+      y = bio12 / 10,
+      text = city
+    ),
+    shape = 16,
+    size = 2,
+    alpha = 0.5
+  ) +
+  theme_bw() +
+  labs(
+    title = "Biome of cities in current inventory list",
+  )
+)
+```
+
+Compared to the climate of all candidate cities on a Whittaker biome map ([@fig-climate], right panel), the current inventory cities are biased towards temperate seasonal forest biome, and lack of cities in boreal forest, rainforest, and subtropical desert biomes. Therefore, I will probably select additional cities from the following group of cities to fill these gaps.
+
+-   Cold cities belongs to boreal forest (or higher elevation), e.g., cities in CO.
+-   Wet cities belongs to temperate seasonal/rain forest, e.g., cities in OR.
+-   Dry cities belongs to temperate grassland/desert, e.g., cities in WY, NV, AZ and UT.
+-   Dry and hot cities belongs to subtropical desert, e.g., cities in AZ and TX.
+-   Wet and hot cities belongs to tropical seasonal forest/savanna, e.g., cities in LA and FL.
+
+```{r fig-climate}
+#| warning: false
+#| fig-cap: "Climate of cities in current inventory list on a Whittaker biome map."
+#| fig-width: 12
+#| fig-height: 10
+
+all_city_list <- readRDS("~/phenology-urban/data/proc/conus/city_list/all_city_features.rds") |>
+  filter(!state %in% c("AK", "HI", "AS", "GU", "MP", "PR", "VI"))
+all_city_centroid <- all_city_list |>
+  st_transform(3857) |>         # project to planar coordinates
+  st_centroid() |>              # compute centroid
+  st_transform(4326) |>         # reproject back to lon/lat if needed
+  mutate(longitude = st_coordinates(st_transform(st_as_sf(geometry), 4326))[, 1],
+         latitude = st_coordinates(st_transform(st_as_sf(geometry), 4326))[, 2]) |>
+  select(-geometry)
+
+all_city_chelsa <- extract_chelsa(chelsa_ras, all_city_centroid, lon_col = "longitude", lat_col = "latitude")
+
+suppressWarnings(
+  climate2 <- plotbiomes::whittaker_base_plot() +
+    geom_point(
+      data = all_city_chelsa,
+      mapping = aes(
+        x = bio1,
+        y = bio12 / 10,
+        text = NAME20
+      ),
+      shape = 16,
+      size = 2,
+      alpha = 0.5
+    ) +
+    theme_bw() +
+    labs(
+      title = "Biome of all candidate cities in the US"
+    )
+)
+
+wrap_plots(climate1 + climate2, guides = "collect") &
+  theme(
+    legend.position = "bottom",
+    plot.margin = margin(3, 2, 3, 2)
+  )
+```
+
+### Urban form
+
+Since the microclimate heterogeneity within cities is largely driven by differences in urban surface structures and their influence on heat processes, I want to include cities that represent a range of urban forms. Specifically, these cities differ in their **overall building height levels** while also exhibiting sufficient **internal heterogeneity** in vertical structure.
+
+To do this, I used the 3D settlement dataset published by @esch_building_2022 and calculated the statistical metrics of building height within each city boundary based on existing inventories.
+
+> About the urban boundary: The trees recorded in the inventories do not necessarily cover the entire city. Therefore, the "boundary" used here refers to the overlapping area between the inventory coverage and the official city boundary defined by the [U.S. Census Bureau](https://www2.census.gov/geo/maps/DC2020/UA20/UA_2020_WallMap.pdf). For eLife, the inventory boundary precisely reflects the area where trees were actually recorded. For OpenTree, I did not download the full dataset—instead, I directly used the bounding box for each city provided in the website’s source code.
+
+```{r}
+#| include: false
+#| warning: false
+#| eval: false
+
+Building_height <- rast("~/phenology-urban/data/raw/CONUS/WorldSettlement3D/WSF3D_V02_BuildingHeight.tif")
+city_boundary_terra <- vect(city_combine)
+
+# Function for each city
+plot_city_height <- function(city_poly) {
+  city_name <- city_poly$city
+  masked <- mask(crop(Building_height, city_poly), city_poly)
+  
+  # Convert raster to data frame
+  df <- as.data.frame(masked, xy = TRUE, na.rm = TRUE)
+  colnames(df)[3] <- "height"
+  
+  # Spatial plot
+  p1 <- ggplot(df, aes(x = x, y = y, fill = height)) +
+    geom_tile() +
+    coord_fixed() +
+    scale_fill_viridis_c(option = "D") +
+    labs(title = city_name, fill = "Height (m)",
+         x = "Lon", y = "Lat") +
+    theme_minimal() +
+    theme(
+    legend.position = "bottom",
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+  # Histogram
+  p2 <- ggplot(df, aes(x = height)) +
+    coord_cartesian(xlim = c(0, 50)) +
+    geom_density(fill = "skyblue", alpha = 0.6, color = "gray50") +
+    labs( x = "Height (m)", y = "Frequency") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    theme_minimal()
+
+  # Combine
+  p1 | p2  # patchwork vertical layout
+}
+
+# Create plots for all cities
+city_plots <- lapply(41:77, function(i) {
+  plot_city_height(city_boundary_terra[i, ])
+})
+
+# Combine all into one figure
+final_plot <- wrap_plots(city_plots, ncol = 4) &
+  theme(
+    plot.margin = margin(3, 2, 3, 2)
+  )
+
+ggsave("building_height_city_grid2.png", plot = final_plot,
+       width = 28, height = 40, units = "in", dpi = 300)
+```
+
+At the bottom of this file, I add a full list of the spatial distribution and histogram of building height for each city. The maps show that the large proportion of area in cities are covered by buildings with heights below 10 meters, and only the downtown areas have higher buildings. The spatial distribution is consistent with the histogram of building height, which shows that most cities have a highly skewed distribution of building height, with a long tail towards higher values.
+
+In order to quantify the building height distribution, and relate it to various city characteristics (and further microclimate), I calculate the following statistics for each city:
+
+-   `median`: the median building height, indicating the overall height.
+-   `sd`: the standard deviation of building height, indicating the variability of building height.
+-   `p90`: the 90th percentile of building height, indicating the height of the tallest buildings.
+-   `IQR`: the interquartile range of building height, indicating the range of the middle 50% of the distribution.
+
+```{r}
+#| include: false
+#| warning: false
+#| echo: false
+
+Building_height <- rast("~/phenology-urban/data/raw/CONUS/WorldSettlement3D/WSF3D_V02_BuildingHeight.tif")
+city_boundary_terra <- vect(city_combine)
+
+zonal_stats <- terra::extract(Building_height, city_boundary_terra, fun = function(x) {
+  c(median = median(x, na.rm = TRUE),
+    sd = sd(x, na.rm = TRUE),
+    p90 = quantile(x, 0.9, na.rm = TRUE),
+    IQR = IQR(x, na.rm = TRUE))
+}) |>
+  as.data.frame()
+
+names(zonal_stats) <- c("ID","median", "sd", "p90", "IQR")
+city_feature <- cbind(city_combine, zonal_stats)
+```
+
+The orange histograms represent the cities with inventory in our current list ([@fig-histogram-invenory]), while the blue histograms represent the full city list ([@fig-histogram-full]). By comparing the distributions, I can assess what kinds of samples are underrepresented in the orange group and should be considered for inclusion to better reflect the diversity in the full dataset.
+
+-   Median height: current list lacks cities with lower median height (\<3.5 m) and extreme higher ones (\~8 m). The full list has a peak at around 3 m.
+-   SD and IQR: current list underrepresents cities with extremely low or high variability in height (low/high SD and IQR).
+-   90th percentile: current list slightly underrepresents low-end (\<5 m) variation.
+
+```{r fig-histogram-invenory}
+#| warning: false
+#| fig-cap: "Distribution of building height metrics across cities with tree inventories in current list"
+# p <- ggplot(city_feature, aes(x = p90, y = sd, color = sqrt(TreeCount), text = city)) +
+#   geom_point(size = 3, alpha = 0.8) +
+#   scale_color_gradient(
+#     low = "#e0f3db",  # light green
+#     high = "#006d2c",  # dark green
+#     name = "sqrt(Tree Count)"
+#   ) +
+#   theme_minimal() +
+#   labs(
+#     x = "Mean Building Height (m)",
+#     y = "Standard Deviation of Building Height (m)",
+#     title = "Building Height Distribution vs Tree Count"
+#   )
+# ggplotly(p)
+
+median <- ggplot(city_feature |> filter(!city %in% c("Austin", "HudsonRiverPark")), aes(x = median)) +
+  geom_histogram(bins = 10, fill = "darkorange", color = "white") +
+  labs(x = "Median Height", y = "Count") +
+  theme_minimal()
+sd <- ggplot(city_feature |> filter(!city %in% c("Austin", "HudsonRiverPark")), aes(x = sd)) +
+  geom_histogram(bins = 10, fill = "darkorange", color = "white") +
+  labs(  x = "Standard Deviation of Height", y = "Count") +
+  theme_minimal()
+p90 <- ggplot(city_feature |> filter(!city %in% c("Austin", "HudsonRiverPark")), aes(x = p90)) +
+  geom_histogram(bins = 10, fill = "darkorange", color = "white") +
+  labs(  x = "90th Percentile Height", y = "Count") +
+  theme_minimal()
+IQR <- ggplot(city_feature |> filter(!city %in% c("Austin", "HudsonRiverPark")), aes(x = IQR)) +
+  geom_histogram(bins = 10, fill = "darkorange", color = "white") +
+  labs(  x = "Interquartile Range of Height", y = "Count") +
+  theme_minimal()
+median + sd + p90 + IQR + plot_layout(ncol = 2) +
+  plot_annotation(
+    title = "Distribution of building height metrics across cities in current inventory list",
+    theme = theme(plot.title = element_text(hjust = 0.5, size = 14))
+    )
+```
+
+```{r}
+#| eval: false
+
+all_city_polygons <- st_read("data/raw/CONUS/boundary/USCities/tl_2024_us_uac20.shp") |>
+  separate(NAME20, into = c("city_raw", "state"), sep = ", ", remove = FALSE) |>
+  rename(city = city_raw) |>
+  select(NAME20, state, city, ALAND20,AWATER20, INTPTLAT20, INTPTLON20) |>
+  st_transform(4326)
+  
+all_city_boundary_terra <- vect(all_city_polygons)
+all_zonal_stats <- terra::extract(Building_height, all_city_boundary_terra, fun = function(x) {
+  c(median = median(x, na.rm = TRUE),
+    sd = sd(x, na.rm = TRUE),
+    p90 = quantile(x, 0.9, na.rm = TRUE),
+    IQR = IQR(x, , na.rm = TRUE))
+}) |>
+  as.data.frame()
+
+names(all_zonal_stats) <- c("ID","median", "sd", "p90", "IQR")
+
+all_city_feature <- cbind(all_city_polygons, all_zonal_stats)
+saveRDS(city_pop, "~/phenology-urban/data/proc/conus/city_list/all_city_features.rds")
+```
+
+```{r fig-histogram-full}
+#| warning: false
+#| fig-cap: "Distribution of building height metrics across all candidate cities."
+all_city_list <- readRDS("~/phenology-urban/data/proc/conus/city_list/all_city_features.rds")
+
+median <- ggplot(all_city_list, aes(x = median)) +
+  geom_histogram(bins = 20, fill = "steelblue", color = "white") +
+  labs(x = "Median Height", y = "Count") +
+  theme_minimal()
+sd <- ggplot(all_city_list, aes(x = sd)) +
+  geom_histogram(bins = 20, fill = "steelblue", color = "white") +
+  labs(  x = "Standard Deviation of Height", y = "Count") +
+  theme_minimal()
+p90 <- ggplot(all_city_list, aes(x = p90)) +
+  geom_histogram(bins = 20, fill = "steelblue", color = "white") +
+  labs(  x = "90th Percentile Height", y = "Count") +
+  theme_minimal()
+IQR <- ggplot(all_city_list, aes(x = IQR)) +
+  geom_histogram(bins = 20, fill = "steelblue", color = "white") +
+  labs(  x = "Interquartile Range of Height", y = "Count") +
+  theme_minimal()
+median + sd + p90 + IQR + plot_layout(ncol = 2) +
+  plot_annotation(
+    title = "Distribution of building height metrics across all candidate cities",
+    theme = theme(plot.title = element_text(hjust = 0.5, size = 14))
+    )
+```
+
+### Population
+
+Population density may influence both the availability of resources for urban tree management and the intensity of human activities that interact with vegetation. In the context of phenology studies, it also affects how phenological shifts are experienced and the extent to which their benefits reach urban populations. Therefore, it is important to include cities across a wide range of population densities to capture this variation. I used the population density data from the [WorldPop](https://hub.worldpop.org/geodata/listing?id=77) to assess the population density of cities with tree inventories as well as all candidate cities.
+
+The population density of cities with tree inventories is shown in the orange histogram ([@fig-population], left panel), while the population density of all candidate cities is shown in the blue histogram ([@fig-population], right panel). The current inventory cities are biased towards higher population densities, especially those above 2000 people/km². To better reflect the full range of urban population density, the samples should be expanded to include more low- and medium-density cities—especially those \< 2000 people/km², and particularly those \< 1000, which make up a large proportion of the full list of US cities but are underrepresented in the current list
+
+```{r fig-population}
+#| warning: false
+#| fig-cap: "Population density of cities with tree inventories (left) and all candidate cities (right)."
+
+
+population <- rast("~/Downloads/usa_pd_2020_1km_UNadj.tif")
+
+pop_stats <- terra::extract(population, city_boundary_terra, fun = function(x) {
+  c(median = median(x, na.rm = TRUE),
+    mean = mean(x, na.rm = TRUE),
+    sum = sum(x, na.rm = TRUE))
+}) |>
+  as.data.frame()
+
+names(pop_stats) <- c("ID","median", "mean", "sum")
+city_pop <- cbind(city_combine, pop_stats) |>
+  mutate(area = as.numeric(st_area(city_combine) / 1e6), # convert to km^2
+         pop_density = sum / area) # people per km^2
+
+
+population_plot <- ggplot(city_pop |> filter(!city %in% c("Austin", "HudsonRiverPark")), aes(x = pop_density)) +
+  geom_histogram(bins = 20, fill = "darkorange", color = "white") +
+  labs(x = "Population Density (1/km^2)", y = "Count",
+       title = "Population density of current cities") +
+  theme_minimal()
+all_population_plot <- ggplot(all_city_list, aes(x = pop_density)) +
+  geom_histogram(bins = 20, fill = "steelblue", color = "white") +
+  labs(x = "Population Density (1/km^2)", y = "Count",
+       title = "Population density of all candidate cities") +
+  theme_minimal()
+
+population_plot + all_population_plot
+
+```
+
+### Combine these 3 factors
+
+In order to combine the three factors (climate, building height, and population density) to select representative cities, I display an interactive plot to visualize cities based on their **median building height** (x-axis) and **standard deviation of building height** (y-axis). And cities are colored by their Whittaker **biome**, sized by **population density**, and labeled with names and detailed information in tooltips on hover.
+
+To focus on a specific group, I can double-click a legend item—for example, double-click on the circle labeled "temperate grassland/desert, \<1k" to highlight only cities in that biome with low population density. Then, look to the lower-left corner of the plot to find cities with low median building height and low variability. These cities may be good candidates for representing sparsely populated, low-rise urban forms in the temperate grassland/desert biome.
+
+```{r fig-city-3factors}
+#| warning: false
+#| fig-cap: "Distribution of building height in each city, colored by Whittaker biomes and sized by population density."
+all_city_chelsa_df <- all_city_chelsa |>
+  mutate(bio1 = bio1,
+         bio12 = bio12 / 10) |>
+  as.data.frame()
+tp_valid_sp <- sp::SpatialPoints(coords = all_city_chelsa_df[, c("bio1", "bio12")])
+
+sp_overlay <- sp::over(tp_valid_sp, Whittaker_biomes_poly)
+all_city_chelsa_dt <- as.data.table(all_city_chelsa_df)
+all_city_chelsa_dt[, biome := sp_overlay$biome]
+
+all_city_chelsa_dt <- all_city_chelsa_dt |>
+  mutate(pop_density_bin = cut(pop_density, breaks = c(0, 1000, 2000, 3000, 4000, 5000, Inf),
+                               labels = c("<1k", "1–2k", "2–3k", "3–4k", "4-5k", ">5k")))
+
+p <- ggplot(all_city_chelsa_dt, aes(
+    x = median,
+    y = sd,
+    text = paste0(
+      "City: ", NAME20, "<br>",
+      "Pop. density bin: ", pop_density_bin, "<br>",
+      "Bio1 (Annual temp): ", round(bio1, 1), " °C<br>",
+      "Bio12 (Precip): ", round(bio12, 0), " cm"
+    ),
+    color = biome,
+    size = pop_density_bin
+  )) +
+  geom_point(alpha = 0.5) +
+  scale_color_manual(
+    name = "Whittaker biomes",
+    breaks = names(Ricklefs_colors),
+    labels = names(Ricklefs_colors),
+    values = Ricklefs_colors
+  ) +
+  scale_size_discrete(name = "Population density (bin)") +
+  theme_minimal() +
+  labs(
+    x = "Median building height (m)",
+    y = "Standard deviation of building height (m)",
+    title = "Building height distribution"
+  )
+
+ggplotly(p)
+```
+
+## Potential limitation
+
+In this exploratory process, I didn't check the WeatherUnderground (WU) sites availablity in the inventory coverd area. For example, the city of Austin has a tree inventory, but the inventory coverd area is centerd in the downtown, while the WU sites are located in the surrounding areas.
+
+```{r fig-austin}
+#| warning: false
+#| fig-cap: "Distribution of WU sites and tree locations in Austin."
+Austin_ep <- read_csv(here("data/raw/CONUS/StreetTrees/elife/v2/Austin_Final_2022-06-18.csv"))
+boundary <- st_read("~/urban-cooling/data/raw/WU/AT/TxDOT_City_Boundaries/Cities.shp",quiet = TRUE) %>%
+      filter(CITY_NM == "Austin") %>%
+      st_transform(4326)
+wu_location <- read_csv(paste0("~/urban-cooling/data/raw/WU/AT/location.csv"), show_col_types = FALSE) %>%
+  st_as_sf(coords = c("Lon", "Lat"), crs = 4326)
+
+ggplot() +
+  geom_sf(data = boundary, fill = "grey90") +
+  geom_sf(data = wu_location, aes(color = "WU location"), size = 0.3) +
+  geom_point(data = Austin_ep,
+             aes(x = longitude_coordinate, y = latitude_coordinate, color = "Tree location"),
+             size = 0.01, alpha = 0.01) +
+  scale_color_manual(name = "Legend",
+                     values = c("WU location" = "blue", "Tree location" = "red")) +
+  guides(color = guide_legend(override.aes = list(alpha = 1, size = 2))) +
+  labs(title = "Austin") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(size = 10, angle = 45, hjust = 1),
+        legend.position = "bottom")
+```
+
+## Action items
+
+-   [ ] Discuss with Prof. Seto and Juwon to see if they have suggestions on the key features being analyzed (e.g., climate, urban form, population density), and to refine the strategy for selecting additional representative cities.
+-   [ ] For each city included, assess whether WU sites fall within areas where trees have been planted (i.e., the inventory area).
+
+## Appendix
+
+![The distribution of building height in each city](image/building_height_city_grid.png){#fig-city_height fig-align="center" width="100%"}
+
+![The distribution of building height in each city (continued).](image/building_height_city_grid2.png){fig-align="center" width="100%"}
