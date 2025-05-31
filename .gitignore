@@ -49,6 +49,5 @@ doc/*.pdf
 # R Environment Variables
 .Renviron
 inst/doc
-/doc/
 /Meta
 /Meta/
