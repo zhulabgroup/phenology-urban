@@ -22,8 +22,8 @@ library(stats)
 # install.packages("INLA",repos=c(getOption("repos"),INLA="https://inla.r-inla-download.org/R/stable"), dep=TRUE)
 
 r_input_dir <- "~/phenology-urban/data/proc/urban/"
-r_output_dir <- "~/phenology-urban/data/proc/urban/sp_model/inla_year_random/"
-citys <- c("NY")
+r_output_dir <- "~/phenology-urban/data/proc/urban/sp_model/inla_year_random/insample_pred/"
+cities <- c("NY", "ST", "HT", "DV")
 
 phe_types <- c("SOS", "EOS", "GreenUp", "GreenDown")
 # genus = "simulation"
@@ -33,7 +33,7 @@ phe_types <- c("SOS", "EOS", "GreenUp", "GreenDown")
 
 
 ######################################## Read fit data ######################################## 
-for (city in citys) {
+for (city in cities) {
   boundary <- switch(
     city,
     "NY" = st_read("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp"),
@@ -100,12 +100,12 @@ for (city in citys) {
         
         ######################################## Read prediction data ########################################
         
-        ### Prediction data (Acer in 2023 for WU location)
+        ### Prediction (Out-of sample)
         
-        mean_doy_acer <- readRDS(paste0("~/phenology-urban/data/proc/urban/",city,"/tavg_allyear_var.rds")) %>%
-          filter(genus == !!genus & thres == !!thres & direction ==!!direction ) %>%
-          summarise(doy = mean(doy)) %>%
-          pull(doy)
+        # mean_doy_acer <- readRDS(paste0("~/phenology-urban/data/proc/urban/",city,"/tavg_allyear_var.rds")) %>%
+        #   filter(genus == !!genus & thres == !!thres & direction ==!!direction ) %>%
+        #   summarise(doy = mean(doy)) %>%
+        #   pull(doy)
         if (phe_type == "EOS" | phe_type == "SOS") {
           type = phe_type
         } else if (phe_type == "GreenUp") {
@@ -113,30 +113,35 @@ for (city in citys) {
         } else {
           type = "green-down pace"
         }
+
+        # preseason <- readRDS(paste0("~/phenology-urban/data/proc/urban/",city,"/tavg_allyear_pcorr.rds")) %>%
+        #   filter(genus == !!genus & type == !!type) %>%
+        #   summarise(pre = mean(optimal_pre_length)) %>%
+        #   pull(pre)
+        # start_date = make_date(2023) + days(round(mean_doy_acer) - 1) - days(preseason)
+        # end_date = make_date(2023) + days(round(mean_doy_acer) - 1)
+        # 
+        # NY_weather <- readRDS(paste0("~/urban-cooling/data/raw/WU/",city,"/",city,"_wu.rds")) %>%
+        #   filter(Date >= start_date & Date <= end_date) %>%
+        #   group_by(name) %>%
+        #   summarise(AvgTemp_mean = mean(AvgTemp),
+        #             Sum_mm_sum = sum(Sum_mm),
+        #             year = as.factor(2023))
+        # 
+        # NY_srad <- readRDS(paste0("~/phenology-urban/data/raw/",city,"/Daymet/daily2016-2024/srad_wu_2023.rds")) %>%
+        #   filter(time >= start_date & time <= end_date) %>%
+        #   group_by(Site) %>%
+        #   summarise(srad_mean = mean(value)) %>%
+        #   inner_join(NY_weather, by = c("Site" = "name"))
+        # 
+        # prediction <- read_csv(paste0("~/urban-cooling/data/raw/WU/",city,"/location.csv"), show_col_types = FALSE) %>%
+        #   inner_join(NY_srad, by = "Site") %>%
+        #   na.omit()
+        # coorp <- cbind(prediction$Lon, prediction$Lat) 
         
-        preseason <- readRDS(paste0("~/phenology-urban/data/proc/urban/",city,"/tavg_allyear_pcorr.rds")) %>%
-          filter(genus == !!genus & type == !!type) %>%
-          summarise(pre = mean(optimal_pre_length)) %>%
-          pull(pre)
-        start_date = make_date(2023) + days(round(mean_doy_acer) - 1) - days(preseason)
-        end_date = make_date(2023) + days(round(mean_doy_acer) - 1)
-        
-        NY_weather <- readRDS(paste0("~/urban-cooling/data/raw/WU/",city,"/",city,"_wu.rds")) %>%
-          filter(Date >= start_date & Date <= end_date) %>%
-          group_by(name) %>%
-          summarise(AvgTemp_mean = mean(AvgTemp),
-                    Sum_mm_sum = sum(Sum_mm),
-                    year = as.factor(2023))
-        
-        NY_srad <- readRDS(paste0("~/phenology-urban/data/raw/",city,"/Daymet/daily2016-2024/srad_wu_2023.rds")) %>%
-          filter(time >= start_date & time <= end_date) %>%
-          group_by(Site) %>%
-          summarise(srad_mean = mean(value)) %>%
-          inner_join(NY_weather, by = c("Site" = "name"))
-        
-        prediction <- read_csv(paste0("~/urban-cooling/data/raw/WU/",city,"/location.csv"), show_col_types = FALSE) %>%
-          inner_join(NY_srad, by = "Site") %>%
-          na.omit()
+        ### Prediction (In-sample)
+        prediction <- tavg_allyear_var
+        coorp <- cbind(prediction$lon, prediction$lat) 
         
         ######################################## Prepare the mesh and spde ######################################## 
         
@@ -163,7 +168,7 @@ for (city in citys) {
                                         n.spde = spde$n.spde)
         # dim(A.phe)
         
-        coorp <- cbind(prediction$Lon, prediction$Lat) 
+        
         A.phe.p <- inla.spde.make.A(mesh = mesh, loc = coorp)
         
         ######################################## Stack the data ########################################
@@ -224,11 +229,40 @@ for (city in citys) {
           filter(Factor == "AvgTemp_mean") %>%
           mutate(Factor = ifelse(Factor == "AvgTemp_mean", genus, Factor))
         
+        index <- inla.stack.index(stack = stk.full, tag = "pred")$data
+        
+        pred_mean <- res$summary.fitted.values[index, "mean"]
+        pred_ll <- res$summary.fitted.values[index, "0.025quant"]
+        pred_ul <- res$summary.fitted.values[index, "0.975quant"]
+        
+        pred_ph_2023 <- rbind(
+          data.frame(
+            Lon = coorp[, 1], Lat = coorp[, 2],
+            value = pred_mean, variable = "pred_mean"
+          ),
+          data.frame(
+            Lon = coorp[, 1], Lat = coorp[, 2],
+            value = pred_ll, variable = "pred_ll"
+          ),
+          data.frame(
+            Lon = coorp[, 1], Lat = coorp[, 2],
+            value = pred_ul, variable = "pred_ul"
+          )
+        )
+        pred_ph_2023$variable <- as.factor(pred_ph_2023$variable)
+        
+        compare<- rbind(
+            Lon = coorp[, 1], Lat = coorp[, 2],
+            value = pred_mean, variable = "pred_mean", true_value = tavg_allyear_var[[phe_metric]]
+          )
+        
         list(mesh = mesh,
              res = res,
              spde = spde,
              stk.full = stk.full,
-             fix_effect = fix_effect) %>%
+             fix_effect = fix_effect,
+             prediction = pred_ph_2023,
+             compare = compare) %>%
           saveRDS(paste0(r_output_dir, city, "_", genus, "_tavg_", phe_type, ".rds"))
       }
     }
@@ -324,7 +358,7 @@ ggplot(NY_Acer_tavg_SOS$fix_effect, aes(x = factor(Factor, levels = rev(Factor))
 
 ######################################## Prediction from model ########################################
 
-### Prediction
+### Out of sample - Prediction
 
 index <- inla.stack.index(stack = NY_Acer_tavg_SOS$stk.full, tag = "pred")$data
 
@@ -357,3 +391,19 @@ ggplot(pred_ph_2023) +
     low = "blue", high = "orange"
   ) +
   theme_bw()
+
+
+### In sample - Prediction
+
+compare <- data.frame(t(NY_Acer_tavg_SOS$compare)) %>%
+  mutate(value = as.numeric(value), true_value = as.numeric(true_value))
+lm_fit <- lm(value ~ true_value, data = compare)
+slope <- round(coef(lm_fit)[2], 3) 
+
+ggplot(compare, aes(x = true_value, y = value)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1, linetype = 2, color = "red") +
+  geom_smooth(method = "lm", formula = y ~ x, se = FALSE, color = "blue") +
+  annotate("text", label = paste("Slope =", slope), color = "blue", size = 5) + 
+  labs(x = "True value", y = "Predicted value") +
+  theme_classic()
