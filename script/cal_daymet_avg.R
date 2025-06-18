@@ -10,14 +10,6 @@ library(sf)
 library(raster)
 
 
-city = "NY"
-folder.raw <- paste0("~/phenology-urban/data/raw/", city, "/Daymet/daily2016-2024")
-download_Daymet <- TRUE
-
-################# based on the boundary of the city #################
-us_boundary <- sf::read_sf("~/phenology-urban/data/raw/NY/boundary/nybb_dissolved.shp")
-us_boundary <- us_boundary %>% st_transform(4326)
-
 ################# larege area #################
 
 # if (download_Daymet) {
@@ -47,20 +39,9 @@ us_boundary <- us_boundary %>% st_transform(4326)
 #   }
 # }
 
-############# city area #############
-
-if (download_Daymet){
-  # get LST extent
-  bbox <- as.vector(terra::ext(us_boundary))
-  # download Daymet data
-  download_daymet_ncss(location = bbox[c('ymax', 'xmin', 'ymin', 'xmax')],
-                       start = 2016, end = 2023,
-                       frequency = "daily",
-                       param = c("tmin", "tmax", "prcp"),
-                       path=folder.raw)
-}
 
 ############# neon area #############
+
 library(ggplot2)
 library(sf)
 library(dplyr)
@@ -93,8 +74,6 @@ library(dplyr)
 #   geom_sf(data = points, color = "blue", size = 2) +  # 绘制点数据
 #   theme_minimal() +
 #   labs(title = paste("Bounding Box and Points for Site"))
-
-
 
 
 for (i in names(neon_site_list)){
@@ -142,52 +121,150 @@ for (i in names(neon_site_list)){
 # lapply(years, calculate_and_save_tavg_tif)
 
 
+############# city area #############
 
+city = "NY"
+extent = "all_tree"
+frequency = "monthly"
+
+data_dir <- paste0("~/phenology-urban/data/raw/", city, "/Daymet/",frequency,"2016-2024/")
+if (!dir.exists(data_dir)) {
+  dir.create(data_dir, recursive = TRUE)
+}
+
+boundary <- switch(
+  city,
+  "NY" = st_read("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp") %>%
+    st_transform(4326),
+  "DT" = st_read("~/urban-cooling/data/raw/WU/DT/City_of_Detroit_Boundary/City_of_Detroit_Boundary.shp") %>%
+    st_transform(4326),
+  "ST" = st_read("~/urban-cooling/data/raw/WU/ST/seattle_boundary/CityUGA.shp") %>%
+    st_transform(4326) %>%
+    filter(CITY_NM == "Seattle"),
+  "HT" = st_read("~/urban-cooling/data/raw/WU/HT/HGAC_City_Boundaries/HGAC_City_Boundaries.shp") %>%
+    filter(NAME == "Houston") %>%
+    st_transform(4326),
+  "TP" = st_read("~/urban-cooling/data/raw/WU/TP/Municipal_Boundary/Municipal_Boundary.shp") %>%
+    st_transform(4326) %>%
+    filter(NAME == "Tampa"),
+  "DV" = st_read("~/urban-cooling/data/raw/WU/DV/DRCOG_Municipalities/DRCOG_Municipalities.shp") %>%
+    filter(city == "Denver") %>%
+    st_transform(4326),
+  "AT" = st_read("~/urban-cooling/data/raw/WU/AT/TxDOT_City_Boundaries/Cities.shp") %>%
+    filter(CITY_NM == "Austin") %>%
+    st_transform(4326),
+  stop("Invalid city abbreviation.")
+)
+
+download_Daymet <- F
+
+if (download_Daymet){
+  # get LST extent
+  bbox <- as.vector(terra::ext(boundary))
+  # download Daymet data
+  download_daymet_ncss(location = bbox[c('ymax', 'xmin', 'ymin', 'xmax')],
+                       start = 2016, end = 2023,
+                       frequency = frequency,
+                       param = c("tmin", "tmax", "prcp"),
+                       path=data_dir)
+}
 
 ############# clean srad #############
 
-data_dir <- paste0("~/phenology-urban/data/raw/", city, "/Daymet/daily2016-2024/")
-file_list <- list.files(data_dir, pattern = "srad_daily_\\d{4}_ncss\\.nc$", full.names = TRUE)
-
-result <- NULL
-
-# points_in_buffer <- read_csv(paste0("~/phenology-urban/data/proc/urban/", city, "/tree_WU_500_buffer_PS.csv"), show_col_types = FALSE)
-# points <- points_in_buffer %>%
-#   group_by(id) %>%
-#   summarise(geometry = first(geometry))
-
-points <- neon_tree_location # urban_tree_location
+if (extent == "WU_buffer"){
+  points_in_buffer <- read_csv(paste0("~/phenology-urban/data/proc/urban/", city, "/tree_WU_500_buffer_PS.csv"), show_col_types = FALSE)
+  points <- points_in_buffer %>%
+    group_by(id) %>%
+    summarise(geometry = first(geometry))
+} else {
+  metadata <- read_csv("~/lab-data/datasets/vegetation/PS/urban/metadata.csv") %>%
+    filter(site == !!city)
+  file_list <- list.files(path = "~/lab-data/datasets/vegetation/PS/urban/doy", pattern = paste0("^doy_",city,"_.*\\.rds$"), full.names = TRUE)
+  data_list <- file_list %>%
+    map(~ readRDS(.x))
+  all_doy <- bind_rows(data_list)
+  tree_location <- metadata %>%
+    mutate(genus = str_extract(taxa, "^[^ ]+")) %>%
+    left_join(all_doy, by = "id") %>%
+    filter(!is.na(doy))
+  points <- tree_location %>%
+    group_by(id) %>%
+    slice(1) %>%
+    ungroup() %>%
+    st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
+    as.data.frame()
+}
 
 coords <- do.call(rbind, lapply(points$geometry, function(x) {
   as.numeric(unlist(strsplit(gsub("c\\(|\\)", "", x), ", ")))
 }))
 points_vect <- vect(coords, crs = "EPSG:4326")
 
-for (file in file_list) {
-  srad_nc <- terra::rast(file)
-  extracted_values <- terra::extract(srad_nc, points_vect) %>%
-    dplyr::select(-ID)
-  colnames(extracted_values) <- as.character(srad_nc@ptr[["time"]])
-  temp_result <- cbind(points["id"], extracted_values) %>%
-    pivot_longer(
-      cols = -id,
-      names_to = "time",
-      values_to = "value"
-    ) %>%
-    mutate(
-      date = as.Date(as.POSIXct(as.numeric(time), origin = "1970-01-01", tz = "UTC"))
-    )
-  result <- bind_rows(result, temp_result)
+for (var in c("tmin", "tmax", "prcp")) {
+  file_list <- list.files(data_dir, pattern = paste0("^", var, "_.*\\.nc$"), full.names = TRUE)
+  result <- NULL
+  
+  for (file in file_list) {
+    single_nc <- terra::rast(file)
+    extracted_values <- terra::extract(single_nc, points_vect) %>%
+      dplyr::select(-ID)
+    colnames(extracted_values) <- as.character(single_nc@pntr[["time"]]) # daily as ptr
+    temp_result <- cbind(points["id"], extracted_values) %>%
+      pivot_longer(
+        cols = -id,
+        names_to = "time",
+        values_to = "value"
+      ) %>%
+      mutate(
+        date = format(as.Date(as.POSIXct(as.numeric(time), origin = "1970-01-01", tz = "UTC")), "%Y-%m")
+      )
+    result <- bind_rows(result, temp_result)
+    cat("Processed file:", file, "\n")
+  }
+  
+  output_file <- paste0(data_dir, var,"_", frequency, "_",extent, ".rds")
+  saveRDS(result, output_file)
 }
 
-saveRDS(result, paste0("~/phenology-urban/data/raw/", city, "/Daymet/daily2016-2024/srad_daily_2016-2023.rds"))
-
-
-############# clean srad for prediction #############
-city = "NY"
+## if frequent == "monthly" & extent == "all_tree"
 data_dir <- paste0("~/phenology-urban/data/raw/", city, "/Daymet/daily2016-2024/")
-file_list <- list.files(data_dir, pattern = "srad_daily_(2022|2023)_ncss\\.nc$", full.names = TRUE)
+for (var in c("srad")) {
+  file_list <- list.files(data_dir, pattern = paste0("^", var, "_.*\\.nc$"), full.names = TRUE)
+  result <- NULL
+  
+  for (file in file_list) {
+    single_nc <- terra::rast(file)
+    extracted_values <- terra::extract(single_nc, points_vect) %>%
+      dplyr::select(-ID)
+    colnames(extracted_values) <- as.character(single_nc@pntr[["time"]])
+    temp_result <- cbind(points["id"], extracted_values) %>%
+      pivot_longer(
+        cols = -id,
+        names_to = "time",
+        values_to = "value"
+      ) %>%
+      mutate(
+        date = format(as.Date(as.POSIXct(as.numeric(time), origin = "1970-01-01", tz = "UTC")), "%Y-%m")
+      ) %>%
+      group_by(id, date) %>%
+      summarise(value = mean(value, na.rm = TRUE), 
+                time = first(time),
+                .groups = "drop")
+    
+    result <- bind_rows(result, temp_result)
+    cat("Processed file:", file, "\n")
+  }
+  
+  output_file <- paste0(data_dir, var,"_", frequency, "_",extent, ".rds")
+  saveRDS(result, output_file)
+}
 
+
+
+
+################# based on the weather underground site of the city #################
+
+file_list <- list.files(data_dir, pattern = "srad_daily_(2022|2023)_ncss\\.nc$", full.names = TRUE)
 result <- NULL
 
 # points_in_buffer <- read_csv(paste0("~/phenology-urban/data/proc/urban/", city, "/tree_WU_500_buffer_PS.csv"), show_col_types = FALSE)

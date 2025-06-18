@@ -1,17 +1,33 @@
-prepare_data <- function(phe_type, points_in_buffer, all_sites_temp, srad_daily) {
+prepare_species_data <- function(phe_type, points_in_buffer, all_sites_temp, srad_daily) {
+  ### WU sites
   points_in_buffer_joined <- points_in_buffer %>%
     left_join((srad_daily %>%
                  select(id, year, season, Avg_srad) %>%
-                 pivot_wider(names_from = season, values_from = Avg_srad, names_prefix = "srad_")), 
+                 pivot_wider(names_from = season, values_from = Avg_srad, names_prefix = "srad_")),
               by = c("id", "year")) %>%
     left_join(all_sites_temp %>%
                 select(name, year, season, Avg_AvgTemp) %>%
-                pivot_wider(names_from = season, values_from = Avg_AvgTemp, names_prefix = "temp_"), 
+                pivot_wider(names_from = season, values_from = Avg_AvgTemp, names_prefix = "temp_"),
               by = c("Site" = "name", "year")) %>%
     left_join(all_sites_temp %>%
                 select(name, year, season, Sum_Sum_mm) %>%
-                pivot_wider(names_from = season, values_from = Sum_Sum_mm, names_prefix = "prcp_"), 
+                pivot_wider(names_from = season, values_from = Sum_Sum_mm, names_prefix = "prcp_"),
               by = c("Site" = "name", "year"))
+  ### All Daymet
+  # points_in_buffer_joined <- points_in_buffer %>%
+  #   left_join((srad_daily %>%
+  #                select(id, year, season, Avg_srad) %>%
+  #                pivot_wider(names_from = season, values_from = Avg_srad, names_prefix = "srad_")), 
+  #             by = c("id", "year")) %>%
+  #   left_join(all_sites_temp %>%
+  #               mutate(Avg_AvgTemp = (tmin +tmax)/2) %>%
+  #               select(id, year, season, Avg_AvgTemp) %>%
+  #               pivot_wider(names_from = season, values_from = Avg_AvgTemp, names_prefix = "temp_"), 
+  #             by = c("id", "year")) %>%
+  #   left_join(all_sites_temp %>%
+  #               select(id, year, season, prcp) %>%
+  #               pivot_wider(names_from = season, values_from = prcp, names_prefix = "prcp_"), 
+  #             by = c("id", "year"))
   
   if (phe_type == "SOS") {
     phe_metric <- "doy"
@@ -19,7 +35,7 @@ prepare_data <- function(phe_type, points_in_buffer, all_sites_temp, srad_daily)
     thres <- 0.5
     model_input <- points_in_buffer_joined %>%
       filter(direction == !!direction & thres == !!thres) %>%
-      select(id, taxa,genus, lon, lat, year, doy, Site, geometry, ends_with("winter")) %>%
+      select(id, taxa, lon, lat, year, doy, geometry, ends_with("winter")) %>%
       drop_na()
   } else if (phe_type == "EOS") {
     phe_metric <- "doy"
@@ -27,7 +43,7 @@ prepare_data <- function(phe_type, points_in_buffer, all_sites_temp, srad_daily)
     thres <- 0.5
     model_input <- points_in_buffer_joined %>%
       filter(direction == !!direction & thres == !!thres) %>%
-      select(id, taxa, genus, lon, lat, year, doy, Site, geometry, ends_with("summer")) %>%
+      select(id, taxa, lon, lat, year, doy, geometry, ends_with("summer")) %>%
       drop_na()
   } else if (phe_type == "GreenUp") {
     phe_metric <- "doy_diff"
@@ -42,7 +58,7 @@ prepare_data <- function(phe_type, points_in_buffer, all_sites_temp, srad_daily)
     model_input = points_in_buffer_joined %>%
       filter(direction == !!direction & thres == 0.2) %>%
       left_join(diff, by = c("year", "id")) %>%
-      select(id, taxa, genus, lon, lat, year, Site, doy_diff, geometry, ends_with("spring")) %>%
+      select(id, taxa, lon, lat, year, doy_diff, geometry, ends_with("spring")) %>%
       drop_na()
     
   } else {
@@ -57,24 +73,64 @@ prepare_data <- function(phe_type, points_in_buffer, all_sites_temp, srad_daily)
     model_input = points_in_buffer_joined %>%
       filter(direction == !!direction & thres == 0.2) %>%
       left_join(diff, by = c("year", "id")) %>%
-      select(id, taxa, genus, lon, lat, year, Site, doy_diff, geometry, ends_with("fall")) %>%
+      select(id, taxa, lon, lat, year, doy_diff, geometry, ends_with("fall")) %>%
       drop_na()
   }
   
-  return(model_input)
+  combine_exact_fuzzy <- function(df, threshold) {
+    exact <- df |> filter(matchtype == "EXACT") |>
+      drop_na(specieskey) # should have the exact species information
+    fuzzy <- df |>
+      filter(matchtype == "FUZZY", !(original_sciname %in% exact$original_sciname)) |>
+      drop_na(specieskey) |>
+      group_by(original_sciname) |> 
+      arrange(desc(status == "ACCEPTED"), desc(confidence)) |> # sort by status, confidence and similarity
+      slice(1) |>
+      ungroup() |>
+      add_count(original_sciname, name = "n_dup") |> # check remaining duplicates
+      filter(n_dup == 1) |> # keep only unique ones, since we can not make final desicion
+      select(-n_dup) |>
+      filter(confidence >= threshold * 100)
+    bind_rows(exact, fuzzy) |> 
+      group_by(original_sciname) |>
+      arrange(desc(status == "ACCEPTED")) |> 
+      slice(1)
+  }
+  
+  gbif_taxon_keys <- model_input$taxa %>% # get the first column of the data.frame
+    unique()  %>% # remove duplicates
+    get_gbifid_(method="backbone") %>%  # match names to the GBIF backbone to get taxonkeys
+    imap(~ .x %>% mutate(original_sciname = .y))  %>%   # add original name back into data.frame
+    bind_rows()  %>% 
+    filter(status %in% c("ACCEPTED", "SYNONYM") & kingdom == "Plantae" & matchtype != "HIGHERRANK") %>% # get only accepted names and remove anything that might have matched to a non-plant
+    combine_exact_fuzzy(threshold = 0.9) %>%
+    select(canonicalname,original_sciname) # check for missing values
+  
+  model_input_top_10_species <- model_input %>%
+    left_join(gbif_taxon_keys, by = c("taxa" = "original_sciname")) %>% # join the GBIF taxon keys
+    filter(canonicalname %in% (model_input %>%
+                                 left_join(gbif_taxon_keys, by = c("taxa" = "original_sciname")) %>%
+                                 drop_na(canonicalname) %>% 
+                                 group_by(canonicalname) %>%
+                                 summarise(n = n(), .groups = "drop") %>%
+                                 arrange(desc(n)) %>%
+                                 head(10) %>% # get the top 10 species, otherwise all sp
+                                 pull(canonicalname))) # filter to the taxa in the original data)
+  
+  return(model_input_top_10_species)
 }
 
 
 
-run_inla_genus = function(model_input_all, r_output_dir, phe_type, city){
-  # options(repos = c(
-  #   INLA = "https://inla.r-inla-download.org/R/testing",
-  #   getOption("repos")
-  # ))
-  # install.packages("inlabru")
-  # install.packages("INLA",repos=c(getOption("repos"),INLA="https://inla.r-inla-download.org/R/stable"), dep=TRUE)
+run_inla_species = function(model_input_all, r_output_dir, phe_type, city){
+# options(repos = c(
+#   INLA = "https://inla.r-inla-download.org/R/testing",
+#   getOption("repos")
+# ))
+# install.packages("inlabru")
+# install.packages("INLA",repos=c(getOption("repos"),INLA="https://inla.r-inla-download.org/R/stable"), dep=TRUE)
   
-  genus_list <- unique(model_input_all$genus)
+  species_list <- unique(model_input_all$canonicalname)
   boundary <- switch(
     city,
     "NY" = st_read("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp"),
@@ -92,18 +148,19 @@ run_inla_genus = function(model_input_all, r_output_dir, phe_type, city){
     stop("Invalid city abbreviation.")
   )
   
-  for (genus in genus_list) {
+  for (species in species_list) {
     
-    model_path <- paste0(r_output_dir, genus, "_", phe_type, ".rds")
+    species_clean <- gsub(" ", "_", species)
+    model_path <- paste0(r_output_dir, species_clean, "_", phe_type, ".rds")
     
     if (file.exists(model_path)) {
-      cat(sprintf("\n File already exists for genus: %s, phe_type: %s, city: %s. Skipping INLA run.\n", 
-                  genus, phe_type, city))
+      cat(sprintf("\n File already exists for species: %s, phe_type: %s, city: %s. Skipping INLA run.\n", 
+                  species, phe_type, city))
       next  # Skip the current iteration of the loop
     } # if the file exists, skip to the next iteration  
     
-    cat(sprintf("\n Running INLA for genus: %s, phe_type: %s, city: %s\n", 
-                genus, phe_type, city))
+    cat(sprintf("\n Running INLA for species: %s, phe_type: %s, city: %s\n", 
+                species, phe_type, city))
     if (phe_type %in% c("SOS","EOS")) {
       phe_metric <- "doy"
     } else {
@@ -111,7 +168,7 @@ run_inla_genus = function(model_input_all, r_output_dir, phe_type, city){
     }
     
     model_input_sf <- model_input_all %>%
-      filter(genus == !!genus) %>%
+      filter(canonicalname == species) %>%
       st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
       st_transform(crs = st_crs(boundary)) %>%
       mutate(lon = st_coordinates(.)[,1], lat = st_coordinates(.)[,2],
@@ -200,7 +257,7 @@ run_inla_genus = function(model_input_all, r_output_dir, phe_type, city){
       row.names = NULL  # Remove row names to avoid duplication
     ) %>%
       filter(Factor == "temp") %>%
-      mutate(Factor = ifelse(Factor == "temp", genus, Factor))
+      mutate(Factor = ifelse(Factor == "temp", species, Factor))
     
     index <- inla.stack.index(stack = stk.full, tag = "pred")$data
     pred_mean <- res$summary.fitted.values[index, "mean"]
@@ -216,13 +273,13 @@ run_inla_genus = function(model_input_all, r_output_dir, phe_type, city){
          stk.full = stk.full,
          fix_effect = fix_effect,
          compare = compare,
-         genus = genus) %>%
+         species = species) %>%
       saveRDS(model_path)
   }
 }
 
 
-plot_coef_genus_city <- function(r_output_dir, phe_type){
+plot_coef_sp_city <- function(r_output_dir, phe_type){
   pattern = paste0(phe_type,"\\.rds$")
   files <- list.files(r_output_dir, pattern = pattern, full.names = TRUE)
   plots_tavg <- list()
@@ -234,7 +291,7 @@ plot_coef_genus_city <- function(r_output_dir, phe_type){
   # for one genus
   for (file in files) {
     model_data <- readRDS(file)
-    genus <- model_data$genus
+    species <- model_data$species
     # beta_names <- c("beta[0]", "beta[AvgTemp_mean]", "beta[Sum_mm_sum]", "beta[srad_mean]")
     # df_list <- lapply(seq_along(model_data$res$marginals.fixed), function(i) {
     #   data.frame(x = model_data$res$marginals.fixed[[i]][,1], 
@@ -242,7 +299,7 @@ plot_coef_genus_city <- function(r_output_dir, phe_type){
     #              beta = beta_names[i])
     # })
     # df <- bind_rows(df_list)
-    beta_avg_temp <- model_data$res$marginals.fixed[[3]]
+    beta_avg_temp <- model_data$res$marginals.fixed[[2]]
     df <- data.frame(
       x = beta_avg_temp[, 1],
       density = beta_avg_temp[, 2],
@@ -253,11 +310,11 @@ plot_coef_genus_city <- function(r_output_dir, phe_type){
       # facet_wrap(~beta, scales = "free", labeller = label_parsed) + 
       theme_minimal() +
       labs(x = "Coefficient Value", y = "Density") +
-      ggtitle(paste(genus)) +
+      ggtitle(paste(species)) +
       theme(legend.position = "none",
             plot.title = element_text(size = 8))
     
-    plots_tavg[[genus]] <- plot_tavg
+    plots_tavg[[species]] <- plot_tavg
     
     coef_summary <- coef_summary %>%
       rbind(model_data$fix_effect)
@@ -273,7 +330,7 @@ plot_coef_genus_city <- function(r_output_dir, phe_type){
     p_mean <- ggplot(df, aes(x = x, y = y, fill = mean_s)) +
       geom_raster() +
       scale_fill_viridis(na.value = "transparent") +
-      ggtitle(paste(genus)) +
+      ggtitle(paste(species)) +
       coord_fixed(ratio = 0.8) + theme_bw() +
       theme(axis.text.x = element_text(size = 6, angle = 45, hjust = 1),
             plot.title = element_text(size = 8))
@@ -281,7 +338,7 @@ plot_coef_genus_city <- function(r_output_dir, phe_type){
     p_sd <- ggplot(df, aes(x = x, y = y, fill = sd_s)) +
       geom_raster() +
       scale_fill_viridis(na.value = "transparent") +
-      ggtitle(paste(genus)) +
+      ggtitle(paste(species)) +
       coord_fixed(ratio = 1) + theme_bw()+
       theme(axis.text.x = element_text(size = 6, angle = 45, hjust = 1),
             plot.title = element_text(size = 8))
@@ -302,14 +359,14 @@ plot_coef_genus_city <- function(r_output_dir, phe_type){
       geom_line(linewidth = 1, alpha = 0.8, color = "blue") +
       coord_fixed(ratio = MaxRange) +
       labs(x = "Distance (m)", y = "Correlation", title = "Matern Correlation Function") +
-      ggtitle(paste(genus)) +
+      ggtitle(paste(species)) +
       theme_minimal()+
       theme(axis.text.x = element_text(size = 6, angle = 45, hjust = 1),
             plot.title = element_text(size = 8))
     
-    plots_mean[[genus]] <- p_mean
-    plots_sd[[genus]] <- p_sd
-    plots_semi[[genus]] <- p_semi
+    plots_mean[[species]] <- p_mean
+    plots_sd[[species]] <- p_sd
+    plots_semi[[species]] <- p_semi
   }
   
   combined_plot_tavg <- wrap_plots(plots_tavg, ncol = 5)
@@ -318,11 +375,10 @@ plot_coef_genus_city <- function(r_output_dir, phe_type){
   combined_plot_sd <- wrap_plots(plots_sd, ncol = 5)
   
   coef_summary <- coef_summary %>%
-    mutate(SigAlpha = ifelse(Sig == "*", 1, 0.2))%>%
-    filter(Factor != "Alnus")
+    mutate(SigAlpha = ifelse(Sig == "*", 1, 0.2))
   
   p_coef <-  ggplot(coef_summary, aes(x = factor(Factor, levels = rev(Factor)), 
-                                      y = Estimate)) +
+                               y = Estimate)) +
     geom_point(aes(alpha = SigAlpha), position = position_dodge(w = 0.5), size = 3) +
     geom_errorbar(aes(ymin = Lower, ymax = Upper, alpha = SigAlpha), 
                   position = position_dodge(w = 0.5), 
@@ -335,6 +391,7 @@ plot_coef_genus_city <- function(r_output_dir, phe_type){
     geom_text(aes(label = Sig, y = Upper + 0.05  ), hjust = -0.5, show.legend = FALSE) +
     geom_text(aes(label = Estimate, y = Estimate  ), vjust = -0.7, show.legend = FALSE) +
     guides(alpha = "none") +
+    # add title
     ggtitle(bquote(beta[Temp]~"for"~.(phe_type))) +
     theme_minimal()
   
@@ -347,7 +404,7 @@ plot_coef_genus_city <- function(r_output_dir, phe_type){
   ))
 }
 
-plot_coef_genus_cities <- function(r_output_dir, phe_type){
+plot_coef_sp_cities <- function(r_output_dir, phe_type){
   pattern = paste0(phe_type,"\\.rds$")
   files <- list.files(r_output_dir, pattern = pattern, full.names = TRUE, recursive = TRUE)
   coef_summary <- data.frame()
@@ -355,7 +412,7 @@ plot_coef_genus_cities <- function(r_output_dir, phe_type){
   # for one 
   for (file in files) {
     model_data <- readRDS(file)
-    genus <- model_data$genus
+    species <- model_data$species
     rel_path <- str_remove(file, paste0("^", r_output_dir))
     city <- str_split(rel_path, "/")[[1]][12]
     

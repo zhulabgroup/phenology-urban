@@ -497,6 +497,15 @@ sp_overlay <- sp::over(tp_valid_sp, Whittaker_biomes_poly)
 all_city_chelsa_dt <- as.data.table(all_city_chelsa_df)
 all_city_chelsa_dt[, biome := sp_overlay$biome]
 
+
+list_city_dt <- left_join(city_chelsa,
+                          city_feature |> select(city, median, sd) |> st_drop_geometry(),
+                          by = "city") |>
+  left_join(city_pop |> select(city, pop_density) |> st_drop_geometry(), by = "city") |>
+  st_drop_geometry()
+# saveRDS(list_city_dt, "~/phenology-urban/data/proc/urban/City_list/list_city.rds")
+# saveRDS(all_city_chelsa_dt, "~/phenology-urban/data/proc/urban/City_list/all_city.rds")
+
 all_city_chelsa_dt <- all_city_chelsa_dt |>
   mutate(pop_density_bin = cut(pop_density, breaks = c(0, 1000, 2000, 3000, 4000, 5000, Inf),
                                labels = c("<1k", "1–2k", "2–3k", "3–4k", "4-5k", ">5k")))
@@ -530,6 +539,80 @@ p <- ggplot(all_city_chelsa_dt, aes(
 
 ggplotly(p)
 ```
+
+To quantatively rank the cities based on the three factors, I use k-means clustering to group cities into clusters based on their median building height, precipitation, temperature, and population density. The clustering results are shown in the following plot, where each point represents a city, colored by its cluster membership.
+
+
+Try k-means
+
+```{r}
+all_city_chelsa_dt <- readRDS("~/phenology-urban/data/proc/urban/City_list/all_city.rds")
+list_city_dt <- readRDS("~/phenology-urban/data/proc/urban/City_list/list_city.rds")
+
+city_data_scaled <- all_city_chelsa_dt |>
+  select(median, sd, pop_density) |>
+  scale() |>
+  bind_cols(all_city_chelsa_dt[, c("NAME20")]) |>
+  na.omit()
+
+# Set the number of clusters (choose based on the elbow method or trial and error)
+set.seed(123)  # Set seed for reproducibility
+kmeans_result <- kmeans(city_data_scaled |>
+                          select(median, sd, pop_density), 
+                        centers = 3, nstart = 25)
+
+# Add cluster results to the original data
+city_data_scaled$cluster <- kmeans_result$cluster
+
+# Visualize the clustering
+ggplot(city_data_scaled, aes(x = sd, y = pop_density, color = factor(cluster))) +
+  geom_point() +
+  labs(title = "K-means Clustering of Cities", x = "Bio1 (Temperature)", y = "Bio12 (Precipitation)") +
+  scale_color_discrete(name = "Cluster")
+
+```
+
+
+PCA and ordination
+
+```{r}
+all_city_chelsa_dt <- readRDS("~/phenology-urban/data/proc/urban/City_list/all_city.rds")
+list_city_dt <- readRDS("~/phenology-urban/data/proc/urban/City_list/list_city.rds")
+
+all_city_data_scaled <- all_city_chelsa_dt |>
+  select(median, sd, pop_density, bio1, bio12) |>
+  scale() |>
+  bind_cols(all_city_chelsa_dt[, c("biome","NAME20")]) |>
+  na.omit()
+
+# Perform PCA
+pca_result <- prcomp(all_city_data_scaled |>
+                       select(median, sd, pop_density),
+                     center = TRUE, scale. = TRUE)
+pca_data <- as.data.frame(pca_result$x)
+all_city_data_scaled <- bind_cols(all_city_data_scaled, pca_data)
+
+
+ggplot(all_city_data_scaled, aes(x = PC1, y = PC2)) +
+  geom_point() +
+  labs(title = "PCA of City Characteristics", x = "PC1", y = "PC2")
+
+
+all_city_mean <- colMeans(all_city_chelsa_dt %>% select(median, sd, pop_density) |> na.omit())
+all_city_sd <- apply(all_city_chelsa_dt %>% select(median, sd, pop_density) |> na.omit(), 2, sd)
+subset_scaled <- scale(list_city_dt %>% select(median, sd, pop_density), center = all_city_mean, scale = all_city_sd)
+
+pca_subset <- predict(pca_result, newdata = subset_scaled)
+pca_subset <- as.data.frame(pca_subset)
+list_city_dt <- bind_cols(list_city_dt, pca_subset)
+
+ggplot(pca_data, aes(x = PC1, y = PC2)) +
+  geom_point() +
+  geom_point(data = pca_subset, aes(x = PC1, y = PC2), color = "red", shape = 4) +
+  labs(title = "PCA of City Characteristics with Subset", x = "PC1", y = "PC2")
+
+```
+
 
 ## Potential limitation
 
