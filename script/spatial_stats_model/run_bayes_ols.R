@@ -3,10 +3,13 @@ library(sp)
 library(sf)
 library(dplyr)
 library(stringr)
-library(lme4)
+library(readr)
 library(coda)
-library(car)
-library(gstat)
+library(lubridate)
+library(tidyr)
+library(taxize)
+library(purrr)
+library(terra)
 
 # Read file paths from environment variables
 r_input_dir <- Sys.getenv("R_INPUT_DIR")
@@ -76,22 +79,22 @@ model_input_all <- prepare_species_data(phe_type, points_in_buffer, all_sites_te
 #################### Find the optimal cov model ####################
 
 taxon_list <- unique(model_input_all[[taxon_col]])
-boundary <- switch(
-  city,
-  "NY" = st_read("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp"),
-  "DT" = st_read("~/urban-cooling/data/raw/WU/DT/City_of_Detroit_Boundary/City_of_Detroit_Boundary.shp"),
-  "ST" = st_read("~/urban-cooling/data/raw/WU/ST/seattle_boundary/CityUGA.shp") %>%
-    filter(CITY_NM == "Seattle"),
-  "HT" = st_read("~/urban-cooling/data/raw/WU/HT/HGAC_City_Boundaries/HGAC_City_Boundaries.shp") %>%
-    filter(NAME == "Houston"),  # change to some distance
-  "TP" = st_read("~/urban-cooling/data/raw/WU/TP/Municipal_Boundary/Municipal_Boundary.shp") %>%
-    filter(NAME == "Tampa"),
-  "DV" = st_read("~/urban-cooling/data/raw/WU/DV/DRCOG_Municipalities/DRCOG_Municipalities.shp") %>%
-    filter(city == "Denver"),
-  "AT" = st_read("~/urban-cooling/data/raw/WU/AT/TxDOT_City_Boundaries/Cities.shp") %>%
-    filter(CITY_NM == "Austin"),
-  stop("Invalid city abbreviation.")
-)
+# boundary <- switch(
+#   city,
+#   "NY" = st_read("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp"),
+#   "DT" = st_read("~/urban-cooling/data/raw/WU/DT/City_of_Detroit_Boundary/City_of_Detroit_Boundary.shp"),
+#   "ST" = st_read("~/urban-cooling/data/raw/WU/ST/seattle_boundary/CityUGA.shp") %>%
+#     filter(CITY_NM == "Seattle"),
+#   "HT" = st_read("~/urban-cooling/data/raw/WU/HT/HGAC_City_Boundaries/HGAC_City_Boundaries.shp") %>%
+#     filter(NAME == "Houston"),  # change to some distance
+#   "TP" = st_read("~/urban-cooling/data/raw/WU/TP/Municipal_Boundary/Municipal_Boundary.shp") %>%
+#     filter(NAME == "Tampa"),
+#   "DV" = st_read("~/urban-cooling/data/raw/WU/DV/DRCOG_Municipalities/DRCOG_Municipalities.shp") %>%
+#     filter(city == "Denver"),
+#   "AT" = st_read("~/urban-cooling/data/raw/WU/AT/TxDOT_City_Boundaries/Cities.shp") %>%
+#     filter(CITY_NM == "Austin"),
+#   stop("Invalid city abbreviation.")
+# )
 
 for (taxon in taxon_list) {
   taxon_clean <- gsub(" ", "_", taxon)
@@ -112,7 +115,7 @@ for (taxon in taxon_list) {
   model_input_sf <- model_input_all %>%
     filter(taxon == !!taxon) %>%
     st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
-    st_transform(crs = st_crs(boundary)) %>%
+    # st_transform(crs = st_crs(boundary)) %>%
     mutate(lon = st_coordinates(.)[,1], lat = st_coordinates(.)[,2],
            year = as.factor(year)) 
   if (phe_type %in% c("SOS","EOS")) {

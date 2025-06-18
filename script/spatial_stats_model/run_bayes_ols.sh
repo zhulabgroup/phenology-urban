@@ -1,12 +1,15 @@
 #!/bin/bash
-#SBATCH --job-name=jags_array
+#SBATCH --job-name=bayes_ols_urban_phe
+#SBATCH --account=zhukai1                   # Account name
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err
 #SBATCH --array=1-4
 #SBATCH --time=24:00:00
-#SBATCH --partition=largemem
+#SBATCH --partition=standard
 #SBATCH --mem=32G
 #SBATCH --cpus-per-task=2
+#SBATCH --mail-user=jializ@umich.edu        # Where to send mail
+#SBATCH --mail-type=BEGIN,END               # Mail notifications at the start and end of the job
 
 # Usage:
 # Submit the script to Slurm with:
@@ -39,6 +42,7 @@ export R_INPUT_DIR
 export R_OUTPUT_DIR
 export PHE_TYPE
 export CITY
+export TAXON_COL
 
 # Load necessary modules
 module load Rgeospatial/4.2.0-2023-04-25
