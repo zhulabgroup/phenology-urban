@@ -1,6 +1,7 @@
 # Project folders
 temp
 doc/image
+data
 
 # Mac files
 .DS_Store
