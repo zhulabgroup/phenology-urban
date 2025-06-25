@@ -1,0 +1,525 @@
+---
+title: "Validation of urban phenology from PlanetScope"
+author: "Jiali Zhu"
+date: "today"
+format:
+  html:
+    code-fold: true
+    code-line-numbers: true
+    code-tools:
+      source: false
+    code-summary: "Code"
+    toc: true
+    number-sections: true
+embed-resources: true
+dpi: 300
+editor: visual
+toc: true
+toc-depth: 3
+---
+
+```{r}
+#| label: load-packages
+#| include: false
+#| warning: false
+
+# Install and load 'zhulabtools' package
+library(zhulabtools)
+
+# Manage packages: check, install, and load specific packages
+check_install_packages(c("readr", "here"))
+load_packages(c("readr", "here"))
+
+select <- dplyr::select # Avoid masking by base R's select function
+```
+
+# Introduction
+
+This document compares phenology metrics derived from PlanetScope (PS) imagery with ground-based observations from the USA National Phenology Network (NPN) in urban areas. The goal is to evaluate the accuracy and reliability of PS-derived phenology relative to ground observations.
+
+For the remote sensing-derived phenology, we focus on the start of season (SOS) and end of season (EOS), calculated from Enhanced Vegetation Index (EVI) curves. SOS is defined as the day of year when the EVI curve of an individual tree’s growing season first crosses the 50% green-up threshold. EOS is defined as the day of year when the EVI curve first crosses the 50% green-down threshold.
+
+For the ground-observed phenology, NPN offers six leaf-related phenophases: (1) Breaking leaf buds, (2) Young leaves, (3) Increasing leaf size, (4) Leaves, (5) Colored leaves, and (6) Falling leaves. For lilac/honeysuckle, there is one more phenophase "All leaf buds broken". From these, key phenological metrics for individual urban trees could be extracted and compared with PS-derived phenology metrics.
+
+# Data Preparation
+
+## NPN across CONUS cities
+
+The NPN data is downloaded from the USA National Phenology Network (https://www.usanpn.org/data/observational-data). I filtered the data to include only tree records from urban areas for the years 2016-2024.
+
+The filter rules are:
+
+-   Exclude records with functional types: "Algae", "Evergreen forb", "Forb", "Graminoid", "Semi-evergreen forb".
+-   Exclude records with `Observed_Status_Conflict_Flag` equal to -9999.
+-   Exclude records with `NumDays_Since_Prior_No` or `NumDays_Until_Next_No` greater than 21.
+-   Combine series of phenophase observations that are separated by gaps of 21 days (or other threshold) or less.
+
+> It is common that there were multiple instances where the plant transitioned from a status of No to a status of Yes. These can represent real phenomena, for instance a drought deciduous tree that leafs out several times in a year, or a dogwood that reblooms after a frost event. This can also occur when observers are reporting on the same plant on sequential days but are not in agreement on phenophase status with other observers.
+
+```{r}
+us_city <- st_read(here("data/raw/CONUS/boundary/USCities/tl_2024_us_uac20.shp"),quiet = TRUE) |>
+  st_transform(4326)
+us_boundary <- st_read(here("data/raw/CONUS/boundary/US/us_boundarydissolve.shp"),quiet = TRUE) |>
+  st_transform(4326)
+threshold <- 21 # tolerance of gap to combine series
+
+npn <- read_csv(here("data/raw/CONUS/NPN/NPN1624/individual_phenometrics_data.csv"),
+                col_types = cols(Latitude = col_double(), Longitude = col_double())) |>
+  filter(!Species_Functional_Type %in% c("Algae", "Evergreen forb", "Forb", "Graminoid", "Semi-evergreen forb")) |>
+  filter(NumDays_Since_Prior_No > 0 & NumDays_Until_Next_No > 0) |>
+  filter(NumDays_Since_Prior_No <= threshold & NumDays_Until_Next_No <= threshold) |>
+  st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326, remove = FALSE) |>
+  st_filter(us_city, .predicate = st_within) |>
+  st_drop_geometry() |>
+  mutate(Species = paste0(Genus, " ", Species),
+         Phenophase_Description = ifelse(
+           Phenophase_Description == "Breaking leaf buds (lilac/honeysuckle)", "Breaking leaf buds", Phenophase_Description)) |> 
+  filter(Phenophase_Description != "Young leaves (forbs)", Observed_Status_Conflict_Flag == "-9999")
+  
+npn_filter <- npn |>
+  group_by(Individual_ID, Phenophase_Description) |>
+  arrange(First_Yes_Julian_Date) |>
+  # compute gap to previous last date
+  mutate(
+    gap = First_Yes_Julian_Date - lag(Last_Yes_Julian_Date, default = first(First_Yes_Julian_Date)),
+    new_series = ifelse(is.na(gap) | gap > threshold, 1, 0),
+    series_id = cumsum(new_series)
+  ) |>
+  group_by(Individual_ID, Phenophase_Description, series_id) |>
+  summarise(
+    First_Yes_Julian_Date = min(First_Yes_Julian_Date),
+    Last_Yes_Julian_Date = max(Last_Yes_Julian_Date),
+    First_Yes_Year = min(First_Yes_Year),
+    Last_Yes_Year = max(Last_Yes_Year),
+    NumYs_in_Series = sum(NumYs_in_Series, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(Length_Series = Last_Yes_Julian_Date - First_Yes_Julian_Date + 1)
+```
+
+To select high-quality phenology series, I filter the individuals which have multiple observations over time and multiple phenophases.
+
+-   The average number of 'yes' in a series is greater than 1, which indicates that the series has multiple observations over time, making a more reliable phenophase period.
+-   The individual that only has phenophase of "Leaves" is not included, as it alone does not provide enough information for green-up and green-down.
+-   The coverage year of an individual is greater than 1, which indicates that the individual has been regular observed in multiple years, making a more reliable sample.
+
+```{r}
+npn_filter_individual <- npn_filter |>
+  filter(NumYs_in_Series > 1) |>
+  group_by(Individual_ID, Phenophase_Description) |>
+  summarise(
+    Sum_Ys = sum(NumYs_in_Series),
+    years_covered = list(
+      unique(unlist(map2(First_Yes_Year, Last_Yes_Year, seq)))
+    ),
+    .groups = "drop"
+  ) |>
+  mutate(
+    Observe_Year = map_int(years_covered, length),
+    Sum_Ys_Per = Sum_Ys / Observe_Year
+  ) |>
+  filter(Observe_Year > 1)
+
+npn_filter_individual_per <- npn_filter_individual |>
+  select(Individual_ID, Phenophase_Description, Sum_Ys_Per) |>
+  pivot_wider(
+    names_from = Phenophase_Description,
+    values_from = Sum_Ys_Per
+  ) |>
+  # count how many phenophases are observed
+  mutate(cover_phenophase = rowSums(!is.na(across(-Individual_ID)))) |>
+  filter(!(cover_phenophase == 1 & !is.na(Leaves)))
+
+npn_filter_individual_yr <- npn_filter_individual |>
+  select(Individual_ID, Phenophase_Description, Observe_Year) |>
+  pivot_wider(
+    names_from = Phenophase_Description,
+    values_from = Observe_Year
+  ) |>
+  # count how many phenophases are observed
+  mutate(cover_phenophase = rowSums(!is.na(across(-Individual_ID)))) |>
+  filter(!(cover_phenophase == 1 & !is.na(Leaves)))
+```
+
+## NPN derived phenology metrics
+
+```{r fun-compute-phe-npn}
+compute_npnphe <- function(start = "Leaves", end = "Increasing leaf size") {
+  npn_filter |>
+    filter(
+      Individual_ID %in% (
+        npn_filter_individual_yr |>
+          filter(.data[[start]] >= 1 & .data[[end]] >= 1) |>
+          pull(Individual_ID)
+      ),
+      Phenophase_Description %in% c(start, end)
+    ) |>
+    mutate(
+      year = ifelse(Phenophase_Description == start, First_Yes_Year, Last_Yes_Year)
+    ) |>
+    group_by(Individual_ID, year, Phenophase_Description) |>
+    summarise(
+      doy = if (unique(Phenophase_Description) == start) {
+        min(First_Yes_Julian_Date, na.rm = TRUE)
+      } else {
+        max(Last_Yes_Julian_Date, na.rm = TRUE)
+      },
+      .groups = "drop"
+    ) |>
+    group_by(Individual_ID, year) |>
+    summarise(
+      npn_doy = mean(doy, na.rm = TRUE),
+      n = n(),
+      .groups = "drop"
+    ) |>
+    filter(n == 2) |>
+    select(-n) |>
+    mutate(
+      npn_doy = yday(as_date(npn_doy - 2440588, origin = "1970-01-01"))
+    ) |>
+    left_join(
+      npn |> distinct(Individual_ID, Species,Species_Functional_Type, Longitude, Latitude),
+      by = "Individual_ID"
+    )
+}
+```
+
+### Match the `Start of Season (SOS)`
+
+The SOS is defined as the day of year when the EVI curve of an individual tree’s growing season first crosses the 50% green-up threshold. For NPN, I tried several phenophases to match the SOS:
+
+1.  Mean value of *the first date of "Leaves"* and *the last day of "Increasing leaf size"*.
+2.  Mean value of *the first date of "Breaking leaf buds"* and *the last day of "Increasing leaf size"*.
+3.  Mean value of *the first date of "Young leaves"* and *the last day of "Increasing leaf size"*.
+
+[@fig-npn-sos-temp] displays the distribution of SOS derived from NPN data for each case of SOS computation. [@fig-npn-sos-spatial] shows the spatial distribution of these samples across the US cities.
+
+```{r fig-npn-sos-temp}
+npn_sos <- compute_npnphe(start = "Leaves", end = "Increasing leaf size") |>
+  mutate(type = "case1") |>
+  bind_rows(
+    compute_npnphe(start = "Breaking leaf buds", end = "Increasing leaf size") |>
+      mutate(type = "case2")
+  ) |>
+  bind_rows(
+    compute_npnphe(start = "Young leaves (tree/shrub)", end = "Increasing leaf size") |>
+      mutate(type = "case3")
+  ) |>
+  mutate(phe = "SOS")
+
+ggplot(npn_sos, aes(npn_doy)) +
+  geom_histogram(aes(y = ..density..), bins = 30, fill = "grey", color = NA) + 
+  geom_density(color = "black", size = 0.5) +
+  labs(
+    x = "DOY",
+    y = "Density",
+    title = "Distribution of NPN-derived SOS"
+  ) +
+  facet_wrap(~ type, scales = "free_y") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r fig-npn-sos-spatial}
+npn_sos_spatial <- npn_sos |>
+  distinct(Individual_ID, Longitude, Latitude) |>
+  group_by(Longitude, Latitude) |>
+  summarise(
+    n = n(),
+    .groups = "drop"
+  ) |>
+  st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326, remove = FALSE) |>
+  st_join(us_city |> select(NAME20, UACE20), join = st_within)
+
+leaflet(data = npn_sos_spatial) %>%
+  addProviderTiles(providers$OpenStreetMap, options = providerTileOptions(opacity = 0.9)) %>%
+  addCircleMarkers(
+    popup = ~ paste0(
+      "<strong>", NAME20, "</strong><br>",
+      "Num individual: ", n, "<br>"
+    ),
+    radius = ~ sqrt(n),
+    stroke = FALSE, fillOpacity = 0.7,
+    color = "green"
+  )
+```
+
+### Match the `End of Season (EOS)`
+
+Similarly, for remote sensing, the EOS is defined as the day of year when the EVI curve of an individual tree’s growing season first crosses the 50% green-down threshold. For NPN, I tried several phenophases to match the EOS:
+
+1.  Mean value of *the first date of "Colored leaves"* and *the last day of "Leaves"*.
+2.  Mean value of *the first date of "Colored leaves"* and *the last day of "Falling leaves"*.
+
+[@fig-npn-eos-temp] displays the number of individual samples per year for each case of EOS computation. [@fig-npn-eos-spatial] shows the spatial distribution of these samples across the US cities.
+
+```{r fig-npn-eos-temp}
+npn_eos <- compute_npnphe(start = "Colored leaves", end = "Increasing leaf size") |>
+  mutate(type = "case1") |>
+  bind_rows(
+    compute_npnphe(start = "Colored leaves", end = "Leaves") |>
+      mutate(type = "case2")
+  ) |>
+  mutate(phe = "EOS")
+
+ggplot(npn_eos, aes(npn_doy)) +
+  geom_histogram(aes(y = ..density..), bins = 30, fill = "grey", color = NA) + 
+  geom_density(color = "black", size = 0.5) +
+  labs(
+    x = "DOY",
+    y = "Density",
+    title = "Distribution of NPN-derived SOS"
+  ) +
+  facet_wrap(~ type, scales = "free_y") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r fig-npn-eos-spatial}
+npn_eos_spatial <- npn_eos |>
+  distinct(Individual_ID, Longitude, Latitude) |>
+  group_by(Longitude, Latitude) |>
+  summarise(
+    n = n(),
+    .groups = "drop"
+  ) |>
+  st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326, remove = FALSE) |>
+  st_join(us_city |> select(NAME20, UACE20), join = st_within)
+
+leaflet(data = npn_eos_spatial) %>%
+  addProviderTiles(providers$OpenStreetMap, options = providerTileOptions(opacity = 0.9)) %>%
+  addCircleMarkers(
+    popup = ~ paste0(
+      "<strong>", NAME20, "</strong><br>",
+      "Num individual: ", n, "<br>"
+    ),
+    radius = ~ sqrt(n),
+    stroke = FALSE, fillOpacity = 0.7,
+    color = "red"
+  )
+```
+
+### Prepare the location for PlanetScope
+
+```{r}
+npn_points <- npn_sos_spatial |>
+  st_drop_geometry() |>
+  rename(lon = Longitude, lat = Latitude, site=UACE20)|>
+  bind_rows(npn_eos_spatial |>
+             st_drop_geometry() |>
+             rename(lon = Longitude, lat = Latitude, site=UACE20)) |>
+  distinct(lon, lat, site) |>
+  mutate(id = row_number())
+
+saveRDS(npn_points, here("data/raw/CONUS/NPN/NPN1624/npn_points.rds"))
+
+library(geosphere)
+max_distances <- st_as_sf(npn_points, coords = c("lon", "lat"), crs = 4326) %>%
+  group_by(site) %>%
+  group_map(~ {
+    if (nrow(.x) < 2) {
+      tibble(max_distance_m = NA)
+    } else {
+      dists <- st_distance(.x)
+      tibble(max_distance_m = max(dists))
+    }
+  }) %>%
+  bind_rows(.id = "site")
+```
+
+
+
+
+
+
+
+# Test in NYC
+
+## NPN in New York City
+
+The NPN data is downloaded from the USA National Phenology Network (https://www.usanpn.org/data/observational-data). I filtered the data to include only tree records from urban areas in New York City (NYC) for the years 2016-2023.
+
+```{r}
+npn <- read_csv(here("data/raw/NY/NPN/16_24_leaf/individual_phenometrics_data.csv"),
+                col_types = cols(Latitude = col_double(), Longitude = col_double())) |>
+  filter(!Species_Functional_Type %in% c("Evergreen forb", "Forb", "Graminoid", "Semi-evergreen forb")) |>
+  filter(Phenophase_Description %in% c("Colored leaves", "Increasing leaf size", "Leaves"))
+npn_individual <- npn |>
+  select(Individual_ID, Latitude, Longitude, Genus, Species, Species_Functional_Type, Species_Category) |>
+  mutate(Species = paste0(Genus, " ", Species)) |>
+  distinct()
+
+npn_sos <- npn |>
+  filter(Phenophase_Description == "Leaves") |>
+  group_by(Individual_ID, First_Yes_Year) |>
+  summarise(SOS = min(First_Yes_DOY), .groups = "drop")
+npn_eos <- npn |>
+  filter(Phenophase_Description == "Increasing leaf size") |>
+  group_by(Individual_ID, Last_Yes_Year) |>
+  summarise(EOS = max(Last_Yes_DOY), .groups = "drop")
+npn_sof <- npn |>
+  filter(Phenophase_Description == "Colored leaves") |>
+  group_by(Individual_ID, First_Yes_Year) |>
+  summarise(SOF = min(First_Yes_DOY), .groups = "drop")
+npn_eof <- npn |>
+  filter(Phenophase_Description == "Leaves") |>
+  group_by(Individual_ID, Last_Yes_Year) |>
+  summarise(EOF = max(Last_Yes_DOY), .groups = "drop")
+
+
+npn_mos <- npn_sos |>
+  inner_join(npn_eos, by = c("Individual_ID", "First_Yes_Year" = "Last_Yes_Year")) |>
+  mutate(MOS = (SOS + EOS) / 2) |>
+  filter((EOS - SOS) >= 0)
+npn_mof <- npn_sof |>
+  inner_join(npn_eof, by = c("Individual_ID", "First_Yes_Year" = "Last_Yes_Year")) |>
+  mutate(MOF = (SOF + EOF) / 2) |>
+  filter((EOF - SOF) >= 0)
+
+# For MOS which has the negetive duration, consider using npn_eof'First_Yes_Year in the previous year
+# No such point
+
+# For MOF which has the negetive duration, consider using npn_eof'Last_Yes_Year in the next year
+# There is no early-SOF in the next year
+
+```
+
+## Do NPN points exist in current PS data?
+
+```{r}
+
+city = "NY"
+ny_boundary <- st_read("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp",quiet = TRUE) |>
+  st_transform(4326)
+
+## Point in NPN
+npn_mos_points <- npn_mos |>
+  left_join(npn_individual, by = c("Individual_ID")) |>
+  distinct(First_Yes_Year, MOS, Longitude, Latitude, Genus, Species, Species_Functional_Type, Species_Category) |>
+  st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326, remove = FALSE) |>
+  st_filter(ny_boundary, .predicate = st_within) |>
+  group_by(Longitude, Latitude, Genus, Species, Species_Functional_Type, Species_Category) |>
+  mutate(Tree_ID = cur_group_id()) |>
+  ungroup() |>
+  group_by(Longitude, Latitude) |>
+  mutate(Loc_ID = cur_group_id()) |>
+  ungroup() |>
+  st_drop_geometry()
+
+npn_mof_points <- npn_mof |>
+  left_join(npn_individual, by = c("Individual_ID")) |>
+  distinct(First_Yes_Year, MOF, Longitude, Latitude, Genus, Species, Species_Functional_Type, Species_Category) |>
+  st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326, remove = FALSE) |>
+  st_filter(ny_boundary, .predicate = st_within) |>
+  group_by(Longitude, Latitude, Genus, Species, Species_Functional_Type, Species_Category) |>
+  mutate(Tree_ID = cur_group_id()) |>
+  ungroup() |>
+  group_by(Longitude, Latitude) |>
+  mutate(Loc_ID = cur_group_id()) |>
+  ungroup()|>
+  st_drop_geometry()
+
+## Point in PS
+# Unfortunately, there are no NPN points within the current PS data coverage in NYC
+# saveRDS(npn_mos_points, here("data/raw/NY/NPN/16_24_leaf/npn_mos_points.rds"))
+# saveRDS(npn_mof_points, here("data/raw/NY/NPN/16_24_leaf/npn_mof_points.rds"))
+```
+
+## PlanetScope phenology for NPN trees
+
+```{r}
+# Distinct location
+npn_points <- npn_mos_points |>
+  select(Loc_ID, Longitude, Latitude) |>
+  rename(Loc_ID_mos = Loc_ID) |>
+  distinct() |>
+  full_join(
+    (npn_mof_points |>
+       select(Loc_ID, Longitude, Latitude) |>
+       rename(Loc_ID_mof = Loc_ID) |>
+       distinct()), 
+    by = c("Longitude", "Latitude")
+  ) |>
+  mutate(id = row_number()) |>
+  rename(lon = Longitude, lat = Latitude)
+
+npn_points <- npn_points %>%
+  mutate(site = kmeans(cbind(lon, lat), centers = 7)$cluster)
+ggplot(npn_points, aes(x = lon, y = lat, color = as.factor(site))) +
+  geom_point(size = 3) +
+  theme_minimal() +
+  labs(color = "Region", title = "NPN Points: K-means 7 Regions")
+
+# saveRDS(npn_points, here("data/raw/NY/NPN/16_24_leaf/npn_points.rds"))
+```
+
+Processing PS data...
+
+# Comparison
+
+```{r}
+# read in all PS_doy_data.rds in the folder
+ps_doy_data <- lapply(list.files(here("data/raw/NY/NPN/16_24_leaf/test_2022_doy"),
+                                 pattern = ".rds", full.names = TRUE), 
+                      readRDS) |>
+  bind_rows() 
+
+npn_mos_ps <- npn_mos_points |>
+  filter(First_Yes_Year == 2022) |>
+  left_join(npn_points |> 
+              na.omit(Loc_ID_mos) |>
+              select(Loc_ID_mos, id), 
+            by = c("Loc_ID" = "Loc_ID_mos")) |>
+  left_join(ps_doy_data |>
+              filter(direction == "up"), by = "id")
+
+npn_mof_ps <- npn_mof_points |>
+  filter(First_Yes_Year == 2022) |>
+  left_join(npn_points |> 
+              na.omit(Loc_ID_mof) |>
+              select(Loc_ID_mof, id), 
+            by = c("Loc_ID" = "Loc_ID_mof")) |>
+  left_join(ps_doy_data |>
+              filter(direction == "down"), by = "id")
+
+summary_npn_mos_ps <- npn_mos_ps %>%
+  group_by(id, doy) %>%
+  summarise(
+    mean = mean(MOS, na.rm = TRUE),
+    p5 = quantile(MOS, 0.05, na.rm = TRUE),
+    p95 = quantile(MOS, 0.95, na.rm = TRUE),
+    .groups = "drop"
+  )
+summary_npn_mof_ps <- npn_mof_ps %>%
+  group_by(id, doy) %>%
+  summarise(
+    mean = mean(MOF, na.rm = TRUE),
+    p5 = quantile(MOF, 0.05, na.rm = TRUE),
+    p95 = quantile(MOF, 0.95, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# Plot
+ggplot(summary_npn_mos_ps, aes(x = mean, y = doy)) +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0, color = "red") +
+  geom_errorbar(aes(xmin = p5, xmax = p95), width = 0.5, alpha = 0.3) +
+  labs(title = "NPN MOS vs PS SOS (2022)", x = "NPN MOS", y = "PS EOS") +
+  theme_minimal()
+
+ggplot(summary_npn_mof_ps, aes(x = mean, y = doy)) +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0, color = "red") +
+  geom_errorbar(aes(xmin = p5, xmax = p95), width = 0.5, alpha = 0.3) +
+  labs(title = "NPN MOF vs PS EOS (2022)", x = "NPN MOF", y = "PS EOS") +
+  theme_minimal()
+
+```
+
+# Reference
+
+(1) the timing of spring leaf-out should be no later than 200 in day of year (DOY); (2) the record should have a difference less than 60 days in comparing to VIIRS SOS; and (3) the anomaly of spring leaf-out timing should be less than 30 days within eight years (2013–2020) for an individual plant. (https://www.sciencedirect.com/science/article/pii/S0924271622002623)
+
+We used the phenophase “breaking leaf buds” in deciduous vegetation, “increasing leaf size” in evergreen vegetation, and “initial growth (grasses/sedges)” and “increasing leaf size” in stress-deciduous vegetation for evaluating SOS. We used the phenophase “all leaves fallen (deciduous)” in deciduous vegetation and “colored leaves” in stress-deciduous vegetation for evaluating EOS.(https://www.sciencedirect.com/science/article/pii/S0303243420300209)
+
+PhenoCam: https://esajournals.onlinelibrary.wiley.com/doi/full/10.1002/ecs2.3912
