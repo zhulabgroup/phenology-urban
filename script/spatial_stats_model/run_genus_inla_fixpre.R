@@ -1,3 +1,5 @@
+
+
 prepare_genus_data <- function(phe_type, points_in_buffer, all_sites_temp, srad_daily) {
   ### WU sites
   points_in_buffer_joined <- points_in_buffer %>%
@@ -157,6 +159,21 @@ run_inla_genus = function(model_input_all, r_output_dir, phe_type, city){
     
     spde <- inla.spde2.matern(mesh = mesh, alpha = 2, constr = TRUE)
     A.phe <- inla.spde.make.A(mesh = mesh, loc = coord)
+    
+    
+    A.phe_matrix <- as.matrix(A.phe)
+    temp_vec <- model_input %>% select(starts_with("temp")) %>% pull()
+    temp_vec <- temp_vec - mean(temp_vec)
+    
+    temp_vec_c <- temp_vec - mean(temp_vec)
+    temp_norm_sq <- sum(temp_vec_c^2)
+    
+    A.phe_ortho <- A.phe_matrix
+    for (j in seq_len(ncol(A.phe_matrix))) {
+      coef_j <- sum(A.phe_matrix[, j] * temp_vec_c) / temp_norm_sq
+      A.phe_ortho[, j] <- A.phe_matrix[, j] - coef_j * temp_vec_c
+    }
+    
     s.index <- inla.spde.make.index(name = "spatial.field",
                                     n.spde = spde$n.spde)
     
@@ -167,14 +184,15 @@ run_inla_genus = function(model_input_all, r_output_dir, phe_type, city){
     stk.e <- inla.stack(
       tag = "est",
       data = list(y = model_input[[phe_metric]]),
-      A = list(1, A.phe),
+      A = list(1, A.phe_ortho),
       effects = list(data.frame(Intercept = rep(1, nrow(coord)),
-                                temp = (model_input %>% select(starts_with("temp")) %>% pull()),
+                                temp = temp_vec,
                                 prcp = (model_input %>% select(starts_with("prcp")) %>% pull()),
                                 srad = (model_input %>% select(starts_with("srad")) %>% pull()),
-                                year = model_input$year), 
+                                year = model_input$year),
                      s = s.index)
     )
+    
     
     
     stk.p <- inla.stack(
@@ -199,11 +217,11 @@ run_inla_genus = function(model_input_all, r_output_dir, phe_type, city){
     
     res <- inla(formula,
                 family = "gaussian",
-                data = inla.stack.data(stk.full),
+                data = inla.stack.data(stk.e),
                 control.compute = list(return.marginals = TRUE, waic = TRUE),
                 control.predictor = list(
                   compute = TRUE,
-                  A = inla.stack.A(stk.full)))
+                  A = inla.stack.A(stk.e)))
     # res$waic$waic
     # summary(res)
     
