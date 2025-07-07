@@ -33,7 +33,7 @@ PHE_TYPE=${PHE_TYPES[$CHAIN_INDEX]}
 R_SCRIPT=../phenology-urban/script/spatial_stats_model/run_bayes_ols.R
 WORKING_DIR=../phenology-urban/
 R_INPUT_DIR=../phenology-urban/data/
-R_OUTPUT_DIR=../phenology-urban/data/proc/urban/ols_model/bayes_species/
+R_OUTPUT_DIR=../phenology-urban/data/proc/urban/ols_model/bayes_species_humid_all/
 CITY="NY"
 TAXON_COL="canonicalname"
 

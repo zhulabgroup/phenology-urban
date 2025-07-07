@@ -1,35 +1,35 @@
 
 
 prepare_genus_data <- function(phe_type, points_in_buffer, all_sites_temp, srad_daily) {
-  ### WU sites
+  # ### WU sites
+  # points_in_buffer_joined <- points_in_buffer %>%
+  #   left_join((srad_daily %>%
+  #                select(id, year, season, Avg_srad) %>%
+  #                pivot_wider(names_from = season, values_from = Avg_srad, names_prefix = "srad_")),
+  #             by = c("id", "year")) %>%
+  #   left_join(all_sites_temp %>%
+  #               select(name, year, season, Avg_AvgTemp) %>%
+  #               pivot_wider(names_from = season, values_from = Avg_AvgTemp, names_prefix = "temp_"),
+  #             by = c("Site" = "name", "year")) %>%
+  #   left_join(all_sites_temp %>%
+  #               select(name, year, season, Sum_Sum_mm) %>%
+  #               pivot_wider(names_from = season, values_from = Sum_Sum_mm, names_prefix = "prcp_"),
+  #             by = c("Site" = "name", "year"))
+  ## All Daymet
   points_in_buffer_joined <- points_in_buffer %>%
     left_join((srad_daily %>%
                  select(id, year, season, Avg_srad) %>%
                  pivot_wider(names_from = season, values_from = Avg_srad, names_prefix = "srad_")),
               by = c("id", "year")) %>%
     left_join(all_sites_temp %>%
-                select(name, year, season, Avg_AvgTemp) %>%
+                mutate(Avg_AvgTemp = temp) %>%
+                select(id, year, season, Avg_AvgTemp) %>%
                 pivot_wider(names_from = season, values_from = Avg_AvgTemp, names_prefix = "temp_"),
-              by = c("Site" = "name", "year")) %>%
+              by = c("id", "year")) %>%
     left_join(all_sites_temp %>%
-                select(name, year, season, Sum_Sum_mm) %>%
-                pivot_wider(names_from = season, values_from = Sum_Sum_mm, names_prefix = "prcp_"),
-              by = c("Site" = "name", "year"))
-  ### All Daymet
-  # points_in_buffer_joined <- points_in_buffer %>%
-  #   left_join((srad_daily %>%
-  #                select(id, year, season, Avg_srad) %>%
-  #                pivot_wider(names_from = season, values_from = Avg_srad, names_prefix = "srad_")), 
-  #             by = c("id", "year")) %>%
-  #   left_join(all_sites_temp %>%
-  #               mutate(Avg_AvgTemp = (tmin +tmax)/2) %>%
-  #               select(id, year, season, Avg_AvgTemp) %>%
-  #               pivot_wider(names_from = season, values_from = Avg_AvgTemp, names_prefix = "temp_"), 
-  #             by = c("id", "year")) %>%
-  #   left_join(all_sites_temp %>%
-  #               select(id, year, season, prcp) %>%
-  #               pivot_wider(names_from = season, values_from = prcp, names_prefix = "prcp_"), 
-  #             by = c("id", "year"))
+                select(id, year, season, prcp) %>%
+                pivot_wider(names_from = season, values_from = prcp, names_prefix = "prcp_"),
+              by = c("id", "year"))
   
   if (phe_type == "SOS") {
     phe_metric <- "doy"
@@ -128,6 +128,8 @@ run_inla_genus = function(model_input_all, r_output_dir, phe_type, city){
       phe_metric <- "doy_diff"
     }
     
+    
+    
     model_input_sf <- model_input_all %>%
       filter(genus == !!genus) %>%
       st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
@@ -155,25 +157,19 @@ run_inla_genus = function(model_input_all, r_output_dir, phe_type, city){
                          max.edge = c(10000, 20000), 
                          cutoff = 1000)  # prevent close points from being connected
     
+    ### Build the mesh 
+    coord <- cbind(model_input$lon, model_input$lat) # coordinates of observations
+    domain <- inla.nonconvex.hull(as.matrix(coord),
+                                  concave = -.07,convex = -0.05, resolution=c(100,100))
+    
+    mesh <- inla.mesh.2d(boundary = domain, loc = coord,
+                         max.edge = c(10000, 20000), 
+                         cutoff = 1000)  # prevent close points from being connected
+    
     ### Build the spde 
     
     spde <- inla.spde2.matern(mesh = mesh, alpha = 2, constr = TRUE)
     A.phe <- inla.spde.make.A(mesh = mesh, loc = coord)
-    
-    
-    A.phe_matrix <- as.matrix(A.phe)
-    temp_vec <- model_input %>% select(starts_with("temp")) %>% pull()
-    temp_vec <- temp_vec - mean(temp_vec)
-    
-    temp_vec_c <- temp_vec - mean(temp_vec)
-    temp_norm_sq <- sum(temp_vec_c^2)
-    
-    A.phe_ortho <- A.phe_matrix
-    for (j in seq_len(ncol(A.phe_matrix))) {
-      coef_j <- sum(A.phe_matrix[, j] * temp_vec_c) / temp_norm_sq
-      A.phe_ortho[, j] <- A.phe_matrix[, j] - coef_j * temp_vec_c
-    }
-    
     s.index <- inla.spde.make.index(name = "spatial.field",
                                     n.spde = spde$n.spde)
     
@@ -184,15 +180,14 @@ run_inla_genus = function(model_input_all, r_output_dir, phe_type, city){
     stk.e <- inla.stack(
       tag = "est",
       data = list(y = model_input[[phe_metric]]),
-      A = list(1, A.phe_ortho),
+      A = list(1, A.phe),
       effects = list(data.frame(Intercept = rep(1, nrow(coord)),
-                                temp = temp_vec,
+                                temp = (model_input %>% select(starts_with("temp")) %>% pull()),
                                 prcp = (model_input %>% select(starts_with("prcp")) %>% pull()),
                                 srad = (model_input %>% select(starts_with("srad")) %>% pull()),
-                                year = model_input$year),
+                                year = model_input$year), 
                      s = s.index)
     )
-    
     
     
     stk.p <- inla.stack(
@@ -217,11 +212,11 @@ run_inla_genus = function(model_input_all, r_output_dir, phe_type, city){
     
     res <- inla(formula,
                 family = "gaussian",
-                data = inla.stack.data(stk.e),
+                data = inla.stack.data(stk.full),
                 control.compute = list(return.marginals = TRUE, waic = TRUE),
                 control.predictor = list(
                   compute = TRUE,
-                  A = inla.stack.A(stk.e)))
+                  A = inla.stack.A(stk.full)))
     # res$waic$waic
     # summary(res)
     
@@ -237,12 +232,78 @@ run_inla_genus = function(model_input_all, r_output_dir, phe_type, city){
       mutate(Factor = ifelse(Factor == "temp", genus, Factor))
     
     index <- inla.stack.index(stack = stk.full, tag = "pred")$data
-    pred_mean <- res$summary.fitted.values[index, "mean"]
+    pred_mean <- res$summary.fitted.values$mean[index]
     
     compare<- rbind(
       Lon = coorp[, 1], Lat = coorp[, 2],
       value = pred_mean, variable = "pred_mean", true_value = model_input[[phe_metric]]
     )
+    
+    ######################################## Check autocorrelation ###########
+    
+    spatial_field_mean <- res$summary.random$spatial.field$mean
+    
+    fitted_spatial <- as.vector(A.phe %*% spatial_field_mean)
+    temp_vec <- model_input %>% select(starts_with("temp")) %>% pull()
+    
+    cor_temp_spatial <- cor(temp_vec, fitted_spatial, use = "complete.obs")
+    print(paste("Correlation between temp and spatial random effect:", round(cor_temp_spatial, 3)))
+    ggplot(data.frame(temp = temp_vec, spatial = fitted_spatial), aes(x = temp, y = spatial)) +
+      geom_point(alpha = 0.6) +
+      geom_smooth(method = "lm", se = FALSE, color = "red") +
+      labs(title = paste("Spatial Confounding: cor =", round(cor_temp_spatial, 2)),
+           x = "Temperature", y = "Spatial Random Effect") +
+      theme_minimal()
+    
+    ######################################## Compare with non-spatial model ########################################
+    formula_nosp <- y ~ 0 + Intercept + temp + prcp + srad + f(year, model = 'iid')
+    
+    res_nosp <- inla(formula_nosp,
+                     family = "gaussian",
+                     data = inla.stack.data(stk.full), 
+                     control.predictor = list(
+                       compute = TRUE,
+                       A = inla.stack.A(stk.full)
+                     ),
+                     control.compute = list(dic = TRUE, waic = TRUE))
+    # summary(res_nosp)
+    # Extract variance components
+    var_fixed_with_spatial <- res$summary.fixed$mean^2 %>% sum()
+    var_fixed_nospatial <- res_nosp$summary.fixed$mean^2 %>% sum()
+    
+    index_est <- inla.stack.index(stack = stk.full, tag = "est")$data
+    fitted_total <- res$summary.fitted.values$mean[index_est]
+    y_obs <- model_input[[phe_metric]]
+    var_y <- var(y_obs, na.rm = TRUE)
+    residuals <- y_obs - fitted_total
+    var_resid <- var(residuals, na.rm = TRUE)
+    R2_conditional <- 1 - var_resid / var_y
+    
+    
+    fitted_fixed_only <- res_nosp$summary.fitted.values$mean[index_est]
+    resid_fixed <- y_obs - fitted_fixed_only
+    var_resid_fixed <- var(resid_fixed, na.rm = TRUE)
+    R2_marginal <- 1 - var_resid_fixed / var_y
+    
+    cat("Marginal R² (fixed only):", round(R2_marginal, 3), "\n")
+    cat("Conditional R² (fixed + random):", round(R2_conditional, 3), "\n")
+    
+    resid_df <- data.frame(
+      lon = model_input$lon,
+      lat = model_input$lat,
+      resid = resid_fixed
+    )
+    
+    library(ggplot2)
+    ggplot(resid_df, aes(x = lon, y = lat, color = resid)) +
+      geom_point() +
+      scale_color_gradient2() +
+      coord_equal() +
+      labs(title = "Residuals from non-spatial model",
+           fill = "Residual") +
+      theme_minimal()
+    
+    ######################################## Save the model results ########################################
     
     list(mesh = mesh,
          res = res,
@@ -533,12 +594,14 @@ plot_coef_genus_cities <- function(r_output_dir, phe_type){
 # 
 # ######################################## Prediction from model ########################################
 # 
-# ### In sample - Prediction
+### In sample - Prediction
 # 
-# compare <- data.frame(t(model_result$compare)) %>%
+# compare <- data.frame(t(compare)) %>%
 #   mutate(value = as.numeric(value), true_value = as.numeric(true_value))
+# compare <- compare %>% mutate(diff = value - true_value)
 # lm_fit <- lm(value ~ true_value, data = compare)
-# slope <- round(coef(lm_fit)[2], 3) 
+# 
+# slope <- round(coef(lm_fit)[2], 3)
 # 
 # ggplot(compare, aes(x = true_value, y = value)) +
 #   geom_point() +
@@ -547,6 +610,12 @@ plot_coef_genus_cities <- function(r_output_dir, phe_type){
 #   annotate("text", x = -Inf, y = Inf,
 #            label = paste("Slope =", round(slope, 2)),
 #            hjust = -0.1, vjust = 1.5,
-#            color = "blue", size = 5) + 
+#            color = "blue", size = 5) +
 #   labs(x = "True value", y = "Predicted value") +
 #   theme_classic()
+# # spatial
+# 
+# ggplot(compare, 
+#        aes(x = Lat, y = Lon, color=diff)) +
+#   geom_point(alpha = 0.6) 
+#   theme_minimal()

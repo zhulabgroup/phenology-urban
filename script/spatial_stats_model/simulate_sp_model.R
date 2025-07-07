@@ -71,9 +71,9 @@ sim_data <- data.frame(
   lon = lon,
   lat = lat,
   year = year,
-  AvgTemp_mean = tavg,
-  Sum_mm_sum = precp,
-  srad_mean = srad,
+  temp = tavg,
+  prcp = precp,
+  srad = srad,
   spatial_effect = spatial_effect,
   doy = y
 )

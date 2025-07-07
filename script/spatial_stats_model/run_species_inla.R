@@ -1,33 +1,33 @@
 prepare_species_data <- function(phe_type, points_in_buffer, all_sites_temp, srad_daily) {
   ### WU sites
+  # points_in_buffer_joined <- points_in_buffer %>%
+  #   left_join((srad_daily %>%
+  #                select(id, year, season, Avg_srad) %>%
+  #                pivot_wider(names_from = season, values_from = Avg_srad, names_prefix = "srad_")),
+  #             by = c("id", "year")) %>%
+  #   left_join(all_sites_temp %>%
+  #               select(name, year, season, Avg_AvgTemp) %>%
+  #               pivot_wider(names_from = season, values_from = Avg_AvgTemp, names_prefix = "temp_"),
+  #             by = c("Site" = "name", "year")) %>%
+  #   left_join(all_sites_temp %>%
+  #               select(name, year, season, Sum_Sum_mm) %>%
+  #               pivot_wider(names_from = season, values_from = Sum_Sum_mm, names_prefix = "prcp_"),
+  #             by = c("Site" = "name", "year"))
+  ## All Daymet
   points_in_buffer_joined <- points_in_buffer %>%
     left_join((srad_daily %>%
                  select(id, year, season, Avg_srad) %>%
                  pivot_wider(names_from = season, values_from = Avg_srad, names_prefix = "srad_")),
               by = c("id", "year")) %>%
     left_join(all_sites_temp %>%
-                select(name, year, season, Avg_AvgTemp) %>%
+                mutate(Avg_AvgTemp = temp) %>%
+                select(id, year, season, Avg_AvgTemp) %>%
                 pivot_wider(names_from = season, values_from = Avg_AvgTemp, names_prefix = "temp_"),
-              by = c("Site" = "name", "year")) %>%
+              by = c("id", "year")) %>%
     left_join(all_sites_temp %>%
-                select(name, year, season, Sum_Sum_mm) %>%
-                pivot_wider(names_from = season, values_from = Sum_Sum_mm, names_prefix = "prcp_"),
-              by = c("Site" = "name", "year"))
-  ### All Daymet
-  # points_in_buffer_joined <- points_in_buffer %>%
-  #   left_join((srad_daily %>%
-  #                select(id, year, season, Avg_srad) %>%
-  #                pivot_wider(names_from = season, values_from = Avg_srad, names_prefix = "srad_")), 
-  #             by = c("id", "year")) %>%
-  #   left_join(all_sites_temp %>%
-  #               mutate(Avg_AvgTemp = (tmin +tmax)/2) %>%
-  #               select(id, year, season, Avg_AvgTemp) %>%
-  #               pivot_wider(names_from = season, values_from = Avg_AvgTemp, names_prefix = "temp_"), 
-  #             by = c("id", "year")) %>%
-  #   left_join(all_sites_temp %>%
-  #               select(id, year, season, prcp) %>%
-  #               pivot_wider(names_from = season, values_from = prcp, names_prefix = "prcp_"), 
-  #             by = c("id", "year"))
+                select(id, year, season, prcp) %>%
+                pivot_wider(names_from = season, values_from = prcp, names_prefix = "prcp_"),
+              by = c("id", "year"))
   
   if (phe_type == "SOS") {
     phe_metric <- "doy"
@@ -77,45 +77,26 @@ prepare_species_data <- function(phe_type, points_in_buffer, all_sites_temp, sra
       drop_na()
   }
   
-  combine_exact_fuzzy <- function(df, threshold) {
-    exact <- df |> filter(matchtype == "EXACT") |>
-      drop_na(specieskey) # should have the exact species information
-    fuzzy <- df |>
-      filter(matchtype == "FUZZY", !(original_sciname %in% exact$original_sciname)) |>
-      drop_na(specieskey) |>
-      group_by(original_sciname) |> 
-      arrange(desc(status == "ACCEPTED"), desc(confidence)) |> # sort by status, confidence and similarity
-      slice(1) |>
-      ungroup() |>
-      add_count(original_sciname, name = "n_dup") |> # check remaining duplicates
-      filter(n_dup == 1) |> # keep only unique ones, since we can not make final desicion
-      select(-n_dup) |>
-      filter(confidence >= threshold * 100)
-    bind_rows(exact, fuzzy) |> 
-      group_by(original_sciname) |>
-      arrange(desc(status == "ACCEPTED")) |> 
-      slice(1)
-  }
-  
   gbif_taxon_keys <- model_input$taxa %>% # get the first column of the data.frame
     unique()  %>% # remove duplicates
-    get_gbifid_(method="backbone") %>%  # match names to the GBIF backbone to get taxonkeys
-    imap(~ .x %>% mutate(original_sciname = .y))  %>%   # add original name back into data.frame
-    bind_rows()  %>% 
-    filter(status %in% c("ACCEPTED", "SYNONYM") & kingdom == "Plantae" & matchtype != "HIGHERRANK") %>% # get only accepted names and remove anything that might have matched to a non-plant
-    combine_exact_fuzzy(threshold = 0.9) %>%
-    select(canonicalname,original_sciname) # check for missing values
+    name_backbone_checklist(kingdom = "Plantae", phylum = "Tracheophyta") %>%
+    filter(kingdom == "Plantae", phylum == "Tracheophyta") |>
+    filter(status %in% c("ACCEPTED", "SYNONYM") & rank == "SPECIES") %>% # get only accepted names and remove anything that might have matched to a non-species
+    select(canonicalName, verbatim_name) # check for missing values
   
   model_input_top_10_species <- model_input %>%
-    left_join(gbif_taxon_keys, by = c("taxa" = "original_sciname")) %>% # join the GBIF taxon keys
-    filter(canonicalname %in% (model_input %>%
-                                 left_join(gbif_taxon_keys, by = c("taxa" = "original_sciname")) %>%
-                                 drop_na(canonicalname) %>% 
-                                 group_by(canonicalname) %>%
+    left_join(gbif_taxon_keys, by = c("taxa" = "verbatim_name")) %>% # join the GBIF taxon keys
+    filter(canonicalName %in% (model_input %>%
+                                 left_join(gbif_taxon_keys, by = c("taxa" = "verbatim_name")) %>%
+                                 drop_na(canonicalName) %>% 
+                                 group_by(canonicalName) %>%
                                  summarise(n = n(), .groups = "drop") %>%
                                  arrange(desc(n)) %>%
                                  head(10) %>% # get the top 10 species, otherwise all sp
-                                 pull(canonicalname))) # filter to the taxa in the original data)
+                                 pull(canonicalName))) |> # filter to the taxa in the original data)
+    rename(canonicalname = canonicalName)
+  
+  
   
   return(model_input_top_10_species)
 }
