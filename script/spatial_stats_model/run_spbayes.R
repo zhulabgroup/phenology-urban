@@ -3,16 +3,21 @@ library(sp)
 library(sf)
 library(dplyr)
 library(stringr)
-library(lme4)
+library(readr)
 library(coda)
-library(car)
-library(gstat)
+library(lubridate)
+library(tidyr)
+library(taxize)
+library(purrr)
+library(terra)
+library(rgbif)
 
 # Read file paths from environment variables
 r_input_dir <- Sys.getenv("R_INPUT_DIR")
 r_output_dir <- Sys.getenv("R_OUTPUT_DIR")
-city <- as.character(Sys.getenv("CITY"))
-phe_type <- as.character(Sys.getenv("PHE_TYPE"))
+city <- Sys.getenv("CITY")
+phe_type <- Sys.getenv("PHE_TYPE")
+taxon_col <- Sys.getenv("TAXON_COL")  # column name for species
 
 # args <- commandArgs(trailingOnly = TRUE)
 # if (length(args) < 3) {
@@ -24,62 +29,132 @@ phe_type <- as.character(Sys.getenv("PHE_TYPE"))
 # city <- args[3]
 # phe_type <- args[4]
 
-# r_input_dir <- "~/phenology-urban/data/proc/urban/"
-# r_output_dir <- "~/phenology-urban/data/proc/urban/sp_model/"
-# city <- "SIM"
+# r_input_dir <- "~/phenology-urban/data/"
+# r_output_dir <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/spbayes_species_humid_all/"
+# city <- "NY"
 # phe_type <- "SOS"
-# genus = "sp_random_yr"\
-# cov_type = c("Mat", "Exp", "Gau", "Sph")
+# taxon_col <- "canonicalname"
 
 #################### Read data ####################
 
-tavg_allyear_var <- readRDS(paste0(r_input_dir, city, "/tavg_allyear_var.rds"))
+## prepare input data
+metadata <- read_csv("~/lab-data/datasets/vegetation/PS/urban/metadata.csv") %>%
+  filter(site == !!city)
+file_list <- list.files(path = "~/lab-data/datasets/vegetation/PS/urban/doy", pattern = paste0("^doy_",city,"_.*\\.rds$"), full.names = TRUE)
+data_list <- file_list %>%
+  map(~ readRDS(.x))
+all_doy <- bind_rows(data_list)
+tree_location <- metadata %>%
+  mutate(genus = str_extract(taxa, "^[^ ]+")) %>%
+  left_join(all_doy, by = "id") %>%
+  filter(!is.na(doy)) %>%
+  mutate(geometry = paste0("c(", lon, ", ", lat, ")"))
 
-if (phe_type == "SOS") {
-  phe_metric <- "doy"
-  direction <- "up"
-  thres <- 0.5
-} else if (phe_type == "EOS") {
-  phe_metric <- "doy"
-  direction <- "down"
-  thres <- 0.5
-} else if (phe_type == "GreenUp") {
-  phe_metric <- "doy_diff"
-  direction <- "up"
-  thres <- 0.2
-  tavg_allyear_var$doy_diff <- as.numeric(tavg_allyear_var$doy_diff)
-} else {
-  phe_metric <- "doy_diff"
-  direction <- "down"
-  thres <- 0.2
-  tavg_allyear_var$doy_diff <- as.numeric(tavg_allyear_var$doy_diff)
-}
+# List of Humid variable names and their corresponding filenames
+files <- c("temp_monthly_all_tree.rds",
+           "srad_monthly_all_tree.rds")
+base_path <- "~/phenology-urban/data/raw/"
+processed_humid_list <- lapply(files, function(file_name) {
+  # Read the file
+  var_name <- sub("_monthly_all_tree.rds", "", file_name)
+  data <- readRDS(paste0(base_path, city, "/HUMID/", file_name)) %>%
+    select(id, value, date) %>%
+    mutate(
+      season = case_when(
+        substr(date, 6, 7) %in% c("03", "04", "05") ~ "spring",
+        substr(date, 6, 7) %in% c("06", "07", "08") ~ "summer",
+        substr(date, 6, 7) %in% c("09", "10", "11") ~ "fall",
+        substr(date, 6, 7) %in% c("12", "01", "02") ~ "winter"
+      )) %>%
+    mutate(year = as.integer(substr(date, 1, 4)),
+           year = if_else(substr(date, 6, 7) == "12", year + 1, year)) %>%
+    filter(year < 2019) %>% 
+    group_by(id, year, season) %>%
+    summarise(
+      # Use sum for prcp, and mean for temp and srad
+      Avg_value = mean(as.numeric(value), na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    # Rename the Avg_value column to the variable name (e.g., tmax, tmin, prcp)
+    rename(!!var_name := Avg_value)
+  return(data)
+})
 
+files <- c("prcp_monthly_all_tree.rds")
+processed_daymet_list <- lapply(files, function(file_name) {
+  # Read the file
+  var_name <- sub("_monthly_all_tree.rds", "", file_name)
+  data <- readRDS(paste0(base_path, city, "/Daymet/monthly2016-2024/", file_name)) %>%
+    select(id, value, date) %>%
+    mutate(
+      season = case_when(
+        substr(date, 6, 7) %in% c("03", "04", "05") ~ "spring",
+        substr(date, 6, 7) %in% c("06", "07", "08") ~ "summer",
+        substr(date, 6, 7) %in% c("09", "10", "11") ~ "fall",
+        substr(date, 6, 7) %in% c("12", "01", "02") ~ "winter"
+      )) %>%
+    mutate(year = as.integer(substr(date, 1, 4)),
+           year = if_else(substr(date, 6, 7) == "12", year + 1, year)) %>%
+    group_by(id, year, season) %>%
+    summarise(
+      # Use sum for prcp, and mean for temp and srad
+      Avg_value = sum(as.numeric(value), na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    # Rename the Avg_value column to the variable name (e.g., tmax, tmin, prcp)
+    rename(!!var_name := Avg_value)
+  
+  return(data)
+})
 
+all_sites_climate <- processed_humid_list[[1]] |>
+  left_join(processed_daymet_list[[1]], by = c("id", "season", "year")) 
+
+srad_daily <- processed_humid_list[[2]] |>
+  rename(Avg_srad = srad)
+
+source("script/spatial_stats_model/run_species_inla.R")
+model_input_all <- prepare_species_data(phe_type, tree_location, all_sites_climate, srad_daily)
+
+taxon_list <- unique(model_input_all[[taxon_col]])
 #################### Find the optimal cov model ####################
-
-unique_genus <- unique(tavg_allyear_var$genus)
-
-for (genus in unique_genus) {
-  model_path <- paste0(r_output_dir, city, "_", genus, "_tavg_", phe_type,  ".rds")
+for (taxon in taxon_list) {
+  taxon_clean <- gsub(" ", "_", taxon)
+  out_dir <- paste0(r_output_dir, city, "/")
+  if (!dir.exists(out_dir)) {
+    dir.create(out_dir, recursive = TRUE)
+  }
+  model_path <- paste0(out_dir, taxon_clean, "_", phe_type, ".rds")
+  
   if (file.exists(model_path)) {
     next  # Skip the current iteration of the loop
   }
-  tavg_phe <- tavg_allyear_var %>%
-    filter(direction == !!direction & thres == !!thres & genus == !!genus) %>%
-    na.omit()
-  print(paste("City:",city, "Genus:",genus, "; metric:", nrow(tavg_phe)))
-  print(paste("Type:", phe_type, "; metric:", phe_metric, "; direction:", direction, "; thres:", thres))
-  if (nrow(tavg_phe) < 10) next
+  model_input_sf <- model_input_all %>%
+    filter(taxon == !!taxon) %>%
+    st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
+    # st_transform(crs = st_crs(boundary)) %>%
+    mutate(lon = st_coordinates(.)[,1], lat = st_coordinates(.)[,2],
+           year = as.factor(year)) 
+  if (phe_type %in% c("SOS","EOS")) {
+    phe_metric <- "doy"
+  } else {
+    phe_metric <- "doy_diff"
+  }
+  tavg_phe <- model_input_sf |>
+    st_drop_geometry()
+  temp_col <- names(tavg_phe)[grepl("^temp", names(tavg_phe))]
+  prcp_col <- names(tavg_phe)[grepl("^prcp", names(tavg_phe))]
+  srad_col <- names(tavg_phe)[grepl("^srad", names(tavg_phe))]
   
-  OLS_formula <- as.formula(paste0(phe_metric, " ~ AvgTemp_mean + Sum_mm_sum + srad_mean + (1|year)"))
-  random_OLS <- lmer(OLS_formula, data = tavg_phe)
-  tavg_phe$residual_random <- tavg_phe[[phe_metric]] - fitted(random_OLS)
-  coordinates(tavg_phe) <- ~ lon + lat
-  vgm.emt <- variogram(residual_random ~ 1, tavg_phe, cloud = FALSE)
-  vgm.las.init <- vgm(model = c("Exp", "Sph", "Gau", "Mat"))
-  vgm_exn_fit <- fit.variogram(vgm.emt, vgm.las.init)
-  cov_type <- as.character(vgm_exn_fit$model)
+  # OLS_formula <- as.formula(paste0(phe_metric, " ~ ", temp_col, "+", prcp_col, "+", srad_col , "+ (1|year)"))
+  # random_OLS <- lmer(OLS_formula, data = tavg_phe)
+  # tavg_phe$residual_random <- tavg_phe[[phe_metric]] - fitted(random_OLS)
+  # coordinates(tavg_phe) <- ~ lon + lat
+  # vgm.emt <- variogram(residual_random ~ 1, tavg_phe, cloud = FALSE)
+  # vgm.las.init <- vgm(model = c("Exp", "Sph", "Gau", "Mat"))
+  # vgm_exn_fit <- fit.variogram(vgm.emt, vgm.las.init)
+  # cov_type <- as.character(vgm_exn_fit$model)
+  cov_type = "Mat"
   
   #################### Run the spatial model ####################
   coords <- coordinates(tavg_phe)
@@ -99,7 +174,7 @@ for (genus in unique_genus) {
     
   
   tavg_phe_df <- as.data.frame(tavg_phe)
-  sp_formula <- as.formula(paste0(phe_metric, " ~ AvgTemp_mean + Sum_mm_sum + srad_mean"))
+  sp_formula <- as.formula(paste0(phe_metric, " ~ ", temp_col, "+", prcp_col, "+", srad_col))
   
   # Define covariance functions
   

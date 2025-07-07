@@ -1,22 +1,23 @@
 #!/bin/bash
-#SBATCH --job-name=jags_array
+#SBATCH --job-name=bayes_sp_urban_phe
+#SBATCH --account=zhukai0                   # Account name
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err
 #SBATCH --array=1-4
-#SBATCH --time=30:00:00
+#SBATCH --time=24:00:00
 #SBATCH --partition=standard
-#SBATCH --mem=24G
+#SBATCH --mem=64G
 #SBATCH --cpus-per-task=2
+#SBATCH --mail-user=jializ@umich.edu        # Where to send mail
+#SBATCH --mail-type=BEGIN,END               # Mail notifications at the start and end of the job
 
 # Usage:
 # Submit the script to Slurm with:
-#    sbatch run_spbayes_slurm.sh
+#    sbatch run_jags_array_slurm.sh
 # When Slurm job array is completed, create a symbolic link to the desirable output with:
 #    ln -si "$WORKING_DIR/intermediate/slurm_job123456/jags_mod.rds" \
 #          "$WORKING_DIR/intermediate/jags_mod.rds"
 #    The `-si` option in `ln` will prompt for confirmation before replacing any existing link or file.
-
-
 
 
 # Define combinations of chains and iterations
@@ -27,17 +28,19 @@ CHAIN_INDEX=$((SLURM_ARRAY_TASK_ID - 1))
 PHE_TYPE=${PHE_TYPES[$CHAIN_INDEX]}
 
 # Define the R script and input/output files
-R_SCRIPT=../phenology-urban/script/run_spbayes.R
-WORKING_DIR=../urban_phenology_sp
-R_INPUT_DIR=$WORKING_DIR/input/
-R_OUTPUT_DIR=$WORKING_DIR/output/
-CITY="TP"
+R_SCRIPT=../phenology-urban/script/spatial_stats_model/run_spbayes.R
+WORKING_DIR=../phenology-urban/
+R_INPUT_DIR=../phenology-urban/data/
+R_OUTPUT_DIR=../phenology-urban/data/proc/urban/sp_model/fixed_preseason/spbayes_species_humid_all/
+CITY="NY"
+TAXON_COL="canonicalname"
 
 # Export variables to be used in the R script
 export R_INPUT_DIR
 export R_OUTPUT_DIR
 export PHE_TYPE
 export CITY
+export TAXON_COL
 
 # Load necessary modules
 module load Rgeospatial/4.2.0-2023-04-25
