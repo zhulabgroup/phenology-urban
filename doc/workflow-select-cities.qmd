@@ -245,6 +245,20 @@ wrap_plots(climate1 + climate2, guides = "collect") &
   )
 ```
 
+
+
+Use the HUMID to get the within city climate variation
+? maybe more direct compared to using building structure
+
+
+
+
+
+
+
+
+
+
 ### Urban form
 
 Since the microclimate heterogeneity within cities is largely driven by differences in urban surface structures and their influence on heat processes, I want to include cities that represent a range of urban forms. Specifically, these cities differ in their **overall building height levels** while also exhibiting sufficient **internal heterogeneity** in vertical structure.

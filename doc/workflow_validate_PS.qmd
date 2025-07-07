@@ -15,30 +15,28 @@ editor_options:
 library(zhulabtools)
 
 # Manage packages: check, install, and load specific packages
-check_install_packages(c("readr", "here", "sf", "ggplot2", "dplyr", "lubridate", "tidyr", "leaflet", "purrr", "patchwork"))
-load_packages(c("readr", "here", "sf", "ggplot2", "dplyr", "lubridate", "tidyr", "leaflet", "purrr", "patchwork"))
+check_install_packages(c("readr", "here", "sf", "ggplot2", "dplyr", "lubridate", "tidyr", "leaflet", "purrr", "patchwork","stringr"))
+load_packages(c("readr", "here", "sf", "ggplot2", "dplyr", "lubridate", "tidyr", "leaflet", "purrr", "patchwork", "stringr"))
 
 select <- dplyr::select # Avoid masking by base R's select function
 ```
 
 # Introduction
 
-This document compares phenology metrics derived from PlanetScope (PS) imagery with ground-based observations from the USA National Phenology Network (NPN) in urban areas. The goal is to evaluate the accuracy and reliability of PS-derived phenology relative to ground observations.
+This document compares individual tree phenology metrics derived from PlanetScope (PS) imagery with ground-based observations from the USA National Phenology Network (NPN) in urban areas. The goal is **to evaluate the accuracy and reliability of PS-derived phenology relative to ground observations**.
 
-For the remote sensing-derived phenology, we focus on the start of season (SOS) and end of season (EOS), calculated from Enhanced Vegetation Index (EVI) curves. SOS is defined as the day of year when the EVI curve of an individual tree’s growing season first crosses the 50% green-up threshold. EOS is defined as the day of year when the EVI curve first crosses the 50% green-down threshold.
+For the remote sensing-based metrics, we focus on the start of season (SOS) and end of season (EOS), calculated from time series of the Enhanced Vegetation Index (EVI). For the ground observations, comparable SOS and EOS metrics are derived from individual tree records in the NPN, based on leaf-related phenophases. These metrics are then directly compared with their PS-derived counterparts to assess consistency and potential bias.
 
-For the ground-observed phenology, NPN offers six leaf-related phenophases: (1) Breaking leaf buds, (2) Young leaves, (3) Increasing leaf size, (4) Leaves, (5) Colored leaves, and (6) Falling leaves. For lilac/honeysuckle, there is one more phenophase "All leaf buds broken". From these, key phenological metrics for individual urban trees could be extracted and compared with PS-derived phenology metrics.
+# Processing NPN data
 
-# Data Preparation
+## Filter NPN across CONUS cities
 
-## NPN across CONUS cities
-
-The NPN data is downloaded from the USA National Phenology Network (https://www.usanpn.org/data/observational-data). I filtered the data to include only tree records from urban areas for the years 2016-2024.
+The NPN data is downloaded from the [USA National Phenology Network Individual Phenometrics](https://www.usanpn.org/data/observational). I filtered the data to include only tree individuals from urban areas for the years 2016-2024.
 
 The filter rules are:
 
+-   Keep records with `Observed_Status_Conflict_Flag` equal to -9999.
 -   Exclude records with functional types: "Algae", "Evergreen forb", "Forb", "Graminoid", "Semi-evergreen forb".
--   Exclude records with `Observed_Status_Conflict_Flag` equal to -9999.
 -   Exclude records with `NumDays_Since_Prior_No` or `NumDays_Until_Next_No` greater than 21.
 -   Combine series of phenophase observations that are separated by gaps of 21 days (or other threshold) or less.
 
@@ -131,6 +129,8 @@ npn_filter_individual_yr <- npn_filter_individual |>
 
 ## NPN derived phenology metrics
 
+For the ground-observed individual phenology, NPN offers six leaf-related phenophases : (1) Breaking leaf buds, (2) Young leaves, (3) Increasing leaf size, (4) Leaves, (5) Colored leaves, and (6) Falling leaves. For lilac/honeysuckle, there is one more phenophase "All leaf buds broken". From these, key phenological metrics for individual urban trees could be extracted and compared with PS-derived phenology metrics.
+
 ```{r fun-compute-phe-npn}
 #| include: false
 compute_npnphe <- function(start = "Leaves", end = "Increasing leaf size") {
@@ -175,13 +175,15 @@ compute_npnphe <- function(start = "Leaves", end = "Increasing leaf size") {
 
 ### Match the `Start of Season (SOS)`
 
-The SOS is defined as the day of year when the EVI curve of an individual tree’s growing season first crosses the 50% green-up threshold. For NPN, I tried several phenophases to match the SOS:
+In the remote sensing context, the start of season (SOS) is defined as the day of year (DOY) when the EVI curve for an individual tree first crosses the 50% green-up threshold. This threshold corresponds to the strongest relative signal observed during the green-up phase from satellite imagery. To match the PS-derived SOS, I tested several leaf-related phenophase indicators from NPN, following the approaches proposed by @modis_npn_xin and @ps_npn_zhao.
 
-1.  Mean value of *the first date of "Leaves"* and *the last day of "Increasing leaf size"*.
-2.  Mean value of *the first date of "Breaking leaf buds"* and *the last day of "Increasing leaf size"*.
-3.  Mean value of *the first date of "Young leaves"* and *the last day of "Increasing leaf size"*.
+Case 1.  Mean value of *the first date of "Leaves"* and *the last day of "Increasing leaf size"*.
 
-[@fig-npn-sos-pdf] displays the distribution of SOS derived from NPN data for each case of SOS computation. [@fig-npn-sos-spatial] shows the spatial distribution of these samples across the US cities, and the size of the circle markers indicates the number of individuals at each location..
+Case 2.  Mean value of *the first date of "Breaking leaf buds"* and *the last day of "Increasing leaf size"*.
+
+Case 3.  Mean value of *the first date of "Young leaves"* and *the last day of "Increasing leaf size"*.
+
+[@fig-npn-sos-pdf] displays the distribution of SOS derived from NPN data for each case of SOS computation. In the first two cases, the median SOS occurs around 120 (doy), which is reasonable; however, the wide range raises uncertainty about **whether it reflects true biological and geographical variation, or potential observation and calculation error in these metrics**.
 
 ```{r fig-npn-sos-pdf}
 #| fig-height: 8
@@ -198,7 +200,8 @@ npn_sos <- compute_npnphe(start = "Leaves", end = "Increasing leaf size") |>
     compute_npnphe(start = "Young leaves (tree/shrub)", end = "Increasing leaf size") |>
       mutate(type = "case3")
   ) |>
-  mutate(phe = "SOS")
+  mutate(phe = "SOS",
+         genus= str_extract(Species, "^[^ ]+"))
 
 ggplot(npn_sos, aes(npn_doy)) +
   geom_histogram(aes(y = ..density..), bins = 30, fill = "grey", color = NA) + 
@@ -212,6 +215,37 @@ ggplot(npn_sos, aes(npn_doy)) +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
+
+[@fig-npn-sos-pdf-sp] shows the histogram of SOS by species and case type. The top 10 species with the most observations are displayed. Similarly, a large degree of variation is observed within each species, suggesting either ecological differences or measurement uncertainties.
+
+```{r fig-npn-sos-pdf-sp}
+#| fig-height: 12 
+#| fig-width: 16
+#| warning: false
+
+top10_Species <- npn_sos |>
+  count(Species, sort = TRUE) |>
+  slice_head(n = 10) |>
+  pull(Species)
+npn_sos_top10 <- npn_sos |> filter(Species %in% top10_Species)
+
+ggplot(npn_sos_top10, aes(x = npn_doy)) +
+  geom_histogram(bins = 30, size = 0.2) +
+  labs(
+    x = "DOY",
+    y = "Density",
+    title = "Histogram of NPN-derived SOS by Species and Case Type"
+  ) +
+  facet_grid(Species ~ type, scales = "free") +
+  theme_minimal(base_size = 14) +
+  theme(
+    strip.text = element_text(size = 12),
+    strip.text.y = element_text(angle = 0),  # <-- this line sets vertical text orientation
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+[@fig-npn-sos-spatial] shows the spatial distribution of these NPN samples across the US cities, and the size of the circle markers indicates the number of individuals at each unique location. Note that some cities contain multiple sampling locations, each with a different number of individuals.
 
 ```{r fig-npn-sos-spatial}
 npn_sos_spatial <- npn_sos |>
@@ -239,12 +273,13 @@ leaflet(data = npn_sos_spatial) %>%
 
 ### Match the `End of Season (EOS)`
 
-Similarly, for remote sensing, the EOS is defined as the day of year when the EVI curve of an individual tree’s growing season first crosses the 50% green-down threshold. For NPN, I tried several phenophases to match the EOS:
+Similarly, for remote sensing, the EOS is defined as the day of year when the EVI curve of an individual tree’s growing season first crosses the 50% green-down threshold. In NPN, I tried several phenophases to match the EOS:
 
-1.  Mean value of *the first date of "Colored leaves"* and *the last day of "Leaves"*.
-2.  Mean value of *the first date of "Colored leaves"* and *the last day of "Falling leaves"*.
+Case 1.  Mean value of *the first date of "Colored leaves"* and *the last day of "Leaves"*.
 
-[@fig-npn-eos-pdf] displays the distribution of EOS derived from NPN data for each case of EOS computation. [@fig-npn-eos-spatial] shows the spatial distribution of these samples across the US cities, and the size of the circle markers indicates the number of individuals at each location.
+Case 2.  Mean value of *the first date of "Colored leaves"* and *the last day of "Falling leaves"*.
+
+[@fig-npn-eos-pdf] displays the distribution of EOS derived from NPN data for each case of EOS computation. And [@fig-npn-eos-pdf-sp] shows the histogram of EOS by species and case type. Similarty, the median EOS is reasonable, and the wide range raises uncertainty as well.
 
 ```{r fig-npn-eos-pdf}
 #| fig-height: 6
@@ -270,6 +305,35 @@ ggplot(npn_eos, aes(npn_doy)) +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
+
+```{r fig-npn-eos-pdf-sp}
+#| fig-height: 12
+#| fig-width: 16
+#| warning: false
+
+top10_Species <- npn_eos |>
+  count(Species, sort = TRUE) |>
+  slice_head(n = 10) |>
+  pull(Species)
+npn_eos_top10 <- npn_eos |> filter(Species %in% top10_Species)
+
+ggplot(npn_eos_top10, aes(x = npn_doy)) +
+  geom_histogram(bins = 30, size = 0.2) +
+  labs(
+    x = "DOY",
+    y = "Density",
+    title = "Histogram of NPN-derived EOS by Species and Case Type"
+  ) +
+  facet_grid(Species ~ type, scales = "free") +
+  theme_minimal(base_size = 14) +
+  theme(
+    strip.text = element_text(size = 12),
+    strip.text.y = element_text(angle = 0),  # <-- this line sets vertical text orientation
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+[@fig-npn-eos-spatial] shows the spatial distribution of these samples across the US cities, and the size of the circle markers indicates the number of individuals at given location.
 
 ```{r fig-npn-eos-spatial}
 npn_eos_spatial <- npn_eos |>
@@ -297,9 +361,9 @@ leaflet(data = npn_eos_spatial) %>%
 
 ### Prepare the location for PlanetScope
 
-To prepare the location data for PlanetScope processing, I combined the SOS and EOS datasets, removed duplicate entries, and created a unique identifier for each location. These locations will be used to extract and analyze time series from the PlanetScope imagery.
+To prepare the location data for PlanetScope processing, I combined the NPN-derived SOS and EOS datasets, removed duplicate entries, and created a unique identifier for each location. These locations will be used to extract and analyze time series from the PlanetScope imagery.
 
-It is common for a single location to have multiple individuals, as shown in [@fig-npn-individuals].
+As demonstrated during the extraction of phenological metrics and in [@fig-npn-individuals], a single location often includes multiple individuals, which sometimes come from different species and functional groups. Therefore, I would like to understand **in data collection how these observations at shared locations are generated and how to handle them**.
 
 ```{r fig-npn-individuals}
 #| fig-height: 5
@@ -333,25 +397,27 @@ ggplot(npn_points, aes(n)) +
 # saveRDS(npn_points, here("data/raw/CONUS/NPN/NPN1624/npn_points.rds"))
 ```
 
-# Processing PS data
+# Processing PlanetScope data
 
-The workflow follows the procedures outlined in the `batchplanet` package to download PlanetScope imagery, process time-series data, and extract phenological metrics.
+PlanetScope, with a spatial resolution of 3 m and a daily revisit cycle, provides an excellent opportunity to capture plant phenology on a large scale and at an individual tree level. The workflow for downloading PlanetScope imagery, processing time-series data, and extracting phenological metrics follows the procedures outlined in the `batchplanet` package and @song_ps.
 
-Due to the PS quota limit, I processed data for only three example cities: 63217 (New York–Jersey City–Newark, NY–NJ), 28117 (Eugene, OR), and 20422 (Corvallis, OR). These cities include 22 locations and 207 individual trees.
+We focus on the start of season (SOS) and end of season (EOS), calculated from Enhanced Vegetation Index (EVI) curves. SOS is defined as the day of year when the EVI curve of an individual tree’s growing season first crosses the 50% green-up threshold. EOS is defined as the day of year when the EVI curve first crosses the 50% green-down threshold. The 50% threshold is used because it represents the point of the most pronounced change in greenness, capturing the strongest relative signal during green-up or green-down (@song_ps).
+
+Due to the PS quota limit, I processed data for only 3 example cities: New York–Jersey City–Newark in NY–NJ (code 63217), Eugene in OR (code 28117), and Corvallis in OR (20422). These 3 cities include 22 locations and 207 individual trees.
 
 >If the validation workflow proves reliable, I will expand the analysis to include all locations in the `npn_points` dataset to conduct a more comprehensive comparison.
 
 # Compare NPN with PlanetScope
 
-[@fig-npn-sos-ps] compares the start of season (SOS) dates derived from NPN observations with those estimated from PlanetScope imagery across the three cases. 
+[@fig-npn-sos-ps] compares the start of season (SOS) dates derived from NPN observations with those estimated from PlanetScope imagery across the first 2 cases (the third case has few smaples). 
 
-The red 1:1 line indicates perfect agreement, while the grey dashed line shows the fitted linear regression (fixed intercept) from NPN SOS to PS SOS.
+The red 1:1 line indicates perfect agreement, while the grey dashed line shows the fitted linear regression (fixed intercept) from NPN SOS to PS SOS. Each point represents the mean NPN SOS for a given location, and the horizontal line ranges show the 5th and 95th percentiles of NPN SOS. Point colors indicate the site (city).
 
-Each point represents the mean NPN SOS for a given location, and the horizontal line ranges show the 5th and 95th percentiles of NPN SOS. Point colors indicate the site (city).
+Generally, the trend suggests a consistency between PS-derived SOS and NPN-derived SOS. However, the plot shows that PS SOS tends to be consistently earlier than NPN SOS across locations, as most points fall below the 1:1 line.
 
 ```{r fig-npn-sos-ps}
-#| fig-height: 8
-#| fig-width: 16
+#| fig-height: 6
+#| fig-width: 10
 #| warning: false
 npn_points <- readRDS(here("data/raw/CONUS/NPN/NPN1624/npn_points.rds"))
 
@@ -368,8 +434,9 @@ npn_sos_ps <- npn_sos |>
   na.omit()
 
 
-summary_npn_sos_ps <- npn_sos_ps %>%
-  group_by(Longitude, Latitude, year, type, doy, site) %>%
+summary_npn_sos_ps <- npn_sos_ps |>
+  filter(type != "case3") |>
+  group_by(Longitude, Latitude, year, type, doy, site) |>
   summarise(
     mean = mean(npn_doy, na.rm = TRUE),
     p5 = quantile(npn_doy, 0.05, na.rm = TRUE),
@@ -415,13 +482,12 @@ plot_weighted_fit <- function(df) {
 
 plots <- lapply(split_by_type, plot_weighted_fit)
 
-plots[[1]] + plots[[2]] + plots[[3]] +
+plots[[1]] + plots[[2]] +
   plot_layout(guides = "collect") & 
   theme(legend.position = "right")
 ```
 
-[@fig-npn-eos-ps] compares the EOE derived from NPN observations with those estimated from PlanetScope imagery across the 2 cases. 
-
+[@fig-npn-eos-ps] compares the EOS derived from NPN observations with those estimated from PlanetScope imagery across the two cases. In both cases, the agreement for EOS is better than that for SOS, particularly in case 2, where the metric is based on 'Falling leaves'. This may be because senescence-related phenophases produce more distinct signals that are easier to detect in both remote sensing and ground-based observations.
 
 ```{r fig-npn-eos-ps}
 #| fig-height: 6
@@ -491,6 +557,15 @@ plots[[1]] + plots[[2]] +
   theme(legend.position = "right")
 ```
 
+# Discussion
+
+With the goal of evaluating the accuracy and reliability of PS-derived phenology for urban trees relative to ground-based observations, I compared phenology metrics derived from NPN and PS. The results reveal some general consistency, which suggests that remote sensing data can capture meaningful phenological signals, thereby providing confidence in its use.
+
+However, several important considerations remain when tuning the matching between PS and NPN metrics, particularly due to my limited understanding of the NPN data collection. I would like to consult with domain experts on the following points:
+
+1. **Selection of high-quality NPN data**: To what extent do existing filtering methods enable quality control of NPN data? Is it possible to reliably identify and retain only high-quality observations from individual trees?
+2. **Variation in NPN-derived phenometrics**: Does the observed variability in NPN phenometrics primarily reflect real biological and geographical differences, or is it influenced by observation uncertainties for calculating phenological metrics?
+3. **Multiple individuals at a single location**: It is common for a single location to have multiple individuals, sometimes even from different species or functional groups. I would like to better understand how those observations from shared locations are generated during NPN data collection.
 
 <!-- # Test in NYC -->
 
