@@ -10,6 +10,7 @@ library(tidyr)
 library(taxize)
 library(purrr)
 library(terra)
+library(rgbif)
 
 # Read file paths from environment variables
 r_input_dir <- Sys.getenv("R_INPUT_DIR")
