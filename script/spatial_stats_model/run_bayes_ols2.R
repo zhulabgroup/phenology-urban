@@ -27,15 +27,16 @@ taxon_col <- Sys.getenv("TAXON_COL")  # column name for species
 # r_output_dir <- args[2]
 # city <- args[3]
 # phe_type <- args[4]
-# 
+
 # r_input_dir <- "~/phenology-urban/data/"
 # r_output_dir <- "~/phenology-urban/data/proc/urban/ols_model/bayes_species/"
 # city <- "NY"
 # phe_type <- "SOS"
-# taxon_col <- "genus"
+# taxon_col <- "canonicalname"
 
 #################### Read data ####################
 
+city <- "NY"
 
 ## prepare input data
 metadata <- read_csv("~/lab-data/datasets/vegetation/PS/urban/metadata.csv") %>%
@@ -44,21 +45,47 @@ file_list <- list.files(path = "~/lab-data/datasets/vegetation/PS/urban/doy", pa
 data_list <- file_list %>%
   map(~ readRDS(.x))
 all_doy <- bind_rows(data_list)
-points_in_buffer <- metadata %>%
+tree_location <- metadata %>%
   mutate(genus = str_extract(taxa, "^[^ ]+")) %>%
-  left_join(all_doy, by = "id") %>% 
+  left_join(all_doy, by = "id") %>%
   filter(!is.na(doy)) %>%
   mutate(geometry = paste0("c(", lon, ", ", lat, ")"))
 
-# List of variable names and their corresponding filenames
-files <- c("tmax_monthly_all_tree.rds", 
-           "tmin_monthly_all_tree.rds", 
-           "prcp_monthly_all_tree.rds",
+# List of Humid variable names and their corresponding filenames
+files <- c("temp_monthly_all_tree.rds",
            "srad_monthly_all_tree.rds")
-processed_data_list <- lapply(files, function(file_name) {
+base_path <- "~/phenology-urban/data/raw/"
+processed_humid_list <- lapply(files, function(file_name) {
   # Read the file
   var_name <- sub("_monthly_all_tree.rds", "", file_name)
-  data <- readRDS(paste0(r_input_dir,"raw/", city, "/Daymet/monthly2016-2024/", file_name)) %>%
+  data <- readRDS(paste0(base_path, city, "/HUMID/", file_name)) %>%
+    select(id, value, date) %>%
+    mutate(
+      season = case_when(
+        substr(date, 6, 7) %in% c("03", "04", "05") ~ "spring",
+        substr(date, 6, 7) %in% c("06", "07", "08") ~ "summer",
+        substr(date, 6, 7) %in% c("09", "10", "11") ~ "fall",
+        substr(date, 6, 7) %in% c("12", "01", "02") ~ "winter"
+      )) %>%
+    mutate(year = as.integer(substr(date, 1, 4)),
+           year = if_else(substr(date, 6, 7) == "12", year + 1, year)) %>%
+    filter(year < 2019) %>% 
+    group_by(id, year, season) %>%
+    summarise(
+      # Use sum for prcp, and mean for temp and srad
+      Avg_value = mean(as.numeric(value), na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    # Rename the Avg_value column to the variable name (e.g., tmax, tmin, prcp)
+    rename(!!var_name := Avg_value)
+  return(data)
+})
+
+files <- c("prcp_monthly_all_tree.rds")
+processed_daymet_list <- lapply(files, function(file_name) {
+  # Read the file
+  var_name <- sub("_monthly_all_tree.rds", "", file_name)
+  data <- readRDS(paste0(base_path, city, "/Daymet/monthly2016-2024/", file_name)) %>%
     select(id, value, date) %>%
     mutate(
       season = case_when(
@@ -71,8 +98,8 @@ processed_data_list <- lapply(files, function(file_name) {
            year = if_else(substr(date, 6, 7) == "12", year + 1, year)) %>%
     group_by(id, year, season) %>%
     summarise(
-      # Use sum for prcp, and mean for tmax and tmin
-      Avg_value = ifelse(var_name == "prcp", sum(value, na.rm = TRUE), mean(value, na.rm = TRUE)),
+      # Use sum for prcp, and mean for temp and srad
+      Avg_value = sum(as.numeric(value), na.rm = TRUE),
       .groups = "drop"
     ) %>%
     # Rename the Avg_value column to the variable name (e.g., tmax, tmin, prcp)
@@ -81,17 +108,14 @@ processed_data_list <- lapply(files, function(file_name) {
   return(data)
 })
 
-all_sites_temp <- processed_data_list[[1]]
-for (i in 2:length(processed_data_list)) {
-  all_sites_temp <- left_join(all_sites_temp, processed_data_list[[i]], by = c("id", "season", "year"))
-}
+all_sites_climate <- processed_humid_list[[1]] |>
+  left_join(processed_daymet_list[[1]], by = c("id", "season", "year")) 
 
-srad_daily <- all_sites_temp %>%
-  select(id, year, season, srad) %>%
+srad_daily <- processed_humid_list[[2]] |>
   rename(Avg_srad = srad)
 
 source("script/spatial_stats_model/run_genus_inla_fixpre.R")
-model_input_all <- prepare_genus_data(phe_type, points_in_buffer, all_sites_temp, srad_daily)
+model_input_all <- prepare_genus_data(phe_type, tree_location, all_sites_climate, srad_daily)
 
 #################### Find the optimal cov model ####################
 

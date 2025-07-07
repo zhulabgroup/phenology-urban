@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=bayes_ols_urban_phe
-#SBATCH --account=zhukai1                   # Account name
+#SBATCH --account=zhukai0                   # Account name
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err
 #SBATCH --array=1-4
@@ -33,7 +33,7 @@ PHE_TYPE=${PHE_TYPES[$CHAIN_INDEX]}
 R_SCRIPT=../phenology-urban/script/spatial_stats_model/run_bayes_ols2.R
 WORKING_DIR=../phenology-urban/
 R_INPUT_DIR=../phenology-urban/data/
-R_OUTPUT_DIR=../phenology-urban/data/proc/urban/ols_model/bayes_genus_daymet_all/
+R_OUTPUT_DIR=../phenology-urban/data/proc/urban/ols_model/bayes_genus_humid_all/
 CITY="NY"
 TAXON_COL="genus"
 
