@@ -155,7 +155,7 @@ for (taxon in taxon_list) {
   cat(sprintf("\n Running INLA for taxon: %s, phe_type: %s, city: %s\n", 
               taxon, phe_type, city))
   model_input_sf <- model_input_all %>%
-    filter(taxon == !!taxon) %>%
+    filter(!!sym(taxon_col) == !!taxon) %>%
     st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
     # st_transform(crs = st_crs(boundary)) %>%
     mutate(lon = st_coordinates(.)[,1], lat = st_coordinates(.)[,2],

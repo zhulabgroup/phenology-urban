@@ -130,7 +130,7 @@ for (taxon in taxon_list) {
     next  # Skip the current iteration of the loop
   }
   model_input_sf <- model_input_all %>%
-    filter(taxon == !!taxon) %>%
+    filter(!!sym(taxon_col) == !!taxon) %>%
     st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
     # st_transform(crs = st_crs(boundary)) %>%
     mutate(lon = st_coordinates(.)[,1], lat = st_coordinates(.)[,2],
@@ -140,8 +140,7 @@ for (taxon in taxon_list) {
   } else {
     phe_metric <- "doy_diff"
   }
-  tavg_phe <- model_input_sf |>
-    st_drop_geometry()
+  tavg_phe <- model_input_sf
   temp_col <- names(tavg_phe)[grepl("^temp", names(tavg_phe))]
   prcp_col <- names(tavg_phe)[grepl("^prcp", names(tavg_phe))]
   srad_col <- names(tavg_phe)[grepl("^srad", names(tavg_phe))]
@@ -157,7 +156,7 @@ for (taxon in taxon_list) {
   cov_type = "Mat"
   
   #################### Run the spatial model ####################
-  coords <- coordinates(tavg_phe)
+  coords <- st_coordinates(tavg_phe)
   dist_matrix <- as.matrix(dist(coords))
   N_knots = 100
   N <- nrow(tavg_phe)
@@ -177,25 +176,25 @@ for (taxon in taxon_list) {
   sp_formula <- as.formula(paste0(phe_metric, " ~ ", temp_col, "+", prcp_col, "+", srad_col))
   
   # Define covariance functions
-  
-  spherical_covariance <- nimbleFunction(
-    run = function(d = double(2), range = double(0), sigma.sq = double(0)) {
-      returnType(double(2))  # Return type is a matrix
-      nrow_d <- dim(d)[1]
-      ncol_d <- dim(d)[2]
-      result <- matrix(0, nrow_d, ncol_d)  # Initialize result matrix
-      for (i in 1:nrow_d) {
-        for (j in 1:ncol_d) {
-          if (d[i, j] <= range) {
-            result[i, j] = sigma.sq * (1 - (3 * d[i, j] / (2 * range)) + (d[i, j]^3 / (2 * range^3)))
-          } else {
-            result[i, j] = 0.0
-          }
-        }
-      }
-      return(result)
-    }
-  )
+  # 
+  # spherical_covariance <- nimbleFunction(
+  #   run = function(d = double(2), range = double(0), sigma.sq = double(0)) {
+  #     returnType(double(2))  # Return type is a matrix
+  #     nrow_d <- dim(d)[1]
+  #     ncol_d <- dim(d)[2]
+  #     result <- matrix(0, nrow_d, ncol_d)  # Initialize result matrix
+  #     for (i in 1:nrow_d) {
+  #       for (j in 1:ncol_d) {
+  #         if (d[i, j] <= range) {
+  #           result[i, j] = sigma.sq * (1 - (3 * d[i, j] / (2 * range)) + (d[i, j]^3 / (2 * range^3)))
+  #         } else {
+  #           result[i, j] = 0.0
+  #         }
+  #       }
+  #     }
+  #     return(result)
+  #   }
+  # )
   
   matern_covariance <- nimbleFunction(
     run = function(d = double(2), range = double(0), sigma.sq = double(0), nu = double(0)) {
@@ -317,9 +316,9 @@ for (taxon in taxon_list) {
     stop("Unknown cov_type!")
   )
   
-  ni <- 10000   # nb iterations 
-  nt <- 50       # thinning interval
-  nb <- ni / 2    # nb iterations as burn-in 
+  ni <- 20000   # nb iterations 
+  nt <- 10       # thinning interval
+  nb <- 5000    # nb iterations as burn-in 
   nc <- 1         # nb chains
   
   

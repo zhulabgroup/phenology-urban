@@ -120,7 +120,7 @@ source("~/phenology-urban/script/spatial_stats_model/run_species_inla.R")
 #| warning: false
 #| eval: true
 
-dir_path <- "~/phenology-urban/data/proc/urban/ols_model/bayes_genus/NY/"
+dir_path <- "~/phenology-urban/data/proc/urban/ols_model/bayes_genus_humid_all/NY/"
 plot_obj <- generate_mcmc_plot(dir_path)
 plot_obj
 ```
@@ -142,8 +142,6 @@ plot_obj
 ```
 
 # Spatial Model
-
-## INLA
 
 ```{r data-3}
 #| eval: false
@@ -226,6 +224,12 @@ all_sites_climate <- processed_humid_list[[1]] |>
 srad_daily <- processed_humid_list[[2]] |>
   rename(Avg_srad = srad)
 ```
+
+## spbayes
+
+
+
+## INLA
 
 ```{r}
 #| label: model-genus4
