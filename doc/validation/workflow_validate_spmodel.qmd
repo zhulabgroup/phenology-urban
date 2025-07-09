@@ -136,7 +136,7 @@ plot_obj
 #| warning: false
 #| eval: true
 
-dir_path <- "~/phenology-urban/data/proc/urban/ols_model/bayes_species/NY/"
+dir_path <- "~/phenology-urban/data/proc/urban/ols_model/bayes_species_humid_all/NY/"
 plot_obj <- generate_mcmc_plot(dir_path)
 plot_obj
 ```

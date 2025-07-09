@@ -13,11 +13,11 @@ editor_options:
 
 library(zhulabtools)
 # Check and  load required packages
-check_install_packages(c("dplyr", "here", "sf", "viridis", "leaflet","terra", "patchwork", "data.table", "plotly"))
+check_install_packages(c("dplyr", "here", "sf", "viridis", "leaflet","terra", "patchwork", "data.table", "plotly", "tidyverse"))
 if (!require(plotbiomes)) {
   devtools::install_github("valentinitnelav/plotbiomes")
 }
-load_packages(c("dplyr", "here", "sf","viridis", "leaflet", "cli", "terra","patchwork", "data.table", "plotly"))
+load_packages(c("dplyr", "here", "sf","viridis", "leaflet", "cli", "terra","patchwork", "data.table", "plotly", "stringr", "tidyverse"))
 
 create_symlink_turbo("data/raw/CONUS/StreetTrees", "datasets/vegetation/StreetTrees/")
 create_symlink_turbo("data/raw/CONUS/boundary", "datasets/boundary/USAdministrative/")
@@ -52,7 +52,7 @@ I first downloaded the dataset from @mccoy_species_2022. Through filtering out r
 #| fig-cap: "Spatial distribution of cities from McCoy et al. (2022)."
 
 
-source(here("script/tidy_elife.R"))
+source(here("script/tidy_tree_inventory/tidy_elife.R"))
 city_elife <- tidy_elife()|>
   filter(city_combine.x != "Honolulu")
 
@@ -81,7 +81,7 @@ After filtering the OpenTrees datasets with tree coordiates, I found that it off
 #| fig-cap: "Spatial distribution of cities from OpenTrees."
 
 
-source(here("script/tidy_opentree.R"))
+source(here("script/tidy_tree_inventory/tidy_opentree.R"))
 city_opentree <- tidy_opentree()
 city_opentree_cen <- city_opentree |>
   st_transform(3857) |>         # project to planar coordinates
@@ -209,6 +209,7 @@ Compared to the climate of all candidate cities on a Whittaker biome map ([@fig-
 
 all_city_list <- readRDS("~/phenology-urban/data/proc/conus/city_list/all_city_features.rds") |>
   filter(!state %in% c("AK", "HI", "AS", "GU", "MP", "PR", "VI"))
+
 all_city_centroid <- all_city_list |>
   st_transform(3857) |>         # project to planar coordinates
   st_centroid() |>              # compute centroid
@@ -244,20 +245,6 @@ wrap_plots(climate1 + climate2, guides = "collect") &
     plot.margin = margin(3, 2, 3, 2)
   )
 ```
-
-
-
-Use the HUMID to get the within city climate variation
-? maybe more direct compared to using building structure
-
-
-
-
-
-
-
-
-
 
 ### Urban form
 
@@ -405,7 +392,7 @@ median + sd + p90 + IQR + plot_layout(ncol = 2) +
 all_city_polygons <- st_read("data/raw/CONUS/boundary/USCities/tl_2024_us_uac20.shp") |>
   separate(NAME20, into = c("city_raw", "state"), sep = ", ", remove = FALSE) |>
   rename(city = city_raw) |>
-  select(NAME20, state, city, ALAND20,AWATER20, INTPTLAT20, INTPTLON20) |>
+  select(GEOID, NAME20, state, city, ALAND20,AWATER20, INTPTLAT20, INTPTLON20) |>
   st_transform(4326)
   
 all_city_boundary_terra <- vect(all_city_polygons)
@@ -492,140 +479,373 @@ population_plot + all_population_plot
 
 ```
 
-### Combine these 3 factors
+## Combine these factors to select representative cities
 
-In order to combine the three factors (climate, building height, and population density) to select representative cities, I display an interactive plot to visualize cities based on their **median building height** (x-axis) and **standard deviation of building height** (y-axis). And cities are colored by their Whittaker **biome**, sized by **population density**, and labeled with names and detailed information in tooltips on hover.
+<!-- In order to combine the three factors (climate, building height, and population density) to select representative cities, I display an interactive plot to visualize cities based on their **median building height** (x-axis) and **standard deviation of building height** (y-axis). And cities are colored by their Whittaker **biome**, sized by **population density**, and labeled with names and detailed information in tooltips on hover. -->
 
-To focus on a specific group, I can double-click a legend item—for example, double-click on the circle labeled "temperate grassland/desert, \<1k" to highlight only cities in that biome with low population density. Then, look to the lower-left corner of the plot to find cities with low median building height and low variability. These cities may be good candidates for representing sparsely populated, low-rise urban forms in the temperate grassland/desert biome.
+<!-- To focus on a specific group, I can double-click a legend item—for example, double-click on the circle labeled "temperate grassland/desert, \<1k" to highlight only cities in that biome with low population density. Then, look to the lower-left corner of the plot to find cities with low median building height and low variability. These cities may be good candidates for representing sparsely populated, low-rise urban forms in the temperate grassland/desert biome. -->
 
-```{r fig-city-3factors}
+<!-- ```{r fig-city-3factors} -->
+<!-- #| warning: false -->
+<!-- #| fig-cap: "Distribution of building height in each city, colored by Whittaker biomes and sized by population density." -->
+<!-- all_city_chelsa_df <- all_city_chelsa |> -->
+<!--   mutate(bio1 = bio1, -->
+<!--          bio12 = bio12 / 10) |> -->
+<!--   as.data.frame() -->
+<!-- tp_valid_sp <- sp::SpatialPoints(coords = all_city_chelsa_df[, c("bio1", "bio12")]) -->
+
+<!-- sp_overlay <- sp::over(tp_valid_sp, Whittaker_biomes_poly) -->
+<!-- all_city_chelsa_dt <- as.data.table(all_city_chelsa_df) -->
+<!-- all_city_chelsa_dt[, biome := sp_overlay$biome] -->
+
+
+<!-- list_city_dt <- left_join(city_chelsa, -->
+<!--                           city_feature |> select(city, median, sd) |> st_drop_geometry(), -->
+<!--                           by = "city") |> -->
+<!--   left_join(city_pop |> select(city, pop_density) |> st_drop_geometry(), by = "city") |> -->
+<!--   st_drop_geometry() -->
+<!-- # saveRDS(list_city_dt, "~/phenology-urban/data/proc/urban/City_list/list_city.rds") -->
+<!-- # saveRDS(all_city_chelsa_dt, "~/phenology-urban/data/proc/urban/City_list/all_city.rds") -->
+
+<!-- all_city_chelsa_dt <- all_city_chelsa_dt |> -->
+<!--   mutate(pop_density_bin = cut(pop_density, breaks = c(0, 1000, 2000, 3000, 4000, 5000, Inf), -->
+<!--                                labels = c("<1k", "1–2k", "2–3k", "3–4k", "4-5k", ">5k"))) -->
+
+<!-- p <- ggplot(all_city_chelsa_dt, aes( -->
+<!--     x = median, -->
+<!--     y = sd, -->
+<!--     text = paste0( -->
+<!--       "City: ", NAME20, "<br>", -->
+<!--       "Pop. density bin: ", pop_density_bin, "<br>", -->
+<!--       "Bio1 (Annual temp): ", round(bio1, 1), " °C<br>", -->
+<!--       "Bio12 (Precip): ", round(bio12, 0), " cm" -->
+<!--     ), -->
+<!--     color = biome, -->
+<!--     size = pop_density_bin -->
+<!--   )) + -->
+<!--   geom_point(alpha = 0.5) + -->
+<!--   scale_color_manual( -->
+<!--     name = "Whittaker biomes", -->
+<!--     breaks = names(Ricklefs_colors), -->
+<!--     labels = names(Ricklefs_colors), -->
+<!--     values = Ricklefs_colors -->
+<!--   ) + -->
+<!--   scale_size_discrete(name = "Population density (bin)") + -->
+<!--   theme_minimal() + -->
+<!--   labs( -->
+<!--     x = "Median building height (m)", -->
+<!--     y = "Standard deviation of building height (m)", -->
+<!--     title = "Building height distribution" -->
+<!--   ) -->
+
+<!-- ggplotly(p) -->
+<!-- ``` -->
+
+### PCA 
+
+To identify a representative subset of cities that captures the variation in key climate and population variables, I applied Principal Component Analysis (PCA) to the following standardized variables: population density, annual temperature, annual precipitation, median and standard deviation of building height. 
+
+*Conduct PCA*
+
+In the PCA plot, cities in the current list are highlighted in blue (56 in total, excluding invalid cities' names), while other cities are shown in grey.
+
+```{r}
 #| warning: false
-#| fig-cap: "Distribution of building height in each city, colored by Whittaker biomes and sized by population density."
-all_city_chelsa_df <- all_city_chelsa |>
-  mutate(bio1 = bio1,
-         bio12 = bio12 / 10) |>
-  as.data.frame()
-tp_valid_sp <- sp::SpatialPoints(coords = all_city_chelsa_df[, c("bio1", "bio12")])
+#| include: false
+all_city <- readRDS("~/phenology-urban/data/proc/urban/City_list/all_city.rds") |>
+  left_join(summer_temp, by = "GEOID20") |>
+  left_join(winter_temp, by = "GEOID20") |>
+  na.omit()
+scaled_matrix <- scale(all_city |>
+  select(pop_density,bio1, bio12, sd, median)|>
+    rename(building_height_sd = sd,
+           building_height_median = median)) 
+all_city_scaled <- as.data.frame(scaled_matrix)
+all_city_scaled$NAME20 <- all_city$NAME20
 
-sp_overlay <- sp::over(tp_valid_sp, Whittaker_biomes_poly)
-all_city_chelsa_dt <- as.data.table(all_city_chelsa_df)
-all_city_chelsa_dt[, biome := sp_overlay$biome]
+list_city <- st_read(here("data/proc/urban/City_list/list_city.shp")) |>
+  st_transform(3857) |>         # project to planar coordinates
+  st_centroid() |>              # compute centroid
+  st_transform(4326) |>
+  st_join(st_read(here("data/raw/CONUS/boundary/USCities/tl_2024_us_uac20.shp")) |> 
+            st_transform(4326) |>
+            select(NAME20), join = st_nearest_feature) |>
+  mutate(
+    NAME20_nospace = str_replace_all(NAME20, "\\s+", ""), 
+    matched = ifelse(city == "WashingtonDC", TRUE, str_detect(NAME20_nospace, fixed(city, ignore_case = TRUE)))
+  ) |>
+  filter(matched == TRUE) |>
+  pull(NAME20)
+```
 
 
-list_city_dt <- left_join(city_chelsa,
-                          city_feature |> select(city, median, sd) |> st_drop_geometry(),
-                          by = "city") |>
-  left_join(city_pop |> select(city, pop_density) |> st_drop_geometry(), by = "city") |>
-  st_drop_geometry()
-# saveRDS(list_city_dt, "~/phenology-urban/data/proc/urban/City_list/list_city.rds")
-# saveRDS(all_city_chelsa_dt, "~/phenology-urban/data/proc/urban/City_list/all_city.rds")
+```{r}
+#| warning: false
+#| fig-cap: "PCA of city climate and population variables, with cities in the current list highlighted in blue."
+#| fig-width: 10
+#| fig-height: 8
+pca_res <- prcomp(all_city_scaled[, 1:5], center = TRUE, scale. = TRUE)
 
-all_city_chelsa_dt <- all_city_chelsa_dt |>
-  mutate(pop_density_bin = cut(pop_density, breaks = c(0, 1000, 2000, 3000, 4000, 5000, Inf),
-                               labels = c("<1k", "1–2k", "2–3k", "3–4k", "4-5k", ">5k")))
+pca_scores <- as.data.frame(pca_res$x[, 1:2])
+colnames(pca_scores) <- c("PC1", "PC2")
+pca_scores$NAME20 <- all_city_scaled$NAME20
 
-p <- ggplot(all_city_chelsa_dt, aes(
-    x = median,
-    y = sd,
-    text = paste0(
-      "City: ", NAME20, "<br>",
-      "Pop. density bin: ", pop_density_bin, "<br>",
-      "Bio1 (Annual temp): ", round(bio1, 1), " °C<br>",
-      "Bio12 (Precip): ", round(bio12, 0), " cm"
-    ),
-    color = biome,
-    size = pop_density_bin
-  )) +
-  geom_point(alpha = 0.5) +
-  scale_color_manual(
-    name = "Whittaker biomes",
-    breaks = names(Ricklefs_colors),
-    labels = names(Ricklefs_colors),
-    values = Ricklefs_colors
-  ) +
-  scale_size_discrete(name = "Population density (bin)") +
-  theme_minimal() +
-  labs(
-    x = "Median building height (m)",
-    y = "Standard deviation of building height (m)",
-    title = "Building height distribution"
+pca_loadings <- as.data.frame(pca_res$rotation[, 1:2])
+pca_loadings$variable <- rownames(pca_loadings)
+
+arrow_scale <- 4
+pca_loadings <- pca_loadings |>
+  mutate(PC1 = PC1 * arrow_scale,
+         PC2 = PC2 * arrow_scale)
+
+pca_scores <- pca_scores |>
+  mutate(
+    selected = NAME20 %in% list_city,
+    hover_text = paste("City:", NAME20)
   )
 
-ggplotly(p)
+p <- ggplot(pca_scores, aes(x = PC1, y = PC2, text = NAME20)) +
+  geom_point(data = filter(pca_scores, !selected),
+             color = "grey60", alpha = 0.3, size = 0.5) +
+  geom_point(data = filter(pca_scores, selected),
+             color = "blue", size = 1) +
+  geom_text(data = filter(pca_scores, selected),
+            aes(label = NAME20), size = 2, vjust = -1) +
+  geom_segment(data = pca_loadings,
+               aes(x = 0, y = 0, xend = PC1, yend = PC2),
+               arrow = arrow(length = unit(0.5, "cm")),
+               color = "red", size = 0.4, inherit.aes = FALSE) +
+  geom_text(data = pca_loadings,
+            aes(x = PC1, y = PC2, label = variable),
+            color = "red", size = 3, hjust = -0.2, vjust = 0.5, inherit.aes = FALSE) +
+  labs(title = "PCA of City Climate and Population Variables",
+       x = "PC1", y = "PC2") +
+  theme_minimal()
+
+ggplotly(p, tooltip = "text")
 ```
 
-To quantatively rank the cities based on the three factors, I use k-means clustering to group cities into clusters based on their median building height, precipitation, temperature, and population density. The clustering results are shown in the following plot, where each point represents a city, colored by its cluster membership.
+In this PCA plot, the first two principal components capture a substantial portion of the total variance. Each input variable contributes meaningfully to the PCA axes (see loadings plot). No single variable dominates, suggesting that both temperature, precipitation, building height, and population density jointly shape the PCA space. 
 
+In addition, the projection of all cities and current cities onto the 2D PCA space are relatively evenly spread, with no extreme clustering. This even distribution supports the use of spatially structured sampling methods, such as grid-based selection.
 
-Try k-means
+*Ploting grids*
+
+Then, I overlaid a regular grid on the PCA space and selected one city per grid cell, retaining existing points that already cover part of the space, while filling in missing areas (grid cells without any existing points) with new representative cities.
+
+1. Use the evenly spaced grid to divide the PCA space into cells.
+
+There are 207 grids have at least one city, with 48 grids having cities in current list. Therefore, I will select other 159 cities from other 159 grids.
 
 ```{r}
-all_city_chelsa_dt <- readRDS("~/phenology-urban/data/proc/urban/City_list/all_city.rds")
-list_city_dt <- readRDS("~/phenology-urban/data/proc/urban/City_list/list_city.rds")
+pca_samples <- function(pca_scores, num, threshold){
+  aspect_ratio <- (max(pca_scores$PC1) - min(pca_scores$PC1))/(max(pca_scores$PC2) - min(pca_scores$PC2)) 
+  x_breaks <- seq(min(pca_scores$PC1), max(pca_scores$PC1), length.out = num* aspect_ratio)
+  y_breaks <- seq(min(pca_scores$PC2), max(pca_scores$PC2), length.out = num)
+  
+  df <- pca_scores %>%
+    mutate(
+      x_bin = cut(PC1, breaks = x_breaks, include.lowest = TRUE, labels = FALSE),
+      y_bin = cut(PC2, breaks = y_breaks, include.lowest = TRUE, labels = FALSE),
+      grid_id = paste(x_bin, y_bin, sep = "_")
+    )
+  
+  grid_full <- expand.grid(
+    x_bin = 1:(length(x_breaks) - 1),
+    y_bin = 1:(length(y_breaks) - 1)
+  ) |>
+    mutate(
+      grid_id = paste(x_bin, y_bin, sep = "_"),
+      PC1_center = (x_breaks[x_bin] + x_breaks[x_bin + 1]) / 2,
+      PC2_center = (y_breaks[y_bin] + y_breaks[y_bin + 1]) / 2
+    ) |>
+    left_join(
+      df |>
+        group_by(x_bin, y_bin) |>
+        summarise(selected = any(selected), 
+                  count = n(),
+                  .groups = "drop"),
+      by = c("x_bin", "y_bin")
+    ) |>
+    mutate(
+      count = replace_na(count, 0),
+      singleton = count < threshold,
+    )
+  
+  p = ggplot(pca_scores, aes(x = PC1, y = PC2, text = NAME20)) +
+    geom_point(data = filter(pca_scores, !selected),
+               color = "grey60", alpha = 0.3, size = 0.5) +
+    geom_point(data = filter(pca_scores, selected),
+               color = "blue", size = 1) +
+    geom_text(data = filter(pca_scores, selected),
+              aes(label = NAME20), size = 2, vjust = -1) +
+    labs(title = "PCA of City Climate and Population Variables",
+         x = "PC1", y = "PC2") +
+    theme_minimal() +
+    geom_tile(
+      data = grid_full |> filter(singleton),
+      aes(x = PC1_center, y = PC2_center),
+      fill = "grey", alpha = 0.6,
+      width = diff(x_breaks)[1], height = diff(y_breaks)[1],
+      inherit.aes = FALSE
+    ) +
+    geom_tile(
+      data = grid_full |> filter(selected),
+      aes(x = PC1_center, y = PC2_center),
+      fill = "blue", alpha = 0.3,
+      width = diff(x_breaks)[1], height = diff(y_breaks)[1],
+      inherit.aes = FALSE
+    ) +
+    geom_vline(xintercept = x_breaks, linetype = "solid", color = "yellow", size = 0.3) +
+    geom_hline(yintercept = y_breaks, linetype = "solid", color = "yellow", size = 0.3) +
+    labs(title = "PCA of City Climate and Population Variables",
+         x = "PC1", y = "PC2") +
+    theme_minimal()
+  
+  total_grids <- nrow(grid_full %>% filter(!singleton))
+  current_grids <- nrow(grid_full %>% filter(selected))
+  need_to_select <- total_grids - nrow(grid_full %>% filter(selected & !singleton))
+  area_covered <- diff(x_breaks)[1] * diff(y_breaks)[1] * (need_to_select + current_grids)
 
-city_data_scaled <- all_city_chelsa_dt |>
-  select(median, sd, pop_density) |>
-  scale() |>
-  bind_cols(all_city_chelsa_dt[, c("NAME20")]) |>
-  na.omit()
+  
+  return(list(
+    plot = p,
+    total_grids = total_grids,
+    current_grids = current_grids,
+    need_to_select = need_to_select,
+    representative_area = area_covered
+  ))
+}
 
-# Set the number of clusters (choose based on the elbow method or trial and error)
-set.seed(123)  # Set seed for reproducibility
-kmeans_result <- kmeans(city_data_scaled |>
-                          select(median, sd, pop_density), 
-                        centers = 3, nstart = 25)
-
-# Add cluster results to the original data
-city_data_scaled$cluster <- kmeans_result$cluster
-
-# Visualize the clustering
-ggplot(city_data_scaled, aes(x = sd, y = pop_density, color = factor(cluster))) +
-  geom_point() +
-  labs(title = "K-means Clustering of Cities", x = "Bio1 (Temperature)", y = "Bio12 (Precipitation)") +
-  scale_color_discrete(name = "Cluster")
-
+num_values <- 6:20
+results <- map_dfr(num_values, function(n) {
+  out <- pca_samples(pca_scores, num = n, threshold = 1)
+  tibble(
+    num = n,
+    total_grids = out$total_grids,
+    current_grids = out$current_grids,
+    need_to_select = out$need_to_select,
+    representative_area = out$representative_area
+  )
+})
+results_long <- results %>%
+  pivot_longer(
+    cols = -num,
+    names_to = "metric",
+    values_to = "value"
+  )
+ggplot(results_long, aes(x = num, y = value, color = metric)) +
+  geom_line(size = 0.5) +
+  geom_point(size = 1) +
+  facet_wrap(~ metric, scales = "free_y") +
+  theme_minimal() +
+  labs(
+    title = "Change in Grid Selection Metrics by Grid Resolution (num)",
+    x = "Number of Grid Divisions (num)",
+    y = "Metric Value"
+  )
 ```
 
-
-PCA and ordination
 
 ```{r}
-all_city_chelsa_dt <- readRDS("~/phenology-urban/data/proc/urban/City_list/all_city.rds")
-list_city_dt <- readRDS("~/phenology-urban/data/proc/urban/City_list/list_city.rds")
 
-all_city_data_scaled <- all_city_chelsa_dt |>
-  select(median, sd, pop_density, bio1, bio12) |>
-  scale() |>
-  bind_cols(all_city_chelsa_dt[, c("biome","NAME20")]) |>
-  na.omit()
+# Step 2: Keep one city per unsampled cell
+sampled_cells <- unique(df$grid_cell[df$selected == TRUE])
+remaining_cells <- setdiff(unique(df$grid_cell), sampled_cells)
 
-# Perform PCA
-pca_result <- prcomp(all_city_data_scaled |>
-                       select(median, sd, pop_density),
-                     center = TRUE, scale. = TRUE)
-pca_data <- as.data.frame(pca_result$x)
-all_city_data_scaled <- bind_cols(all_city_data_scaled, pca_data)
-
-
-ggplot(all_city_data_scaled, aes(x = PC1, y = PC2)) +
-  geom_point() +
-  labs(title = "PCA of City Characteristics", x = "PC1", y = "PC2")
-
-
-all_city_mean <- colMeans(all_city_chelsa_dt %>% select(median, sd, pop_density) |> na.omit())
-all_city_sd <- apply(all_city_chelsa_dt %>% select(median, sd, pop_density) |> na.omit(), 2, sd)
-subset_scaled <- scale(list_city_dt %>% select(median, sd, pop_density), center = all_city_mean, scale = all_city_sd)
-
-pca_subset <- predict(pca_result, newdata = subset_scaled)
-pca_subset <- as.data.frame(pca_subset)
-list_city_dt <- bind_cols(list_city_dt, pca_subset)
-
-ggplot(pca_data, aes(x = PC1, y = PC2)) +
-  geom_point() +
-  geom_point(data = pca_subset, aes(x = PC1, y = PC2), color = "red", shape = 4) +
-  labs(title = "PCA of City Characteristics with Subset", x = "PC1", y = "PC2")
-
+new_samples <- df %>%
+  filter(grid_cell %in% remaining_cells) %>%
+  group_by(grid_cell) %>%
+  slice_min(sqrt((PC1 - grid_center_x)^2 + (PC2 - grid_center_y)^2), with_ties = FALSE)
 ```
+
+
+Use the HUMID to get the within city climate (temperature) variation
+? maybe more direct compared to using building structure
+
+```{r}
+# use it as a vallidation
+data_folder <- "~/phenology-urban/data/proc/humid/cities"
+summer_temp <- read_tsv(file.path(data_folder, "all_cities_summer_2017.txt"), show_col_types = FALSE) |> 
+  select(GEOID20, std_temp, median_temp) |>
+  rename(summer_median_temp = median_temp,
+         summer_std_temp = std_temp) |>
+  filter(summer_median_temp != 0)
+winter_temp <- read_tsv(file.path(data_folder, "all_cities_winter_2017.txt"), show_col_types = FALSE) |> 
+  select(GEOID20, std_temp, median_temp) |>
+  rename(winter_median_temp = median_temp,
+         winter_std_temp = std_temp)
+all_city <- readRDS("~/phenology-urban/data/proc/urban/City_list/all_city.rds") |>
+  left_join(summer_temp, by = "GEOID20") |>
+  left_join(winter_temp, by = "GEOID20") |>
+  na.omit()
+scaled_matrix <- scale(all_city |>
+  select(pop_density, bio12, summer_median_temp, summer_std_temp, winter_median_temp, winter_std_temp)) 
+all_city_scaled <- as.data.frame(scaled_matrix)
+all_city_scaled$NAME20 <- all_city$NAME20
+
+list_city <- st_read(here("data/proc/urban/City_list/list_city.shp")) |>
+  st_transform(3857) |>         # project to planar coordinates
+  st_centroid() |>              # compute centroid
+  st_transform(4326) |>
+  st_join(st_read(here("data/raw/CONUS/boundary/USCities/tl_2024_us_uac20.shp")) |> 
+            st_transform(4326) |>
+            select(NAME20), join = st_nearest_feature) |>
+  mutate(
+    NAME20_nospace = str_replace_all(NAME20, "\\s+", ""), 
+    matched = ifelse(city == "WashingtonDC", TRUE, str_detect(NAME20_nospace, fixed(city, ignore_case = TRUE)))
+  ) |>
+  filter(matched == TRUE) |>
+  pull(NAME20)
+```
+
+```{r}
+pca_res <- prcomp(all_city_scaled[, 1:6], center = TRUE, scale. = TRUE)
+
+pca_scores <- as.data.frame(pca_res$x[, 1:2])
+colnames(pca_scores) <- c("PC1", "PC2")
+pca_scores$NAME20 <- all_city_scaled$NAME20
+
+pca_loadings <- as.data.frame(pca_res$rotation[, 1:2])
+pca_loadings$variable <- rownames(pca_loadings)
+
+arrow_scale <- 4
+pca_loadings <- pca_loadings |>
+  mutate(PC1 = PC1 * arrow_scale,
+         PC2 = PC2 * arrow_scale)
+
+pca_scores <- pca_scores |>
+  mutate(
+    highlight = NAME20 %in% list_city,
+    hover_text = paste("City:", NAME20)
+  )
+
+p <- ggplot(pca_scores, aes(x = PC1, y = PC2, text = NAME20)) +
+  geom_point(data = filter(pca_scores, !highlight),
+             color = "grey60", alpha = 0.3, size = 0.5) +
+  geom_point(data = filter(pca_scores, highlight),
+             color = "blue", size = 1) +
+  geom_text(data = filter(pca_scores, highlight),
+            aes(label = NAME20), size = 2, vjust = -1) +
+  geom_segment(data = pca_loadings,
+               aes(x = 0, y = 0, xend = PC1, yend = PC2),
+               arrow = arrow(length = unit(0.5, "cm")),
+               color = "red", size = 0.4, inherit.aes = FALSE) +
+  geom_text(data = pca_loadings,
+            aes(x = PC1, y = PC2, label = variable),
+            color = "red", size = 3, hjust = -0.2, vjust = 0.5, inherit.aes = FALSE) +
+  labs(title = "PCA of City Climate and Population Variables",
+       x = "PC1", y = "PC2") +
+  theme_minimal()
+
+ggplotly(p, tooltip = "text")
+```
+
+
+
+
+
+
 
 
 ## Potential limitation
