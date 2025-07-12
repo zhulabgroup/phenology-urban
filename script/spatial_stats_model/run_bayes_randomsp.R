@@ -62,7 +62,7 @@ points_in_buffer <- st_join(points_sf, hex_grid, join = st_within) %>%
   st_drop_geometry()
 
 
-all_sites_temp <- readRDS(paste0("~/urban-cooling/data/raw/WU/",city,"/",city,"_wu.rds")) %>%
+all_sites_temp <- readRDS(paste0("~/urban-cooling/data_gl/raw/WU/",city,"/",city,"_wu.rds")) %>%
   dplyr::select(c(Date, HighTemp, AvgTemp, LowTemp, Sum_mm, name)) %>%
   mutate(season = case_when(
     month(Date) %in% 3:5 ~ "spring",
@@ -231,17 +231,17 @@ for (taxon in taxon_list) {
                              summary = TRUE, 
                              WAIC = TRUE)
 
-  library(ggmcmc)
-  beta_label <- data.frame(Parameter = "beta[2]", Label = "AvgTemp")
-  param_data <- ggs(modelMCMCrun$samples, par_labels = beta_label) %>%
-    filter(Parameter == "AvgTemp")
-  beta_mean <- mean(param_data$value)
-  param_data %>%
-    ggs_density() + # traceplot
-    theme_bw() +
-    ggtitle(paste("taxon:", taxon)) +
-    theme(plot.title = element_text(hjust = 0.5)) +
-    annotate("text", x = beta_mean, y = 0, label = paste0("Mean: ", round(beta_mean, 2)),vjust = -1.5, color = "red", size = 4)
+  # library(ggmcmc)
+  # beta_label <- data.frame(Parameter = "beta[2]", Label = "AvgTemp")
+  # param_data <- ggs(modelMCMCrun$samples, par_labels = beta_label) %>%
+  #   filter(Parameter == "AvgTemp")
+  # beta_mean <- mean(param_data$value)
+  # param_data %>%
+  #   ggs_density() + # traceplot
+  #   theme_bw() +
+  #   ggtitle(paste("taxon:", taxon)) +
+  #   theme(plot.title = element_text(hjust = 0.5)) +
+  #   annotate("text", x = beta_mean, y = 0, label = paste0("Mean: ", round(beta_mean, 2)),vjust = -1.5, color = "red", size = 4)
 
   saveRDS(modelMCMCrun, file = model_path)
 }
