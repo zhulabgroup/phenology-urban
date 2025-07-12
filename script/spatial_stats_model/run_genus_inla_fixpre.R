@@ -1,35 +1,40 @@
 
 
-prepare_genus_data <- function(phe_type, points_in_buffer, all_sites_temp, srad_daily) {
-  # ### WU sites
-  # points_in_buffer_joined <- points_in_buffer %>%
-  #   left_join((srad_daily %>%
-  #                select(id, year, season, Avg_srad) %>%
-  #                pivot_wider(names_from = season, values_from = Avg_srad, names_prefix = "srad_")),
-  #             by = c("id", "year")) %>%
-  #   left_join(all_sites_temp %>%
-  #               select(name, year, season, Avg_AvgTemp) %>%
-  #               pivot_wider(names_from = season, values_from = Avg_AvgTemp, names_prefix = "temp_"),
-  #             by = c("Site" = "name", "year")) %>%
-  #   left_join(all_sites_temp %>%
-  #               select(name, year, season, Sum_Sum_mm) %>%
-  #               pivot_wider(names_from = season, values_from = Sum_Sum_mm, names_prefix = "prcp_"),
-  #             by = c("Site" = "name", "year"))
-  ## All Daymet
-  points_in_buffer_joined <- points_in_buffer %>%
-    left_join((srad_daily %>%
-                 select(id, year, season, Avg_srad) %>%
-                 pivot_wider(names_from = season, values_from = Avg_srad, names_prefix = "srad_")),
-              by = c("id", "year")) %>%
-    left_join(all_sites_temp %>%
-                mutate(Avg_AvgTemp = temp) %>%
-                select(id, year, season, Avg_AvgTemp) %>%
-                pivot_wider(names_from = season, values_from = Avg_AvgTemp, names_prefix = "temp_"),
-              by = c("id", "year")) %>%
-    left_join(all_sites_temp %>%
-                select(id, year, season, prcp) %>%
-                pivot_wider(names_from = season, values_from = prcp, names_prefix = "prcp_"),
-              by = c("id", "year"))
+prepare_genus_data <- function(phe_type, points_in_buffer, all_sites_temp, srad_daily, source) {
+  if (source == "WU") {
+    ### WU sites
+    points_in_buffer_joined <- points_in_buffer %>%
+      left_join((srad_daily %>%
+                   select(id, year, season, Avg_srad) %>%
+                   pivot_wider(names_from = season, values_from = Avg_srad, names_prefix = "srad_")),
+                by = c("id", "year")) %>%
+      left_join(all_sites_temp %>%
+                  select(name, year, season, Avg_AvgTemp) %>%
+                  pivot_wider(names_from = season, values_from = Avg_AvgTemp, names_prefix = "temp_"),
+                by = c("Site" = "name", "year")) %>%
+      left_join(all_sites_temp %>%
+                  select(name, year, season, Sum_Sum_mm) %>%
+                  pivot_wider(names_from = season, values_from = Sum_Sum_mm, names_prefix = "prcp_"),
+                by = c("Site" = "name", "year"))
+  } else if (source == "Daymet") {
+    ## All Daymet
+    points_in_buffer_joined <- points_in_buffer %>%
+      left_join((srad_daily %>%
+                   select(id, year, season, Avg_srad) %>%
+                   pivot_wider(names_from = season, values_from = Avg_srad, names_prefix = "srad_")),
+                by = c("id", "year")) %>%
+      left_join(all_sites_temp %>%
+                  mutate(Avg_AvgTemp = temp) %>%
+                  select(id, year, season, Avg_AvgTemp) %>%
+                  pivot_wider(names_from = season, values_from = Avg_AvgTemp, names_prefix = "temp_"),
+                by = c("id", "year")) %>%
+      left_join(all_sites_temp %>%
+                  select(id, year, season, prcp) %>%
+                  pivot_wider(names_from = season, values_from = prcp, names_prefix = "prcp_"),
+                by = c("id", "year"))
+  } else {
+    stop("Invalid source. Must be 'WU' or 'Daymet'.")
+  }
   
   if (phe_type == "SOS") {
     phe_metric <- "doy"
@@ -37,7 +42,7 @@ prepare_genus_data <- function(phe_type, points_in_buffer, all_sites_temp, srad_
     thres <- 0.5
     model_input <- points_in_buffer_joined %>%
       filter(direction == !!direction & thres == !!thres) %>%
-      select(id, taxa,genus, lon, lat, year, doy, geometry, ends_with("winter")) %>%
+      select(id, taxa,genus, lon, lat, year, doy, hex_id, ends_with("winter")) %>%
       drop_na()
   } else if (phe_type == "EOS") {
     phe_metric <- "doy"
@@ -45,7 +50,7 @@ prepare_genus_data <- function(phe_type, points_in_buffer, all_sites_temp, srad_
     thres <- 0.5
     model_input <- points_in_buffer_joined %>%
       filter(direction == !!direction & thres == !!thres) %>%
-      select(id, taxa, genus, lon, lat, year, doy, geometry, ends_with("summer")) %>%
+      select(id, taxa, genus, lon, lat, year, doy, hex_id, ends_with("summer")) %>%
       drop_na()
   } else if (phe_type == "GreenUp") {
     phe_metric <- "doy_diff"
@@ -60,7 +65,7 @@ prepare_genus_data <- function(phe_type, points_in_buffer, all_sites_temp, srad_
     model_input = points_in_buffer_joined %>%
       filter(direction == !!direction & thres == 0.2) %>%
       left_join(diff, by = c("year", "id")) %>%
-      select(id, taxa, genus, lon, lat, year, doy_diff, geometry, ends_with("spring")) %>%
+      select(id, taxa, genus, lon, lat, year, doy_diff, hex_id, ends_with("spring")) %>%
       drop_na()
     
   } else {
@@ -75,7 +80,7 @@ prepare_genus_data <- function(phe_type, points_in_buffer, all_sites_temp, srad_
     model_input = points_in_buffer_joined %>%
       filter(direction == !!direction & thres == 0.2) %>%
       left_join(diff, by = c("year", "id")) %>%
-      select(id, taxa, genus, lon, lat, year, doy_diff, geometry, ends_with("fall")) %>%
+      select(id, taxa, genus, lon, lat, year, doy_diff, hex_id, ends_with("fall")) %>%
       drop_na()
   }
   
