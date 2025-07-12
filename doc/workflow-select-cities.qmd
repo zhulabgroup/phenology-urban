@@ -17,7 +17,7 @@ check_install_packages(c("dplyr", "here", "sf", "viridis", "leaflet","terra", "p
 if (!require(plotbiomes)) {
   devtools::install_github("valentinitnelav/plotbiomes")
 }
-load_packages(c("dplyr", "here", "sf","viridis", "leaflet", "cli", "terra","patchwork", "data.table", "plotly", "stringr", "tidyverse"))
+load_packages(c("dplyr", "here", "sf","viridis", "leaflet", "cli", "terra","patchwork", "data.table", "plotly", "readxl", "tidyverse"))
 
 create_symlink_turbo("data/raw/CONUS/StreetTrees", "datasets/vegetation/StreetTrees/")
 create_symlink_turbo("data/raw/CONUS/boundary", "datasets/boundary/USAdministrative/")
@@ -479,82 +479,26 @@ population_plot + all_population_plot
 
 ```
 
-## Combine these factors to select representative cities
+## Combine these factors to 确定城市的代表性
 
-<!-- In order to combine the three factors (climate, building height, and population density) to select representative cities, I display an interactive plot to visualize cities based on their **median building height** (x-axis) and **standard deviation of building height** (y-axis). And cities are colored by their Whittaker **biome**, sized by **population density**, and labeled with names and detailed information in tooltips on hover. -->
+At this stage, I have collected tree inventories from 77 cities, and assessed their climate, urban form, and population characteristics and compared them to all US city list. The next step is to select a representative subset of cities that captures the variation in these key factors.
 
-<!-- To focus on a specific group, I can double-click a legend item—for example, double-click on the circle labeled "temperate grassland/desert, \<1k" to highlight only cities in that biome with low population density. Then, look to the lower-left corner of the plot to find cities with low median building height and low variability. These cities may be good candidates for representing sparsely populated, low-rise urban forms in the temperate grassland/desert biome. -->
+### Potential additional cities
 
-<!-- ```{r fig-city-3factors} -->
-<!-- #| warning: false -->
-<!-- #| fig-cap: "Distribution of building height in each city, colored by Whittaker biomes and sized by population density." -->
-<!-- all_city_chelsa_df <- all_city_chelsa |> -->
-<!--   mutate(bio1 = bio1, -->
-<!--          bio12 = bio12 / 10) |> -->
-<!--   as.data.frame() -->
-<!-- tp_valid_sp <- sp::SpatialPoints(coords = all_city_chelsa_df[, c("bio1", "bio12")]) -->
-
-<!-- sp_overlay <- sp::over(tp_valid_sp, Whittaker_biomes_poly) -->
-<!-- all_city_chelsa_dt <- as.data.table(all_city_chelsa_df) -->
-<!-- all_city_chelsa_dt[, biome := sp_overlay$biome] -->
-
-
-<!-- list_city_dt <- left_join(city_chelsa, -->
-<!--                           city_feature |> select(city, median, sd) |> st_drop_geometry(), -->
-<!--                           by = "city") |> -->
-<!--   left_join(city_pop |> select(city, pop_density) |> st_drop_geometry(), by = "city") |> -->
-<!--   st_drop_geometry() -->
-<!-- # saveRDS(list_city_dt, "~/phenology-urban/data/proc/urban/City_list/list_city.rds") -->
-<!-- # saveRDS(all_city_chelsa_dt, "~/phenology-urban/data/proc/urban/City_list/all_city.rds") -->
-
-<!-- all_city_chelsa_dt <- all_city_chelsa_dt |> -->
-<!--   mutate(pop_density_bin = cut(pop_density, breaks = c(0, 1000, 2000, 3000, 4000, 5000, Inf), -->
-<!--                                labels = c("<1k", "1–2k", "2–3k", "3–4k", "4-5k", ">5k"))) -->
-
-<!-- p <- ggplot(all_city_chelsa_dt, aes( -->
-<!--     x = median, -->
-<!--     y = sd, -->
-<!--     text = paste0( -->
-<!--       "City: ", NAME20, "<br>", -->
-<!--       "Pop. density bin: ", pop_density_bin, "<br>", -->
-<!--       "Bio1 (Annual temp): ", round(bio1, 1), " °C<br>", -->
-<!--       "Bio12 (Precip): ", round(bio12, 0), " cm" -->
-<!--     ), -->
-<!--     color = biome, -->
-<!--     size = pop_density_bin -->
-<!--   )) + -->
-<!--   geom_point(alpha = 0.5) + -->
-<!--   scale_color_manual( -->
-<!--     name = "Whittaker biomes", -->
-<!--     breaks = names(Ricklefs_colors), -->
-<!--     labels = names(Ricklefs_colors), -->
-<!--     values = Ricklefs_colors -->
-<!--   ) + -->
-<!--   scale_size_discrete(name = "Population density (bin)") + -->
-<!--   theme_minimal() + -->
-<!--   labs( -->
-<!--     x = "Median building height (m)", -->
-<!--     y = "Standard deviation of building height (m)", -->
-<!--     title = "Building height distribution" -->
-<!--   ) -->
-
-<!-- ggplotly(p) -->
-<!-- ``` -->
+In addition to these cities with tree inventories, I also identified 42 additional cities that are recorded in GUTI dataset which complied tree inventory data globally. These cities are listed in the `data/proc/urban/City_list/list_city.shp` file. The size of the circle represents the number of trees in the city. @Ossola_GUTI
 
 ### PCA 
 
 To identify a representative subset of cities that captures the variation in key climate and population variables, I applied Principal Component Analysis (PCA) to the following standardized variables: population density, annual temperature, annual precipitation, median and standard deviation of building height. 
 
-*Conduct PCA*
+#### Conduct PCA
 
-In the PCA plot, cities in the current list are highlighted in blue (56 in total, excluding invalid cities' names), while other cities are shown in grey.
+In the PCA plot, cities in the current list are highlighted in blue (36 in total, excluding invalid cities' names), while other cities are shown in grey.
 
 ```{r}
 #| warning: false
 #| include: false
 all_city <- readRDS("~/phenology-urban/data/proc/urban/City_list/all_city.rds") |>
-  left_join(summer_temp, by = "GEOID20") |>
-  left_join(winter_temp, by = "GEOID20") |>
   na.omit()
 scaled_matrix <- scale(all_city |>
   select(pop_density,bio1, bio12, sd, median)|>
@@ -573,6 +517,26 @@ list_city <- st_read(here("data/proc/urban/City_list/list_city.shp")) |>
   mutate(
     NAME20_nospace = str_replace_all(NAME20, "\\s+", ""), 
     matched = ifelse(city == "WashingtonDC", TRUE, str_detect(NAME20_nospace, fixed(city, ignore_case = TRUE)))
+  ) |>
+  filter(matched == TRUE) |>
+  pull(NAME20)
+```
+
+From GUTI, the US cities with tree inventories: 
+```{r}
+GUTI_list <- read_excel("~/urban-niche/data/raw/CONUS/climate-niche/guti/GUTI_v1.0.xlsx", 
+    sheet = "Appendix 3.1", skip = 3) |>
+  separate(Country, into = c("country", "state"), sep = " \\(|\\)", remove = FALSE) |>
+  filter(country == "USA" & Continent == "North America" & `Source type` == "Tree inventory") |>
+  st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326) |>
+  st_join(st_read(here("data/raw/CONUS/boundary/USCities/tl_2024_us_uac20.shp")) |> 
+            st_transform(4326) |>
+            select(NAME20), join = st_nearest_feature) |>
+  select(City, state, NAME20)|>
+  mutate(
+    city_words = str_split(City, "\\s+") |> 
+      map(~ .x[nchar(.x) > 3]),  # remove "SAN" "EI", "port"
+    matched = ifelse(City == "Port Chester", FALSE, map2_lgl(city_words, NAME20, ~ any(str_detect(.y, fixed(.x, ignore_case = TRUE)))))
   ) |>
   filter(matched == TRUE) |>
   pull(NAME20)
@@ -601,16 +565,13 @@ pca_loadings <- pca_loadings |>
 pca_scores <- pca_scores |>
   mutate(
     selected = NAME20 %in% list_city,
+    GUTI_list = NAME20 %in% GUTI_list,
     hover_text = paste("City:", NAME20)
   )
 
-p <- ggplot(pca_scores, aes(x = PC1, y = PC2, text = NAME20)) +
-  geom_point(data = filter(pca_scores, !selected),
+p1 = ggplot(pca_scores, aes(x = PC1, y = PC2, text = NAME20)) +
+  geom_point(data = pca_scores,
              color = "grey60", alpha = 0.3, size = 0.5) +
-  geom_point(data = filter(pca_scores, selected),
-             color = "blue", size = 1) +
-  geom_text(data = filter(pca_scores, selected),
-            aes(label = NAME20), size = 2, vjust = -1) +
   geom_segment(data = pca_loadings,
                aes(x = 0, y = 0, xend = PC1, yend = PC2),
                arrow = arrow(length = unit(0.5, "cm")),
@@ -622,23 +583,38 @@ p <- ggplot(pca_scores, aes(x = PC1, y = PC2, text = NAME20)) +
        x = "PC1", y = "PC2") +
   theme_minimal()
 
-ggplotly(p, tooltip = "text")
+# ggplotly(p, tooltip = "text")
+
+p2 = ggplot(pca_scores, aes(x = PC1, y = PC2, text = NAME20)) +
+  geom_point(data = filter(pca_scores, !(selected | GUTI_list)),
+             color = "grey60", alpha = 0.3, size = 0.5) +
+  geom_point(data = filter(pca_scores, selected),
+             color = "blue", size = 1) +
+  geom_text(data = filter(pca_scores, selected),
+            aes(label = NAME20), size = 2, vjust = -1) +
+  geom_point(data = filter(pca_scores, !selected & GUTI_list),
+             color = "red", size = 1) +
+  geom_text(data = filter(pca_scores,  !selected & GUTI_list),
+            aes(label = NAME20), size = 2, vjust = -1) +
+  labs(title = "PCA of City Climate and Population Variables",
+       x = "PC1", y = "PC2") +
+  theme_minimal()
+
+p1 + p2
 ```
 
 In this PCA plot, the first two principal components capture a substantial portion of the total variance. Each input variable contributes meaningfully to the PCA axes (see loadings plot). No single variable dominates, suggesting that both temperature, precipitation, building height, and population density jointly shape the PCA space. 
 
 In addition, the projection of all cities and current cities onto the 2D PCA space are relatively evenly spread, with no extreme clustering. This even distribution supports the use of spatially structured sampling methods, such as grid-based selection.
 
-*Ploting grids*
+#### Plot grids
 
 Then, I overlaid a regular grid on the PCA space and selected one city per grid cell, retaining existing points that already cover part of the space, while filling in missing areas (grid cells without any existing points) with new representative cities.
 
 1. Use the evenly spaced grid to divide the PCA space into cells.
 
-There are 207 grids have at least one city, with 48 grids having cities in current list. Therefore, I will select other 159 cities from other 159 grids.
-
 ```{r}
-pca_samples <- function(pca_scores, num, threshold){
+pca_even_sample <- function(pca_scores, num, threshold){
   aspect_ratio <- (max(pca_scores$PC1) - min(pca_scores$PC1))/(max(pca_scores$PC2) - min(pca_scores$PC2)) 
   x_breaks <- seq(min(pca_scores$PC1), max(pca_scores$PC1), length.out = num* aspect_ratio)
   y_breaks <- seq(min(pca_scores$PC2), max(pca_scores$PC2), length.out = num)
@@ -663,6 +639,7 @@ pca_samples <- function(pca_scores, num, threshold){
       df |>
         group_by(x_bin, y_bin) |>
         summarise(selected = any(selected), 
+                  GUTI_list_sup = any(GUTI_list),
                   count = n(),
                   .groups = "drop"),
       by = c("x_bin", "y_bin")
@@ -673,12 +650,12 @@ pca_samples <- function(pca_scores, num, threshold){
     )
   
   p = ggplot(pca_scores, aes(x = PC1, y = PC2, text = NAME20)) +
-    geom_point(data = filter(pca_scores, !selected),
-               color = "grey60", alpha = 0.3, size = 0.5) +
+    geom_point(data = filter(pca_scores, !(selected | GUTI_list)),
+             color = "grey60", alpha = 0.3, size = 0.5) +
     geom_point(data = filter(pca_scores, selected),
                color = "blue", size = 1) +
-    geom_text(data = filter(pca_scores, selected),
-              aes(label = NAME20), size = 2, vjust = -1) +
+    geom_point(data = filter(pca_scores, !selected & GUTI_list),
+               color = "red", size = 1) +
     labs(title = "PCA of City Climate and Population Variables",
          x = "PC1", y = "PC2") +
     theme_minimal() +
@@ -696,8 +673,15 @@ pca_samples <- function(pca_scores, num, threshold){
       width = diff(x_breaks)[1], height = diff(y_breaks)[1],
       inherit.aes = FALSE
     ) +
-    geom_vline(xintercept = x_breaks, linetype = "solid", color = "yellow", size = 0.3) +
-    geom_hline(yintercept = y_breaks, linetype = "solid", color = "yellow", size = 0.3) +
+    geom_tile(
+      data = grid_full |> filter(!selected & GUTI_list_sup),
+      aes(x = PC1_center, y = PC2_center),
+      fill = "red", alpha = 0.3,
+      width = diff(x_breaks)[1], height = diff(y_breaks)[1],
+      inherit.aes = FALSE
+    ) +
+    # geom_vline(xintercept = x_breaks, linetype = "solid", color = "yellow", size = 0.3) +
+    # geom_hline(yintercept = y_breaks, linetype = "solid", color = "yellow", size = 0.3) +
     labs(title = "PCA of City Climate and Population Variables",
          x = "PC1", y = "PC2") +
     theme_minimal()
@@ -708,6 +692,140 @@ pca_samples <- function(pca_scores, num, threshold){
   area_covered <- diff(x_breaks)[1] * diff(y_breaks)[1] * (need_to_select + current_grids)
 
   
+  message(paste0("Total grids having at least 1 city: ", total_grids, "\n"))
+  message("Total grids having cities in current list: ", current_grids, "\n")
+  message("Number of cities NEED to be selected: ", need_to_select, "\n")
+  message("Representative area in PCA space: ", area_covered, "\n")
+  res_list <- list(
+    plot = p,
+    total_grids = total_grids,
+    current_grids = current_grids,
+    need_to_select = need_to_select,
+    area_covered = area_covered
+  )
+  return(res_list)
+
+}
+
+example = pca_even_sample(pca_scores, num = 13, threshold = 1)
+ggplotly(example$plot)
+
+```
+
+
+```{r}
+num_values <- 6:20
+threshold_values <- 1:10
+
+results <- cross_df(list(num = num_values, threshold = threshold_values)) %>%
+  mutate(data = map2(num, threshold, ~{
+    out <- pca_even_sample(pca_scores, num = .x, threshold = .y)
+    tibble(
+      total_grids = out$total_grids,
+      current_grids = out$current_grids,
+      need_to_select = out$need_to_select,
+      area_covered = out$area_covered
+    )
+  })) %>%
+  unnest(data)
+
+results_long <- results %>%
+  pivot_longer(
+    cols = c(total_grids, current_grids, need_to_select, area_covered),
+    names_to = "metric",
+    values_to = "value"
+  )
+
+ggplot(results_long, aes(x = num, y = value, color = factor(threshold))) +
+  geom_line(size = 0.6) +
+  geom_point(size = 1) +
+  facet_wrap(~ metric, scales = "free_y") +
+  theme_minimal() +
+  labs(
+    title = "Grid Metrics Varying by Grid Number and Threshold",
+    x = "Number of Grid Divisions (num)",
+    y = "Metric Value",
+    color = "Threshold"
+  )
+```
+
+2. Use the percentile of samples to divide the PCA space into cells.
+
+```{r}
+pca_even_sample_percentile <- function(pca_scores, num, threshold) {
+  # Define percentile-based breaks
+  x_breaks <- quantile(pca_scores$PC1, probs = seq(0, 1, length.out = num + 1), na.rm = TRUE)
+  y_breaks <- quantile(pca_scores$PC2, probs = seq(0, 1, length.out = num + 1), na.rm = TRUE)
+
+  df <- pca_scores %>%
+    mutate(
+      x_bin = cut(PC1, breaks = x_breaks, include.lowest = TRUE, labels = FALSE),
+      y_bin = cut(PC2, breaks = y_breaks, include.lowest = TRUE, labels = FALSE),
+      grid_id = paste(x_bin, y_bin, sep = "_")
+    )
+
+  grid_full <- expand.grid(
+    x_bin = 1:(length(x_breaks) - 1),
+    y_bin = 1:(length(y_breaks) - 1)
+  ) |>
+    mutate(
+      grid_id = paste(x_bin, y_bin, sep = "_"),
+      x_min = x_breaks[x_bin],
+      x_max = x_breaks[x_bin + 1],
+      y_min = y_breaks[y_bin],
+      y_max = y_breaks[y_bin + 1],
+      PC1_center = (x_min + x_max) / 2,
+      PC2_center = (y_min + y_max) / 2,
+      area = (x_max - x_min) * (y_max - y_min)
+    ) |>
+    left_join(
+      df |>
+        group_by(x_bin, y_bin) |>
+        summarise(selected = any(selected), 
+                  count = n(),
+                  .groups = "drop"),
+      by = c("x_bin", "y_bin")
+    ) |>
+    mutate(
+      count = replace_na(count, 0),
+      selected = replace_na(selected, FALSE),
+      singleton = count < threshold
+    )
+
+  # --- Plot ---
+  p = ggplot(pca_scores, aes(x = PC1, y = PC2, text = NAME20)) +
+    geom_point(data = filter(pca_scores, !selected),
+               color = "grey60", alpha = 0.3, size = 0.5) +
+    geom_point(data = filter(pca_scores, selected),
+               color = "blue", size = 1) +
+    geom_text(data = filter(pca_scores, selected),
+              aes(label = NAME20), size = 2, vjust = -1) +
+    # geom_tile(
+    #   data = grid_full |> filter(singleton),
+    #   aes(x = PC1_center, y = PC2_center),
+    #   fill = "grey", alpha = 0.6,
+    #   width = grid_full$area^0.5, height = grid_full$area^0.5,
+    #   inherit.aes = FALSE
+    # ) +
+    # geom_tile(
+    #   data = grid_full |> filter(selected),
+    #   aes(x = PC1_center, y = PC2_center),
+    #   fill = "blue", alpha = 0.3,
+    #   width = grid_full$area^0.5, height = grid_full$area^0.5,
+    #   inherit.aes = FALSE
+    # ) +
+    geom_vline(xintercept = x_breaks, linetype = "solid", color = "yellow", size = 0.3) +
+    geom_hline(yintercept = y_breaks, linetype = "solid", color = "yellow", size = 0.3) +
+    labs(title = "PCA of City Climate and Population Variables",
+         x = "PC1", y = "PC2") +
+    theme_minimal()
+
+  # --- Calculate metrics ---
+  total_grids <- nrow(grid_full %>% filter(!singleton))
+  current_grids <- nrow(grid_full %>% filter(selected))
+  need_to_select <- total_grids - nrow(grid_full %>% filter(selected & !singleton))
+  area_covered <- sum(grid_full$area[grid_full$selected | (!grid_full$singleton)], na.rm = TRUE)
+
   return(list(
     plot = p,
     total_grids = total_grids,
@@ -716,54 +834,28 @@ pca_samples <- function(pca_scores, num, threshold){
     representative_area = area_covered
   ))
 }
+example_percentile = pca_even_sample_percentile(pca_scores, num = 16, threshold = 1)
 
-num_values <- 6:20
-results <- map_dfr(num_values, function(n) {
-  out <- pca_samples(pca_scores, num = n, threshold = 1)
-  tibble(
-    num = n,
-    total_grids = out$total_grids,
-    current_grids = out$current_grids,
-    need_to_select = out$need_to_select,
-    representative_area = out$representative_area
-  )
-})
-results_long <- results %>%
-  pivot_longer(
-    cols = -num,
-    names_to = "metric",
-    values_to = "value"
-  )
-ggplot(results_long, aes(x = num, y = value, color = metric)) +
-  geom_line(size = 0.5) +
-  geom_point(size = 1) +
-  facet_wrap(~ metric, scales = "free_y") +
-  theme_minimal() +
-  labs(
-    title = "Change in Grid Selection Metrics by Grid Resolution (num)",
-    x = "Number of Grid Divisions (num)",
-    y = "Metric Value"
-  )
 ```
 
-
-```{r}
-
-# Step 2: Keep one city per unsampled cell
-sampled_cells <- unique(df$grid_cell[df$selected == TRUE])
-remaining_cells <- setdiff(unique(df$grid_cell), sampled_cells)
-
-new_samples <- df %>%
-  filter(grid_cell %in% remaining_cells) %>%
-  group_by(grid_cell) %>%
-  slice_min(sqrt((PC1 - grid_center_x)^2 + (PC2 - grid_center_y)^2), with_ties = FALSE)
-```
 
 
 Use the HUMID to get the within city climate (temperature) variation
 ? maybe more direct compared to using building structure
 
 ```{r}
+# 
+# # Step 2: Keep one city per unsampled cell
+# sampled_cells <- unique(df$grid_cell[df$selected == TRUE])
+# remaining_cells <- setdiff(unique(df$grid_cell), sampled_cells)
+# 
+# new_samples <- df %>%
+#   filter(grid_cell %in% remaining_cells) %>%
+#   group_by(grid_cell) %>%
+#   slice_min(sqrt((PC1 - grid_center_x)^2 + (PC2 - grid_center_y)^2), with_ties = FALSE)
+
+
+
 # use it as a vallidation
 data_folder <- "~/phenology-urban/data/proc/humid/cities"
 summer_temp <- read_tsv(file.path(data_folder, "all_cities_summer_2017.txt"), show_col_types = FALSE) |> 

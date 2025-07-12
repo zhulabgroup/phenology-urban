@@ -1,0 +1,330 @@
+---
+title: "Validation of using spatial statistic model"
+author: "Jiali Zhu"
+date: "today"
+editor_options:
+  chunk_output_type: console
+---
+
+# Introduction
+
+This document follows the same workflow for analyzing urban phenology data, while changing the climate variable to the Daymet instead. The analysis is structured around two main levels: genus and species, with a particular emphasis on the city of New York.
+
+```{r}
+#| label: load-packages
+#| include: false
+#| warning: false
+
+# Install and load 'zhulabtools' package
+library(zhulabtools)
+
+# Manage packages: check, install, and load specific packages
+check_install_packages(c("dplyr","lubridate", "ggplot2", "sf","sp", "readr", "purrr", "stringr","glue", "tidyr", "broom","lme4", "broom.mixed", "ppcor", "spdep", "spatialreg", "lmtest","car", "spBayes", "coda", "patchwork", "performance", "terra", "ggpmisc", "gstat", "ggmcmc", "taxize", "stats", "viridis"))
+if (!require(plotbiomes)) {
+  devtools::install_github("valentinitnelav/plotbiomes")
+}
+load_packages(c("dplyr","lubridate", "ggplot2", "sf","sp", "readr", "purrr", "stringr","glue", "tidyr", "broom","lme4", "broom.mixed", "ppcor", "spdep", "spatialreg", "lmtest","car", "spBayes", "coda", "patchwork", "performance", "terra", "ggpmisc", "gstat", "ggmcmc", "taxize", "stats", "viridis","INLA"))
+
+select <- dplyr::select # Avoid masking by base R's select function
+city <- "NY" # Set the city for analysis
+phe_types <- c("SOS", "EOS")
+```
+
+```{r}
+#| include: false
+generate_mcmc_plot <- function(dir_path) {
+  
+  # Helper to process files by pattern
+  process_files <- function(file_list, phe_type_label) {
+    param_list <- map(file_list, function(file) {
+      model_data <- readRDS(file)
+      genus <- sub(paste0("(.*?)_", phe_type_label, "\\.rds"), "\\1", basename(file))
+      beta_label <- data.frame(Parameter = "beta[2]", Label = genus)
+      param_data <- ggs(model_data$samples, par_labels = beta_label) %>%
+        filter(Parameter == genus)
+      return(param_data)
+    })
+    combined_param_data <- bind_rows(param_list) %>%
+      filter(Parameter != "Alnus") %>%
+      mutate(phe_type = phe_type_label)
+    return(combined_param_data)
+  }
+  
+  # Collect files
+  SOS_files <- list.files(dir_path, pattern = "SOS\\.rds$", full.names = TRUE)
+  EOS_files <- list.files(dir_path, pattern = "EOS\\.rds$", full.names = TRUE)
+  Gup_files <- list.files(dir_path, pattern = "GreenUp\\.rds$", full.names = TRUE)
+  Gdown_files <- list.files(dir_path, pattern = "GreenDown\\.rds$", full.names = TRUE)
+  
+  # Process each type
+  sos_data <- process_files(SOS_files, "SOS")
+  eos_data <- process_files(EOS_files, "EOS")
+  gup_data <- process_files(Gup_files, "GreenUp")
+  gdown_data <- process_files(Gdown_files, "GreenDown")
+  
+  combined_param_data <- bind_rows(sos_data, eos_data, gup_data, gdown_data)
+  
+  # Summarize
+  summary_data <- combined_param_data %>%
+    group_by(Parameter, phe_type) %>%
+    summarise(
+      mean_value = mean(value, na.rm = TRUE),
+      lower_2_5 = quantile(value, 0.025, na.rm = TRUE),
+      upper_97_5 = quantile(value, 0.975, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    mutate(Sig = ifelse(lower_2_5 * upper_97_5 > 0, "*", ""),
+           SigAlpha = ifelse(Sig == "*", 1, 0.2))
+  
+  summary_data$phe_type <- factor(summary_data$phe_type, levels = c("SOS", "EOS", "GreenUp", "GreenDown"))
+  param_levels <- rev(unique(summary_data$Parameter))
+  
+  # Plot
+  p <- ggplot(summary_data, aes(x = factor(Parameter, levels = param_levels), y = mean_value)) +
+    geom_point(aes(alpha = SigAlpha), size=3) +
+  geom_errorbar(aes(ymin = lower_2_5, ymax = upper_97_5, alpha = SigAlpha), width = 0.4) +
+  geom_hline(yintercept = 0, linetype = 2, color = "black") +
+  geom_text(aes(label = round(mean_value, 3)), 
+            vjust = -0.7, size = 4) +
+  scale_alpha_identity() +
+  guides(alpha = "none") +
+  facet_wrap(~ phe_type, scales = "free_x") +  # flip x/y means free_x
+  theme_minimal() +
+  labs(x = NULL, y = "Estimate") +
+  theme(
+    strip.text = element_text(face = "bold"),
+    axis.text.x = element_text(size = 14)
+  ) +
+    coord_flip()
+  
+  return(p)
+}
+
+source("~/phenology-urban/script/spatial_stats_model/run_genus_inla_fixpre.R")
+source("~/phenology-urban/script/spatial_stats_model/run_species_inla.R")
+```
+
+
+# OLS
+
+## Results
+
+### Genus
+
+```{r}
+#| label: fig-ny_genus
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each genus in New York city."
+#| warning: false
+#| eval: true
+
+dir_path <- "~/phenology-urban/data/proc/urban/ols_model/bayes_genus_humid_all/NY/"
+plot_obj <- generate_mcmc_plot(dir_path)
+plot_obj
+```
+
+### Species
+
+```{r}
+#| label: fig-ny_sp
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each species in New York city."
+#| warning: false
+#| eval: true
+
+dir_path <- "~/phenology-urban/data/proc/urban/ols_model/bayes_species_humid_all/NY/"
+plot_obj <- generate_mcmc_plot(dir_path)
+plot_obj
+```
+
+# Spatial Model
+
+```{r data-3}
+#| eval: false
+#| include: false
+city <- "NY"
+
+## prepare input data
+metadata <- read_csv("~/lab-data/datasets/vegetation/PS/urban/metadata.csv") %>%
+  filter(site == !!city)
+file_list <- list.files(path = "~/lab-data/datasets/vegetation/PS/urban/doy", pattern = paste0("^doy_",city,"_.*\\.rds$"), full.names = TRUE)
+data_list <- file_list %>%
+  map(~ readRDS(.x))
+all_doy <- bind_rows(data_list)
+tree_location <- metadata %>%
+  mutate(genus = str_extract(taxa, "^[^ ]+")) %>%
+  left_join(all_doy, by = "id") %>%
+  filter(!is.na(doy)) %>%
+  mutate(geometry = paste0("c(", lon, ", ", lat, ")"))
+
+# List of Humid variable names and their corresponding filenames
+files <- c("temp_monthly_all_tree.rds",
+           "srad_monthly_all_tree.rds")
+base_path <- "~/phenology-urban/data/raw/"
+processed_humid_list <- lapply(files, function(file_name) {
+  # Read the file
+  var_name <- sub("_monthly_all_tree.rds", "", file_name)
+  data <- readRDS(paste0(base_path, city, "/HUMID/", file_name)) %>%
+    select(id, value, date) %>%
+    mutate(
+      season = case_when(
+        substr(date, 6, 7) %in% c("03", "04", "05") ~ "spring",
+        substr(date, 6, 7) %in% c("06", "07", "08") ~ "summer",
+        substr(date, 6, 7) %in% c("09", "10", "11") ~ "fall",
+        substr(date, 6, 7) %in% c("12", "01", "02") ~ "winter"
+      )) %>%
+    mutate(year = as.integer(substr(date, 1, 4)),
+           year = if_else(substr(date, 6, 7) == "12", year + 1, year)) %>%
+    filter(year < 2019) %>% 
+    group_by(id, year, season) %>%
+    summarise(
+    # Use sum for prcp, and mean for temp and srad
+    Avg_value = mean(as.numeric(value), na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  # Rename the Avg_value column to the variable name (e.g., tmax, tmin, prcp)
+  rename(!!var_name := Avg_value)
+  return(data)
+})
+
+files <- c("prcp_monthly_all_tree.rds")
+processed_daymet_list <- lapply(files, function(file_name) {
+  # Read the file
+  var_name <- sub("_monthly_all_tree.rds", "", file_name)
+  data <- readRDS(paste0(base_path, city, "/Daymet/monthly2016-2024/", file_name)) %>%
+    select(id, value, date) %>%
+    mutate(
+      season = case_when(
+        substr(date, 6, 7) %in% c("03", "04", "05") ~ "spring",
+        substr(date, 6, 7) %in% c("06", "07", "08") ~ "summer",
+        substr(date, 6, 7) %in% c("09", "10", "11") ~ "fall",
+        substr(date, 6, 7) %in% c("12", "01", "02") ~ "winter"
+      )) %>%
+    mutate(year = as.integer(substr(date, 1, 4)),
+           year = if_else(substr(date, 6, 7) == "12", year + 1, year)) %>%
+    group_by(id, year, season) %>%
+    summarise(
+    # Use sum for prcp, and mean for temp and srad
+    Avg_value = sum(as.numeric(value), na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  # Rename the Avg_value column to the variable name (e.g., tmax, tmin, prcp)
+  rename(!!var_name := Avg_value)
+
+  return(data)
+})
+
+all_sites_climate <- processed_humid_list[[1]] |>
+  left_join(processed_daymet_list[[1]], by = c("id", "season", "year")) 
+
+srad_daily <- processed_humid_list[[2]] |>
+  rename(Avg_srad = srad)
+```
+
+## spbayes
+
+
+
+## INLA
+
+```{r}
+#| label: model-genus4
+#| eval: false
+#| include: false
+#
+source("~/phenology-urban/script/spatial_stats_model/run_genus_inla_fixpre.R")
+#
+r_output_dir <- paste0("~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/inla_year_random_genus_humid_all/", city, "/")
+if (!dir.exists(r_output_dir)) {
+  dir.create(r_output_dir, recursive = TRUE)
+}
+#
+lapply(phe_types, function(phe_type) {
+  model_input_all <- prepare_genus_data(phe_type, tree_location, all_sites_climate, srad_daily)
+  run_inla_genus(model_input_all, r_output_dir, phe_type, city)
+})
+```
+
+```{r}
+#| label: model-species4
+#| eval: false
+#| include: false
+
+source("~/phenology-urban/script/spatial_stats_model/run_species_inla.R")
+r_output_dir <- paste0("~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/inla_year_random_species_humid_all/", city, "/")
+if (!dir.exists(r_output_dir)) {
+  dir.create(r_output_dir, recursive = TRUE)
+}
+
+lapply(phe_types, function(phe_type) {
+  model_input_all <- prepare_species_data(phe_type, tree_location, all_sites_climate, srad_daily)
+  run_inla_species(model_input_all, r_output_dir, phe_type, city)
+})
+```
+
+### Genus level
+
+```{r}
+#| label: fig-genus-4
+#| include: true
+#| fig-width: 10
+#| fig-height: 5
+#| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each genus in New York city."
+#| warning: false
+#| eval: true
+
+
+r_output_dir <- paste0("~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/inla_year_random_genus_humid_all/", city, "/")
+plots_coef <- list()
+
+for (phe_type in phe_types) {
+  p1 <- plot_coef_genus_city(r_output_dir, phe_type)
+  plots_coef[[phe_type]] <- p1$coef_summary_plot
+}
+
+ny_genus = wrap_plots(plots_coef, ncol = 2)
+ny_genus
+```
+
+### Species level
+
+```{r}
+#| label: fig-species-4
+#| include: true
+#| fig-width: 10
+#| fig-height: 5
+#| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each species in New York city."
+#| warning: false
+#| eval: true
+
+
+r_output_dir <- paste0("~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/inla_year_random_species_humid_all/", city, "/")
+plots_coef <- list()
+
+for (phe_type in phe_types) {
+  p1 <- plot_coef_sp_city(r_output_dir, phe_type)
+  plots_coef[[phe_type]] <- p1$coef_summary_plot
+}
+
+ny_sp = wrap_plots(plots_coef, ncol = 2)
+ny_sp
+```
+
+
+# Diagnostic
+
+## The spatial confounding between fixed effects and spatial random effects
+
+```{r}
+model <- readRDS("~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/inla_year_random_genus_check/NY/Acer_SOS.rds")
+spatial_mean <- model$res$summary.random$spatial.field$mean
+A_full <- inla.stack.A(model$stk.full)
+A_spatial <- A_full[["2"]]
+
+A_est <- A_spatial[inla.stack.index(model$stk.full, tag = "est")$data, ]
+```
+
