@@ -204,8 +204,6 @@ for (taxon in taxon_list) {
   constants <- list(N = N, P = ncol(X), 
                     nyears = nyears, 
                     year = year_index,
-                    nhex = nhex, 
-                    hex_id = hex_index,
                     I = diag(1,N))
   monitors <- c("beta", "tau.year", "year_effect")
   
