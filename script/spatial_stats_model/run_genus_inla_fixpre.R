@@ -16,7 +16,7 @@ prepare_genus_data <- function(phe_type, points_in_buffer, all_sites_temp, srad_
                   select(name, year, season, Sum_Sum_mm) %>%
                   pivot_wider(names_from = season, values_from = Sum_Sum_mm, names_prefix = "prcp_"),
                 by = c("Site" = "name", "year"))
-  } else if (source == "Daymet") {
+  } else if (source == "Grid") {
     ## All Daymet
     points_in_buffer_joined <- points_in_buffer %>%
       left_join((srad_daily %>%
