@@ -16,7 +16,7 @@ library(rgbif)
 r_input_dir <- Sys.getenv("R_INPUT_DIR")
 r_output_dir <- Sys.getenv("R_OUTPUT_DIR")
 city <- Sys.getenv("CITY")
-phe_type <- Sys.getenv("PHE_TYPE")
+phe_type <- Sys.getenv("PHE_TYPE") 
 taxon_col <- Sys.getenv("TAXON_COL")  # column name for species
 
 # args <- commandArgs(trailingOnly = TRUE)

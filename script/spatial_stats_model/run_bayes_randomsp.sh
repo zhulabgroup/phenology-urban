@@ -36,10 +36,10 @@ echo "Running combination: PHE_TYPE=$PHE_TYPE, TAXON_COL=$TAXON_COL"
 
 
 # Define the R script and input/output files
-R_SCRIPT=../phenology-urban/script/spatial_stats_model/run_bayes_randomsp.R
+R_SCRIPT=../phenology-urban/script/spatial_stats_model/run_bayes_fixedsp.R
 WORKING_DIR=../phenology-urban/
 R_INPUT_DIR=../phenology-urban/data/
-R_OUTPUT_DIR=../phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp/
+R_OUTPUT_DIR=../phenology-urban/data/proc/urban/sp_model/fixed_preseason/ols_model/bayes_fixed_sp/
 CITY="NY"
 
 # Export variables to be used in the R script
