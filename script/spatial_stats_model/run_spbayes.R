@@ -30,91 +30,84 @@ taxon_col <- Sys.getenv("TAXON_COL")  # column name for species
 # phe_type <- args[4]
 
 # r_input_dir <- "~/phenology-urban/data/"
-# r_output_dir <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/spbayes_species_humid_all/"
+# r_output_dir <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/spbayes/"
 # city <- "NY"
 # phe_type <- "SOS"
 # taxon_col <- "canonicalname"
 
 #################### Read data ####################
 
+# Given the temporal variation required, we will use the WU data
+
 ## prepare input data
-metadata <- read_csv("~/lab-data/datasets/vegetation/PS/urban/metadata.csv") %>%
-  filter(site == !!city)
-file_list <- list.files(path = "~/lab-data/datasets/vegetation/PS/urban/doy", pattern = paste0("^doy_",city,"_.*\\.rds$"), full.names = TRUE)
-data_list <- file_list %>%
-  map(~ readRDS(.x))
-all_doy <- bind_rows(data_list)
-tree_location <- metadata %>%
-  mutate(genus = str_extract(taxa, "^[^ ]+")) %>%
-  left_join(all_doy, by = "id") %>%
-  filter(!is.na(doy)) %>%
-  mutate(geometry = paste0("c(", lon, ", ", lat, ")"))
+points_in_buffer <- read_csv(paste0("~/phenology-urban/data/proc/urban/",city,"/tree_WU_500_buffer_PS.csv"), show_col_types = FALSE)
 
-# List of Humid variable names and their corresponding filenames
-files <- c("temp_monthly_all_tree.rds",
-           "srad_monthly_all_tree.rds")
-base_path <- "~/phenology-urban/data/raw/"
-processed_humid_list <- lapply(files, function(file_name) {
-  # Read the file
-  var_name <- sub("_monthly_all_tree.rds", "", file_name)
-  data <- readRDS(paste0(base_path, city, "/HUMID/", file_name)) %>%
-    select(id, value, date) %>%
-    mutate(
-      season = case_when(
-        substr(date, 6, 7) %in% c("03", "04", "05") ~ "spring",
-        substr(date, 6, 7) %in% c("06", "07", "08") ~ "summer",
-        substr(date, 6, 7) %in% c("09", "10", "11") ~ "fall",
-        substr(date, 6, 7) %in% c("12", "01", "02") ~ "winter"
-      )) %>%
-    mutate(year = as.integer(substr(date, 1, 4)),
-           year = if_else(substr(date, 6, 7) == "12", year + 1, year)) %>%
-    filter(year < 2019) %>% 
-    group_by(id, year, season) %>%
-    summarise(
-      # Use sum for prcp, and mean for temp and srad
-      Avg_value = mean(as.numeric(value), na.rm = TRUE),
-      .groups = "drop"
-    ) %>%
-    # Rename the Avg_value column to the variable name (e.g., tmax, tmin, prcp)
-    rename(!!var_name := Avg_value)
-  return(data)
-})
+points_sf <- st_as_sf(points_in_buffer, coords = c("lon", "lat"), crs = 4326, remove = F) |>
+  st_transform(crs = 9311)
+hex_size <- 5000
+bbox <- st_bbox(points_sf)
+hex_grid_geom <- st_make_grid(bbox, cellsize = hex_size, square = FALSE)
+hex_grid <- st_sf(geometry = hex_grid_geom) |>
+  mutate(hex_id = row_number()) |>
+  mutate(centroid = st_centroid(geometry)) |>
+  mutate(
+    hex_lon = st_coordinates(centroid)[, 1],
+    hex_lat = st_coordinates(centroid)[, 2]
+  ) |>
+  select(-centroid)
+# Assign each point to a hexagon
+points_in_buffer <- st_join(points_sf, hex_grid, join = st_within) %>%
+  mutate(hex_id = as.factor(hex_id)) |>
+  select(-hex_lon, -hex_lat) |>
+  st_drop_geometry()
 
-files <- c("prcp_monthly_all_tree.rds")
-processed_daymet_list <- lapply(files, function(file_name) {
-  # Read the file
-  var_name <- sub("_monthly_all_tree.rds", "", file_name)
-  data <- readRDS(paste0(base_path, city, "/Daymet/monthly2016-2024/", file_name)) %>%
-    select(id, value, date) %>%
-    mutate(
-      season = case_when(
-        substr(date, 6, 7) %in% c("03", "04", "05") ~ "spring",
-        substr(date, 6, 7) %in% c("06", "07", "08") ~ "summer",
-        substr(date, 6, 7) %in% c("09", "10", "11") ~ "fall",
-        substr(date, 6, 7) %in% c("12", "01", "02") ~ "winter"
-      )) %>%
-    mutate(year = as.integer(substr(date, 1, 4)),
-           year = if_else(substr(date, 6, 7) == "12", year + 1, year)) %>%
-    group_by(id, year, season) %>%
-    summarise(
-      # Use sum for prcp, and mean for temp and srad
-      Avg_value = sum(as.numeric(value), na.rm = TRUE),
-      .groups = "drop"
-    ) %>%
-    # Rename the Avg_value column to the variable name (e.g., tmax, tmin, prcp)
-    rename(!!var_name := Avg_value)
-  
-  return(data)
-})
 
-all_sites_climate <- processed_humid_list[[1]] |>
-  left_join(processed_daymet_list[[1]], by = c("id", "season", "year")) 
+all_sites_temp <- readRDS(paste0("~/urban-cooling/data_gl/raw/WU/",city,"/",city,"_wu.rds")) %>%
+  dplyr::select(c(Date, HighTemp, AvgTemp, LowTemp, Sum_mm, name)) %>%
+  mutate(season = case_when(
+    month(Date) %in% 3:5 ~ "spring",
+    month(Date) %in% 6:8 ~ "summer",
+    month(Date) %in% 9:11 ~ "fall",
+    month(Date) %in% c(12, 1, 2) ~ "winter"
+  )) %>%
+  mutate(year = year(Date),
+         year = if_else(month(Date) == 12, year + 1, year)) %>%
+  group_by(name, year, season) %>%
+  summarise(
+    Avg_AvgTemp = mean(AvgTemp, na.rm = TRUE),
+    Sum_Sum_mm = sum(Sum_mm, na.rm = TRUE),
+    AvgTemp_count = sum(!is.na(AvgTemp)),
+    Sum_mm_count = sum(!is.na(Sum_mm)),
+    .groups = "drop"
+  )
 
-srad_daily <- processed_humid_list[[2]] |>
-  rename(Avg_srad = srad)
+srad_daily <- readRDS(paste0("~/phenology-urban/data/raw/",city,"/Daymet/daily2016-2024/srad_daily_2016-2023.rds")) %>%
+  select(id, value, date)  %>%
+  mutate(season = case_when(
+    month(date) %in% 3:5 ~ "spring",
+    month(date) %in% 6:8 ~ "summer",
+    month(date) %in% 9:11 ~ "fall",
+    month(date) %in% c(12, 1, 2) ~ "winter"
+  )) %>%
+  mutate(year = year(date),
+         year = if_else(month(date) == 12, year + 1, year)) %>%
+  group_by(id, year, season) %>%
+  summarise(
+    Avg_srad = mean(value, na.rm = TRUE),
+    srad_count = sum(!is.na(value)),
+    .groups = "drop"
+  )
 
-source("script/spatial_stats_model/run_species_inla.R")
-model_input_all <- prepare_species_data(phe_type, tree_location, all_sites_climate, srad_daily)
+if (taxon_col  == "canonicalname"){
+  source("script/spatial_stats_model/run_species_inla.R")
+  model_input_all <- prepare_species_data(phe_type, points_in_buffer, all_sites_temp, srad_daily, source = "WU")
+} else if (taxon_col == "genus") {
+  source("script/spatial_stats_model/run_genus_inla_fixpre.R")
+  model_input_all <- prepare_genus_data(phe_type, points_in_buffer, all_sites_temp, srad_daily, source = "WU")
+} else {
+  stop("Invalid taxon_col. Must be 'canonicalname' or 'species'.")
+}
+
 
 taxon_list <- unique(model_input_all[[taxon_col]])
 #################### Find the optimal cov model ####################
@@ -317,16 +310,16 @@ for (taxon in taxon_list) {
   )
   
   ni <- 20000   # nb iterations 
-  nt <- 10       # thinning interval
+  nt <- 1       # thinning interval
   nb <- 5000    # nb iterations as burn-in 
-  nc <- 1         # nb chains
+  nc <- 2         # nb chains
   
   
   #################### Run/Save the model ####################
   
   modelMCMCrun <- nimbleMCMC(code = model_code, data = data, constants = constants, inits = inits, 
                              monitors = monitors,
-                             niter = ni, nburnin = nb, thin = nt, nchains = nc, setSeed = 2025,
+                             niter = ni, nburnin = nb, thin = nt, nchains = nc,  setSeed = rep(2025, nc),
                              progressBar = TRUE, 
                              samplesAsCodaMCMC = TRUE, 
                              summary = TRUE, 

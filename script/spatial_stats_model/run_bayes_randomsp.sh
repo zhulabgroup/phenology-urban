@@ -3,8 +3,8 @@
 #SBATCH --account=zhukai0                   # Account name
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err
-#SBATCH --array=1-4
-#SBATCH --time=5:00:00
+#SBATCH --array=1-2
+#SBATCH --time=6:00:00
 #SBATCH --partition=standard
 #SBATCH --mem=32G
 #SBATCH --cpus-per-task=2
@@ -22,7 +22,7 @@
 
 
 # Define combinations of chains and iterations
-PHE_TYPES=("SOS" "EOS")
+PHE_TYPES=("EOS")
 TAXON_COLS=("canonicalname" "genus")
 NUM_PHE=${#PHE_TYPES[@]}
 NUM_COL=${#TAXON_COLS[@]}
@@ -36,10 +36,10 @@ echo "Running combination: PHE_TYPE=$PHE_TYPE, TAXON_COL=$TAXON_COL"
 
 
 # Define the R script and input/output files
-R_SCRIPT=../phenology-urban/script/spatial_stats_model/run_bayes_randomsp_humid.R
+R_SCRIPT=../phenology-urban/script/spatial_stats_model/run_bayes_randomsp.R
 WORKING_DIR=../phenology-urban/
 R_INPUT_DIR=../phenology-urban/data/
-R_OUTPUT_DIR=../phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp_humid/
+R_OUTPUT_DIR=../phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp/
 CITY="NY"
 
 # Export variables to be used in the R script

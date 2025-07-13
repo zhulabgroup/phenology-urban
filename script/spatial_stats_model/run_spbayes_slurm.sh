@@ -21,19 +21,25 @@
 
 
 # Define combinations of chains and iterations
-PHE_TYPES=("SOS" "EOS" "GreenUp" "GreenDown")
+PHE_TYPES=("SOS" "EOS")
+TAXON_COLS=("canonicalname" "genus")
+NUM_PHE=${#PHE_TYPES[@]}
+NUM_COL=${#TAXON_COLS[@]}
+INDEX=$((SLURM_ARRAY_TASK_ID - 1))
+PHE_INDEX=$((INDEX / NUM_COL))
+COL_INDEX=$((INDEX % NUM_COL))
+PHE_TYPE=${PHE_TYPES[$PHE_INDEX]}
+TAXON_COL=${TAXON_COLS[$COL_INDEX]}
 
-# Get the combination for this array job
-CHAIN_INDEX=$((SLURM_ARRAY_TASK_ID - 1))
-PHE_TYPE=${PHE_TYPES[$CHAIN_INDEX]}
+echo "Running combination: PHE_TYPE=$PHE_TYPE, TAXON_COL=$TAXON_COL"
+
 
 # Define the R script and input/output files
 R_SCRIPT=../phenology-urban/script/spatial_stats_model/run_spbayes.R
 WORKING_DIR=../phenology-urban/
 R_INPUT_DIR=../phenology-urban/data/
-R_OUTPUT_DIR=../phenology-urban/data/proc/urban/sp_model/fixed_preseason/spbayes_species_humid_all/
+R_OUTPUT_DIR=../phenology-urban/data/proc/urban/sp_model/fixed_preseason/spbayes/
 CITY="NY"
-TAXON_COL="canonicalname"
 
 # Export variables to be used in the R script
 export R_INPUT_DIR
