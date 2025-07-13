@@ -332,7 +332,7 @@ plot_coef_sp_city <- function(r_output_dir, phe_type){
     spde.est <- inla.spde2.result(inla = model_data$res, name = "spatial.field",
                                   spde = model_data$spde, do.transf = TRUE)
     Kappa = inla.zmarginal(spde.est$marginals.kappa[[1]], silent = TRUE)[1]$mean
-    MaxRange <- 50000
+    MaxRange <- 10000
     Resolution <- 100
     d.vec <- seq(0, MaxRange, length = Resolution)
     Cor.M <- (Kappa * d.vec) * besselK(Kappa * d.vec, 1)
@@ -341,7 +341,8 @@ plot_coef_sp_city <- function(r_output_dir, phe_type){
     
     p_semi <- ggplot(CorData, aes(x = Distance, y = Correlation)) +
       geom_line(linewidth = 1, alpha = 0.8, color = "blue") +
-      coord_fixed(ratio = MaxRange) +
+      scale_x_continuous(limits = c(0, 10000)) +
+      scale_y_continuous(limits = c(0, 1)) +
       labs(x = "Distance (m)", y = "Correlation", title = "Matern Correlation Function") +
       ggtitle(paste(species)) +
       theme_minimal()+
@@ -354,7 +355,8 @@ plot_coef_sp_city <- function(r_output_dir, phe_type){
   }
   
   combined_plot_tavg <- wrap_plots(plots_tavg, ncol = 5)
-  combined_plot_semi <- wrap_plots(plots_semi, ncol = 5)
+  combined_plot_semi <- wrap_plots(plots_semi, ncol = 5) +
+    plot_layout(guides = "collect")
   combined_plot_mean <- wrap_plots(plots_mean, ncol = 5)
   combined_plot_sd <- wrap_plots(plots_sd, ncol = 5)
   

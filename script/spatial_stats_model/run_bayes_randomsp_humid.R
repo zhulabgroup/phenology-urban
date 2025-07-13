@@ -206,52 +206,60 @@ for (taxon in taxon_list) {
   prcp_col <- names(tavg_phe_df)[grepl("^prcp", names(tavg_phe_df))]
   srad_col <- names(tavg_phe_df)[grepl("^srad", names(tavg_phe_df))]
   
-  sp_formula <- as.formula(paste0(
-    phe_metric, " ~ ", temp_col, " + ", prcp_col, " + ", srad_col, " + hex_id"
-  ))
+  sp_formula <- as.formula(paste0(phe_metric, " ~ ", temp_col, "+", prcp_col, "+", srad_col))
   
   # Define Nimble model code
   model_code <- nimbleCode({
     for (i in 1:N) {
       y[i] ~ dnorm(mu[i], tau)
-      mu[i] <- inprod(X[i, 1:P], beta[]) + year_effect[year[i]]
+      mu[i] <- inprod(X[i, 1:P], beta[]) + year_effect[year[i]] + sp_effect[hex_id[i]]
     }
     for (q in 1:nyears) {
       year_effect[q] ~ dnorm(0, sd = sqrt(tau.year))
+    }
+    for (s in 1:nhex) {
+      sp_effect[s] ~ dnorm(0, sd = sqrt(tau.hex))
     }
     for (j in 1:P) {
       beta[j] ~ dnorm(0, sd = 1000)
     }
     tau ~ dgamma(0.001, 0.001)
     tau.year ~ dinvgamma(2.001, 0.667)
+    tau.hex ~ dinvgamma(1, 0.01)
   })
   
   # Data inputs
   
   N <- nrow(tavg_phe_df)
   nyears <- length(unique(tavg_phe_df$year))
+  nhex <- length(unique(tavg_phe_df$hex_id))
   X <- model.matrix(sp_formula, data = tavg_phe_df)
   y <- tavg_phe_df[[all.vars(sp_formula)[1]]]
   year_index <- as.integer(factor(tavg_phe_df$year))  # Create fixed year indices
+  hex_index <- as.integer(factor(tavg_phe_df$hex_id))  # Create fixed year indices
   data <- list(y = y, X = X)  # Remove 'year' from data
   inits <- list(
     beta = rep(0, ncol(X)),
     tau = 1, 
     tau.year = 1,
-    year_effect = rep(0, nyears)
+    tau.hex = 1,
+    year_effect = rep(0, nyears),
+    sp_effect = rep(0, nhex)
   )
   
   ### Change based on semi-variogram fitting
   constants <- list(N = N, P = ncol(X), 
                     nyears = nyears, 
                     year = year_index,
+                    nhex = nhex, 
+                    hex_id = hex_index,
                     I = diag(1,N))
-  monitors <- c("beta", "tau.year", "year_effect")
+  monitors <- c("beta", "tau.year", "year_effect", "tau.hex", "sp_effect")
   
-  ni <- 20000   # nb iterations 
+  ni <- 40000   # nb iterations 
   nt <- 1       # thinning interval
   nb <- 5000    # nb iterations as burn-in 
-  nc <- 1         # nb chains
+  nc <- 2         # nb chains
   
   
   #################### Run/Save the model ####################
@@ -263,7 +271,7 @@ for (taxon in taxon_list) {
                              samplesAsCodaMCMC = TRUE, 
                              summary = TRUE, 
                              WAIC = TRUE)
-
+  
   # library(ggmcmc)
   # beta_label <- data.frame(Parameter = "beta[2]", Label = "AvgTemp")
   # param_data <- ggs(modelMCMCrun$samples, par_labels = beta_label) %>%
@@ -275,7 +283,7 @@ for (taxon in taxon_list) {
   #   ggtitle(paste("taxon:", taxon)) +
   #   theme(plot.title = element_text(hjust = 0.5)) +
   #   annotate("text", x = beta_mean, y = 0, label = paste0("Mean: ", round(beta_mean, 2)),vjust = -1.5, color = "red", size = 4)
-
+  
   saveRDS(modelMCMCrun, file = model_path)
 }
 
