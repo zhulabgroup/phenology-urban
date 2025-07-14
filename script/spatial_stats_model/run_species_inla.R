@@ -349,6 +349,7 @@ plot_coef_sp_city <- function(r_output_dir, phe_type){
       theme(axis.text.x = element_text(size = 6, angle = 45, hjust = 1),
             plot.title = element_text(size = 8))
     
+    
     plots_mean[[species]] <- p_mean
     plots_sd[[species]] <- p_sd
     plots_semi[[species]] <- p_semi

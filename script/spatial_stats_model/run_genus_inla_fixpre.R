@@ -400,7 +400,8 @@ plot_coef_genus_city <- function(r_output_dir, phe_type){
     
     p_semi <- ggplot(CorData, aes(x = Distance, y = Correlation)) +
       geom_line(linewidth = 1, alpha = 0.8, color = "blue") +
-      coord_fixed(ratio = MaxRange) +
+      scale_x_continuous(limits = c(0, 10000)) +
+      scale_y_continuous(limits = c(0, 1)) +
       labs(x = "Distance (m)", y = "Correlation", title = "Matern Correlation Function") +
       ggtitle(paste(genus)) +
       theme_minimal()+
