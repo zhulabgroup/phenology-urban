@@ -1,0 +1,780 @@
+---
+title: "Validation of using spatial statistic model"
+author: "Jiali Zhu"
+date: "today"
+editor_options:
+  chunk_output_type: console
+---
+
+```{r}
+#| label: load-packages
+#| include: false
+#| warning: false
+
+# Install and load 'zhulabtools' package
+library(zhulabtools)
+
+# Manage packages: check, install, and load specific packages
+check_install_packages(c("dplyr","lubridate", "ggplot2", "sf","sp", "readr", "purrr", "stringr","glue", "tidyr", "broom","lme4", "broom.mixed", "ppcor", "spdep", "spatialreg", "lmtest","car", "spBayes", "coda", "patchwork", "performance", "terra", "ggpmisc", "gstat", "ggmcmc", "taxize", "stats", "viridis"))
+if (!require(plotbiomes)) {
+  devtools::install_github("valentinitnelav/plotbiomes")
+}
+load_packages(c("dplyr","lubridate", "ggplot2", "sf","sp", "readr", "purrr", "stringr","glue", "tidyr", "broom","lme4", "broom.mixed", "ppcor", "spdep", "spatialreg", "lmtest","car", "spBayes", "coda", "patchwork", "performance", "terra", "ggpmisc", "gstat", "ggmcmc", "taxize", "stats", "viridis","INLA"))
+
+select <- dplyr::select # Avoid masking by base R's select function
+city <- "NY" # Set the city for analysis
+phe_types <- c("SOS", "EOS")
+```
+
+# Introduction
+
+The goal of this analysis is to understand how temperature heterogeneity within the city influences phenological events, such as the start of season (SOS) and end of season (EOS), for various tree genera and species in urban environments. In this document, I will compare the performance of different spatial models to assess their impact on model inference. The analysis will be conducted using data from New York City, focusing on the phenological events of various tree species.
+
+## Data input
+
+In this analysis, I used the phenological data collected from the PlanetScope remote sensing data, which includes information on the start and end of season for tree locations in New York City. The relevant predictors including average temperature and precipitation from personal weather sites, and solar radiation from Daymet gridded data.
+
+### Predictors
+
+The predictors used in this analysis include **Average Temperature**, **Precipitation** and **Solar Radiation**.
+
+Because the Weather Underground stations are unevenly distributed and are not located exactly with individual tree locations, trees within a 500-meter buffer of each station were selected to share that station's meteorological data. This approach results in spatial clustering of the selected tree points around station locations (see @fig-predictors, left and middle panels, with enlarged view).
+
+Average solar radiation for each tree location and season was derived from gridded Daymet data. Shortwave radiation values were extracted directly at the coordinates of each tree (see @fig-predictors, right panel).
+
+```{r}
+#| label: fig-predictors
+#| include: true
+#| fig-width: 15
+#| fig-height: 6
+#| fig-cap: "Spatial distribution of Weather Underground sites and shortwave radiation data in New York City."
+#| warning: false
+
+points_in_buffer <- read_csv(paste0("~/phenology-urban/data/proc/urban/",city,"/tree_WU_500_buffer_PS.csv"), show_col_types = FALSE)
+
+points_sf <- st_as_sf(points_in_buffer, coords = c("lon", "lat"), crs = 4326, remove = F) |>
+  st_transform(crs = 9311)
+hex_size <- 5000
+bbox <- st_bbox(points_sf)
+hex_grid_geom <- st_make_grid(bbox, cellsize = hex_size, square = FALSE)
+hex_grid <- st_sf(geometry = hex_grid_geom) |>
+  mutate(hex_id = row_number()) |>
+  mutate(centroid = st_centroid(geometry)) |>
+  mutate(
+    hex_lon = st_coordinates(centroid)[, 1],
+    hex_lat = st_coordinates(centroid)[, 2]
+  )
+# Assign each point to a hexagon
+points_in_buffer <- st_join(points_sf, hex_grid, join = st_within) %>%
+  mutate(hex_id = as.factor(hex_id)) |>
+  filter(thres == 0.5 & year == 2020 & taxa == "Acer platanoides") |>
+  st_transform(crs = 4326)
+
+boundary <- read_sf("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp", quiet = T) |>
+  st_transform(crs = 4326)
+
+wu_location <- read_csv(paste0("~/urban-cooling/data/raw/WU/", city, "/location.csv"), show_col_types = FALSE) %>%
+  st_as_sf(coords = c("Lon", "Lat"), crs = 4326)
+  
+tempprep = ggplot() +
+  geom_sf(data = boundary, fill = "grey90") +
+  geom_sf(data = wu_location, color = "blue", size = 0.5) +
+  geom_point(data = points_in_buffer, aes(x = lon, y = lat), color = "red",size = 0.1, alpha = 0.5) +
+  theme_minimal()+
+  theme(axis.text.x = element_text(size = 10, angle = 45, hjust = 1))
+
+tempprep_large = ggplot() +
+  geom_sf(data = boundary, fill = "grey90", color = NA) +
+  geom_sf(data = wu_location |> st_buffer(dist = 500),
+          aes(fill = "500 m buffer"), alpha = 0.2, color = NA) +
+  geom_sf(data = wu_location,
+          aes(color = "WU Station"), size = 2) +
+  geom_point(data = points_in_buffer,
+             aes(x = lon, y = lat, color = "Selected Trees"),
+             size = 0.5, alpha = 0.5) +
+  scale_color_manual(
+    name = "Legend",
+    values = c("WU Station" = "blue", "Selected Trees" = "red")
+  ) +
+  scale_fill_manual(
+    name = "Legend",
+    values = c("500 m buffer" = "red")
+  ) +
+  coord_sf(
+    xlim = c(-73.88, -73.84),
+    ylim = c(40.85, 40.87),
+    expand = FALSE
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 10, angle = 45, hjust = 1),
+    legend.position = "right"
+  )
+
+  
+data_dir <- paste0("~/phenology-urban/data/raw/", city, "/Daymet/daily2016-2024/")
+file <- list.files(data_dir, pattern = "srad_daily_2023_ncss\\.nc$", full.names = TRUE)
+srad_nc <- terra::rast(file)
+
+srad_df <- as.data.frame(srad_nc[[1]], xy = TRUE)
+srad <- ggplot(srad_df, aes(x = x, y = y, fill = srad_1)) +
+  geom_raster() +
+  scale_fill_viridis_c(name = "W/m²") +
+  labs(title = "Shortwave Radiation (W/m²) - 2023-01-01", x = "x", y = "y") +
+  theme_minimal()
+
+tempprep + tempprep_large + srad 
+```
+
+### Response variable
+
+The response variable is the day of year (`DOY`) of the start of season (SOS) and end of season (EOS) respectively for individual trees in New York City. Due to urban planting practices, neighboring trees are more likely to share similar characteristics and management regimes, which can lead to similar phenological patterns. Given this, spatial effects are modeled in subsequent analyses. The map below shows the distribution of phenological observations in 2020 for a selected species.
+
+```{r}
+#| label: fig-response
+#| include: true
+#| fig-width: 10
+#| fig-height: 6
+#| fig-cap: "Phenological events in New York City in 2020 for Acer platanoides (Norway maple)"
+#| warning: false
+#| eval: true
+
+
+## prepare input data
+sos <- ggplot(points_in_buffer |> filter(direction == "up")) +
+  geom_sf(data = boundary, fill = NA, color = "black") +
+  geom_sf(size = 1, aes(color = doy)) +
+  scale_color_viridis_c() +
+  coord_sf() +
+  labs(title = "SOS",
+       x = "Longitude", y = "Latitude") +
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(size = 12)
+  )
+
+eos <- ggplot(points_in_buffer |> filter(direction == "down")) +
+  geom_sf(data = boundary, fill = NA, color = "black") +
+  geom_sf(size = 1, aes(color = doy)) +
+  scale_color_viridis_c() +
+  coord_sf() +
+  labs(title = "EOS",
+       x = "Longitude", y = "Latitude") +
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(size = 10)
+  )
+
+sos + eos + plot_layout(ncol = 2) +
+  theme(plot.title = element_text(hjust = 0.5, size = 12))
+```
+
+## Model definition
+
+For this analysis, I adopt a basic model for urban phenology data, while varying the specification of spatial effects. The model is defined as follows:
+
+$$y(\mathbf{s}_i, \mathbf{t}) = \mathbf{X}_{\mathbf{s}_i,\mathbf{t}} \boldsymbol{\beta} + w(\mathbf{s}_i) + u(\mathbf{t}) + \epsilon(\mathbf{s}_i, \mathbf{t})$$
+
+where $y(\mathbf{s}_i, \mathbf{t})$ represents the phenological event (e.g., SOS or EOS) at location $\mathbf{s}_i$ and time $\mathbf{t}$.$\mathbf{X}_{\mathbf{s}_i,\mathbf{t}} = [1, \text{AvgTemp}_{\mathbf{s}_i,\mathbf{t}}, \text{Precp}_{\mathbf{s}_i,\mathbf{t}}, \text{srad}_{\mathbf{s}_i,\mathbf{t}}]$ is the design matrix of predictors. $\boldsymbol{\beta} = [\beta_0, \beta_1, \beta_2, \beta_3]$ are the regression coefficients for the intercept and covariates. $\beta_1$ is the coefficient for the average temperature, which is the main interest in this study. The temporal random effect $u(\mathbf{t})$ captures random year effect. Finally, $\epsilon(\mathbf{s}_i, \mathbf{t})$ represents the residual error term.
+
+To explore how spatial structure influences model performance and inference, I compared 4 alternative specifications for the spatial term $w(\mathbf{s}_i)$ :
+
+1.  **No spatial effect**: $w(\mathbf{s}_i)=0$, assuming spatial independence across observations.
+2.  **Spatial random effect with covariance**: $w(\mathbf{s}_i) \sim \mathcal{GP}(0, \Sigma)$, modeled as a spatially structured random effect with a covariance function (Matérn here) reflecting spatial autocorrelation.
+3.  **Spatial random effect without covariance**: $w(\mathbf{s}_i)$ modeled as a random intercept for discrete spatial units (hexagonal grid cells here), assuming no correlation across space. $w(\mathbf{s}_i) = u_{g_i},\ u_{g_i} \sim \mathcal{N}(0, \sigma^2_w)$
+4.  **Spatial fixed effect without covariance**: $w(\mathbf{s}_i)$ treated as a categorical fixed effect based on grid cell, assuming no spatial correlation. $w(\mathbf{s}_i) = \gamma_{g_i},\ \gamma_{g_i}$ is a fixed effect for each cell. 
+
+# Model selection
+
+```{r}
+#| include: false
+# Helper to process files by pattern
+
+
+generate_mcmc_plot <- function(dir_path, coef, fixed_sp){
+  process_files <- function(file_list, phe_type_label) {
+    param_list <- map(file_list, function(file) {
+      model_data <- readRDS(file)
+      genus <- sub(paste0("(.*?)_", phe_type_label, "\\.rds"), "\\1", basename(file))
+      if (fixed_sp) {
+        param_data <- ggs(model_data$samples) |>
+          filter(str_starts(Parameter, fixed("beta["))) |>
+          arrange(desc(Iteration)) |>
+          slice_head(n = 10000) |>
+          mutate(beta_index = as.integer(str_extract(Parameter, "(?<=beta\\[)\\d+"))) |>
+          filter(beta_index >= 5)|>
+          rename(ParameterOriginal = Parameter) |>
+          mutate(Parameter = genus)
+      } else {
+        param_data <- ggs(model_data$samples) |>
+          filter(str_starts(Parameter, fixed(coef))) |>
+          arrange(desc(Iteration)) |>
+          slice_head(n = 10000) |>
+          rename(ParameterOriginal = Parameter) |>
+          mutate(Parameter = genus)
+      }
+
+      return(param_data)
+    })
+    combined_param_data <- bind_rows(param_list) %>%
+      filter(Parameter != "Alnus") %>%
+      mutate(phe_type = phe_type_label)
+    return(combined_param_data)
+}
+  # Collect files
+  SOS_files <- list.files(dir_path, pattern = "SOS\\.rds$", full.names = TRUE)
+  EOS_files <- list.files(dir_path, pattern = "EOS\\.rds$", full.names = TRUE)
+
+  # Process each type
+  sos_data <- process_files(SOS_files, "SOS")
+  eos_data <- process_files(EOS_files, "EOS")
+
+  combined_param_data <- bind_rows(sos_data, eos_data)
+  combined_param_data$phe_type <- factor(combined_param_data$phe_type, levels = c("SOS", "EOS"))
+
+  # Summarize
+  summary_data <- combined_param_data %>%
+    group_by(Parameter, phe_type) %>%
+    summarise(
+      median_value = median(value, na.rm = TRUE),
+      lower_2_5 = quantile(value, 0.025, na.rm = TRUE),
+      upper_97_5 = quantile(value, 0.975, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    mutate(Sig = ifelse(lower_2_5 * upper_97_5 > 0, "*", ""),
+           SigAlpha = ifelse(Sig == "*", 1, 0.2)) 
+
+  param_levels <- rev(unique(summary_data$Parameter))
+
+  # Plot
+  p1 <- ggplot(summary_data, aes(x = factor(as.character(Parameter), levels = param_levels), y = median_value)) +
+    geom_point(aes(alpha = SigAlpha), size=3) +
+    geom_errorbar(aes(ymin = lower_2_5, ymax = upper_97_5, alpha = SigAlpha), width = 0.4) +
+    geom_hline(yintercept = 0, linetype = 2, color = "black") +
+    geom_text(aes(label = round(median_value, 3)),
+              vjust = -0.7, size = 4) +
+    scale_alpha_identity() +
+    guides(alpha = "none") +
+    facet_wrap(~ phe_type, scales = "free_x") +  # flip x/y means free_x
+    theme_minimal() +
+    labs(x = NULL, y = "Estimate") +
+    theme(
+      strip.text = element_text(face = "bold"),
+      axis.text.x = element_text(size = 14)
+    ) +
+      coord_flip()
+
+  if (coef == "sp_effect") {
+    p2 <- ggplot(combined_param_data, aes(x = value, fill = ParameterOriginal)) +
+      geom_density(linewidth = 0.1, alpha = 0.5) +
+      scale_x_continuous(limits = c(-50, 50)) +
+      facet_wrap(~ Parameter, ncol = 1, scales = "free_y") +
+      labs(
+        x = paste0("Posterior distribution of ", coef),
+        y = "Density"
+      ) +
+      facet_grid(Parameter ~ phe_type, scales = "free_y") +
+      theme_minimal(base_size = 12) +
+      theme(
+        axis.text.y = element_blank(),
+        strip.text.y = element_text(angle = 0),
+        panel.spacing = unit(0.4, "lines"),
+        legend.position = "none"
+      )
+  } else if (coef == "spatial_effect") {
+    p2 <- ggplot(combined_param_data, aes(x = value)) +
+      geom_density(fill = "skyblue", alpha = 0.5) +
+      scale_x_continuous(limits = c(-100, 100)) +
+      facet_wrap(~ Parameter, ncol = 1, scales = "free_y") +
+      labs(
+        x = paste0("Posterior distribution of ", coef),
+        y = "Density"
+      ) +
+      facet_grid(Parameter ~ phe_type, scales = "free_y")+
+      theme_minimal(base_size = 12) +
+      theme(
+        axis.text.y = element_blank(),
+        strip.text.y = element_text(angle = 0),
+        panel.spacing = unit(0.4, "lines")
+      )
+  } else {
+    p2 <- ggplot(combined_param_data, aes(x = value)) +
+      geom_density(fill = "skyblue", alpha = 0.5) +
+      facet_wrap(~ Parameter, ncol = 1, scales = "free_y") +
+      labs(
+        x = paste0("Posterior distribution of ", coef),
+        y = "Density"
+      ) +
+      facet_grid(Parameter ~ phe_type, scales = "free_y")+
+      geom_text(data = summary_data, aes(x = median_value-3, y = 0, label = round(median_value, 3)), vjust = -1, size = 3) +
+      theme_minimal(base_size = 12) +
+      theme(
+        axis.text.y = element_blank(),
+        strip.text.y = element_text(angle = 0),
+        panel.spacing = unit(0.4, "lines")
+      )
+  }
+  p <- list(coef_summary_plot = p1, coef_density_plot = p2)
+  return(p)
+}
+
+source("~/phenology-urban/script/spatial_stats_model/run_genus_inla_fixpre.R")
+source("~/phenology-urban/script/spatial_stats_model/run_species_inla.R")
+```
+
+## No spatial effect
+
+$$w(\mathbf{s}_i)=0$$
+
+[@fig-ny-coef1] shows the posterior distributions of the regression coefficients for average temperature (Temp~avg~) across different taxonomic groups in New York City. The coefficients for SOS are generally negative, suggesting that higher average temperatures lead to earlier onset of the growing season. In contrast, the responses in EOS are more varied.
+
+```{r}
+#| label: fig-ny-coef1
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each taxon group in New York city."
+#| warning: false
+#| eval: true
+
+g_dir_path <- "~/phenology-urban/data/proc/urban/ols_model/bayes_genus/NY/"
+s_dir_path <- "~/phenology-urban/data/proc/urban/ols_model/bayes_species/NY/"
+
+g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "beta[2]", fixed_sp = F)
+s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
+
+(g_plot_obj$coef_summary_plot + ggtitle("Genus")) / (s_plot_obj$coef_summary_plot +  ggtitle("Species"))
+```
+
+When examining the posterior distributions in density form, the SOS coefficients appear more concentrated and consistent across taxa, indicating a clear and strong temperature signal. In contrast, the EOS responses are more dispersed, suggesting that the effect of temperature on EOS is less consistent and possibly weaker across species.
+
+```{r}
+#| label: fig-ny-density1
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of regression coefficients in density form."
+#| warning: false
+#| eval: true
+
+(g_plot_obj$coef_density_plot + ggtitle("Genus")) / (s_plot_obj$coef_density_plot +  ggtitle("Species"))
+```
+
+## Spatial Model
+
+### Spatial random effect with covariance
+
+$$w(\mathbf{s}_i) \sim \mathcal{GP}(0, \Sigma)$$
+
+#### MCMC
+
+Bayesian inference was performed using the `NIMBLE` package, which implements traditional MCMC algorithms to sample from the posterior distributions of model parameters.
+
+The posterior distributions of the regression coefficients for average temperature (Temp~avg~) across different taxonomic groups in New York City are shown in [@fig-ny-coef2]. Compared to the previous model, most coefficients remain relatively stable, with only minor changes observed. Notably, some EOS coefficients for a few specific taxa exhibit larger shifts.
+
+```{r}
+#| label: fig-ny-coef2
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each taxon group in New York city."
+#| warning: false
+#| eval: true
+
+g_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/spbayes/NY/genus"
+s_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/spbayes/NY/species/"
+
+g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "beta[2]", fixed_sp = F)
+s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
+
+(g_plot_obj$coef_summary_plot + ggtitle("Genus")) / (s_plot_obj$coef_summary_plot +  ggtitle("Species"))
+```
+
+```{r}
+#| label: fig-ny-density2
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of regression coefficients in density form."
+#| warning: false
+#| eval: true
+
+(g_plot_obj$coef_density_plot + ggtitle("Genus")) / (s_plot_obj$coef_density_plot +  ggtitle("Species"))
+```
+
+However, in this case, the spatial random effect produced overly smoothed estimates, which may have masked important local variations in the phenological patterns.
+
+![The estimated spatial effect for SOS at genus level.](image/fig-ny_sos_tavg_mcmc_sp-1.png){#fig-sp_mcmc fig-align="center" width="60%"}
+
+#### INLA
+
+To get the posterior distribution of model parameters more efficiently, I used the Integrated Nested Laplace Approximation (INLA) in `INLA` package. Rather than estimating the joint posterior distribution of the parameters via MCMC, INLA focusing on individual posterior marginals of the model parameters, which is enough to make inference of the model parameters and latent effects in most cases.
+
+[@fig-ny-coef3] shows the posterior coefficients estimated using INLA. Compared to the previous models, the SOS coefficients remain relatively stable. However, many EOS coefficients shift noticeably, often becoming significantly positive. The shifts in EOS coefficients may be due to the *inherently weaker temperature signal in EOS*. The EOS estimates might be more sensitive to the inclusion of spatial effects in the model.
+
+It is important to note that the density form of the posterior distribution is not directly comparable to the MCMC results. This is because INLA first finds the Maximum A Posteriori (MAP) estimate, and then applies Laplace Approximation, which assumes that the posterior is approximately Gaussian around the MAP. This approximation can misrepresent posterior uncertainty, especially when the true distribution is asymmetric or multimodal.
+
+```{r}
+#| label: fig-ny-coef3
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each taxon group in New York city."
+#| warning: false
+#| eval: true
+
+r_output_dir <- paste0("~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/inla_year_random_genus_check/", city, "/")
+plots_coef <- list()
+
+for (phe_type in phe_types) {
+  p1 <- plot_coef_genus_city(r_output_dir, phe_type)
+  plots_coef[[phe_type]] <- p1$coef_summary_plot
+}
+
+ny_genus = wrap_plots(plots_coef, ncol = 2)
+
+r_output_dir <- paste0("~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/inla_year_random_species_check/", city, "/")
+plots_coef <- list()
+
+for (phe_type in phe_types) {
+  p1 <- plot_coef_sp_city(r_output_dir, phe_type)
+  plots_coef[[phe_type]] <- p1$coef_summary_plot
+}
+
+ny_sp = wrap_plots(plots_coef, ncol = 2)
+
+ny_genus/ny_sp
+```
+
+The fitted Matern correlation functions for most taxonomic groups exhibit two extreme patterns. For some groups, the correlation decays very rapidly with distance, effectively capturing only highly localized spatial structure and individual-level variance (potential overfitting) and failing to reflect broader spatial autocorrelation. In contrast, for other species, the correlation remains high across long distances, indicating a weak or overly diffuse spatial structure. This may reflect insufficient spatial signal (potential underfitting).
+
+```{r}
+#| label: fig-ny-inla-plot_semi
+#| include: true
+#| fig-width: 15
+#| fig-height: 10
+#| warning: false
+#| eval: true
+#| fig-cap: "The fitted Matern correlation functions and spatial fields for each genus in New York city, generated via INLA."
+
+r_output_dir <- paste0("~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/inla_year_random_genus_check/", city, "/")
+p1 <- plot_coef_genus_city(r_output_dir, phe_type = "EOS")
+
+r_output_dir <- paste0("~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/inla_year_random_species_check/", city, "/")
+p2 <- plot_coef_sp_city(r_output_dir, phe_type = "EOS")
+p1$combined_plot_semi/p1$combined_plot_mean
+```
+
+```{r}
+#| label: fig-ny-inla-plot_semi2
+#| include: true
+#| fig-width: 15
+#| fig-height: 10
+#| warning: false
+#| eval: true
+#| fig-cap: "The fitted Matern correlation functions and spatial fields for each species in New York city, generated via INLA."
+
+p2$combined_plot_semi /p2$combined_plot_mean
+```
+
+### Treat the spatial random effect as a random effect without covariance
+
+$$w(\mathbf{s}_i) = u_{g_i},\ u_{g_i} \sim \mathcal{N}(0, \sigma^2_w)$$
+
+In this method, the spatial variation is treated as discrete and unstructured, and each spatial unit's effect is estimated independently. This reduces the risk of over-smoothing or misrepresenting spatial dependence when the true spatial correlation is weak or uncertain, thus making more conservative estimates of the spatial effects.
+
+```{r fig-grid}
+#| fig-width: 6
+#| fig-height: 6
+#| fig-cap: "The hexagonal grid used for spatial modeling in New York City."
+#| warning: false
+#| eval: true
+ggplot() +
+  geom_sf(data = boundary, fill = "grey90", color = NA) +
+  geom_sf(data = hex_grid, fill = NA, color = "black", size = 0.2) +
+  geom_sf(
+    data = st_join(points_sf, hex_grid, join = st_within) |>
+      filter(year == 2020) |>
+      mutate(hex_id = factor(hex_id)),
+    aes(color = hex_id), size = 0.01
+  ) +
+  guides(col = "none") +
+  theme_minimal()
+```
+
+
+[@fig-ny-coef4] shows the posterior distributions of the regression coefficients for average temperature (Temp~avg~) across different taxonomic groups in New York City. After applying a more conservative spatial effect, the SOS responses still generally exhibit negative temperature effects. In contrast, the effects on EOS are more variable, with most groups showing non-significant responses.
+
+```{r}
+#| label: fig-ny-coef4
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each taxon group in New York city."
+#| warning: false
+#| eval: true
+
+g_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp/NY/genus/"
+s_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp/NY/species/"
+
+g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "beta[2]", fixed_sp = F)
+s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
+
+(g_plot_obj$coef_summary_plot + ggtitle("Genus")) / (s_plot_obj$coef_summary_plot +  ggtitle("Species"))
+```
+
+```{r}
+#| label: fig-ny-density4
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of regression coefficients in density form."
+#| warning: false
+#| eval: true
+
+(g_plot_obj$coef_density_plot + ggtitle("Genus")) / (s_plot_obj$coef_density_plot +  ggtitle("Species"))
+```
+
+[@fig-ny-randomsp] shows the posterior distributions of the spatial random effects for each hexagon in New York City. Each color represents a different hexagon. This plot also helps to visualize how spatial variation manifests across hexagonal grid cells. If the histograms of different hexagons resemble normal distributions and are clearly separated, it indicates that phenological responses vary across space,  and different hexagons exhibit distinct effects. In contrast, if the histograms largely overlap and cluster around zero, this suggests minimal spatial heterogeneity, with similar responses across hexagons. Moreover, if the histograms are flat or broad within each hexagon, this implies greater within-hexagon variability, indicating less internal consistency in phenological responses.
+
+Take `EOS` for *Betula papyrifera* as an example, the flat spatial random effect shows greater within-hexagon (local) variability. But the fitted spatial random effect in INLA [@fig-ny-inla-plot_semi2] shows a more structured spatial pattern extend to large distance, indicating that the localized spatial variation is not well captured. And this may lead to the large shift in EOS coefficients in INLA compared to other models.
+
+```{r}
+#| label: fig-ny-randomsp
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of spatial random effect in density form."
+#| warning: false
+#| eval: true
+
+g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "sp_effect", fixed_sp = F)
+s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "sp_effect", fixed_sp = F)
+
+(g_plot_obj$coef_density_plot + ggtitle("Genus")) / (s_plot_obj$coef_density_plot +  ggtitle("Species"))
+```
+
+### Treat the spatial random effect as a fixed effect
+
+$$w(\mathbf{s}_i) = \gamma_{g_i},\ \gamma_{g_i} \text{ is a fixed effect for each cell.}$$
+
+Model 4 uses fixed effects for each grid cell without partial pooling, providing greater flexibility compared to Model 3 but at the cost of potentially unstable estimates and reduced interpretability when data are limited. In this case, the estimate of coefficent of temperature becomes more sensitive to how the spatial units are defined, potentially leading to greater fluctuations in its value.
+
+The limitations of Model 4 are also evident in [@fig-ny-coef5]. For SOS, where the response is stronger, the estimated coefficients remain relatively stable. However, for EOS, the coefficients become less stable, reflecting the increased sensitivity of the fixed-effects model in cases with weaker signals.
+
+```{r}
+#| label: fig-ny-coef5
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each taxon group in New York city."
+#| warning: false
+#| eval: true
+
+g_dir_path <- "~/phenology-urban/data/proc/urban/ols_model/bayes_fixed_sp/NY/genus"
+s_dir_path <- "~/phenology-urban/data/proc/urban/ols_model/bayes_fixed_sp/NY/species"
+
+g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "beta[2]", fixed_sp = F)
+s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
+
+(g_plot_obj$coef_summary_plot + ggtitle("Genus")) / (s_plot_obj$coef_summary_plot +  ggtitle("Species"))
+```
+
+
+```{r}
+#| label: fig-ny-density5
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of regression coefficients in density form."
+#| warning: false
+#| eval: true
+
+(g_plot_obj$coef_density_plot + ggtitle("Genus")) / (s_plot_obj$coef_density_plot +  ggtitle("Species"))
+```
+
+# Conclusion
+
+In this analysis, I compared four different spatial modeling approaches for urban phenology data in New York City, focusing on the effects of average temperature on the `SOS` and `EOS`. The models varied in how they treated spatial effects, ranging from no spatial effect to spatial random effects with covariance, random effects without covariance, and fixed effects for spatial units.
+
+-   The **no spatial effect** model provided a baseline, showing that temperature generally has a negative effect on SOS and a more variable effect on EOS across taxa.
+-   The **spatial random effect with covariance** model effectively captured underlying spatial structure but sometimes led to over-smoothing or inflated individual-level variance, resulting in unstable estimates—particularly for EOS, where the temperature response was weaker.
+-   The **spatial random effect without covariance** model offered a more conservative approach, mitigating over-smoothing and providing more interpretable estimates of spatial heterogeneity.
+-   The **spatial fixed effect** model allowed for greater flexibility but resulted in less stable estimates, particularly for EOS, and was more sensitive to the definition of spatial units.
+
+<!-- ```{r} -->
+<!-- #| label: fig-ny-fixedsp -->
+<!-- #| include: true -->
+<!-- #| fig-width: 10 -->
+<!-- #| fig-height: 10 -->
+<!-- #| fig-cap: "The distribution of the posterior of spatial fixed effect in density form." -->
+<!-- #| warning: false -->
+<!-- #| eval: true -->
+
+<!-- g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "spatial_effect", fixed_sp = T) -->
+<!-- s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "spatial_effect", fixed_sp = T) -->
+
+<!-- (g_plot_obj$coef_density_plot + ggtitle("Genus")) / (s_plot_obj$coef_density_plot +  ggtitle("Species")) -->
+<!-- ``` -->
+
+<!-- ### MCMC -->
+
+<!-- Using `NIMBLE` package, the MCMC algorithm was used to sample from the posterior distribution of the model parameters. -->
+
+<!-- ```{r} -->
+<!-- #| label: fig-ny_genus -->
+<!-- #| include: true -->
+<!-- #| fig-width: 10 -->
+<!-- #| fig-height: 10 -->
+<!-- #| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each genus in New York city." -->
+<!-- #| warning: false -->
+<!-- #| eval: true -->
+
+<!-- dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/spbayes/NY/" -->
+<!-- plot_obj <- generate_mcmc_plot(dir_path, coef = "beta[2]") -->
+<!-- plot_obj$coef_summary_plot -->
+<!-- plot_obj$coef_density_plot -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- #| label: fig-ny_genus -->
+<!-- #| include: true -->
+<!-- #| fig-width: 10 -->
+<!-- #| fig-height: 10 -->
+<!-- #| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each species in New York city." -->
+<!-- #| warning: false -->
+<!-- #| eval: true -->
+
+<!-- dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/spbayes/NY/species/" -->
+<!-- plot_obj <- generate_mcmc_plot(dir_path, coef = "beta[2]") -->
+<!-- plot_obj$coef_summary_plot -->
+<!-- plot_obj$coef_density_plot -->
+<!-- ``` -->
+
+<!-- Show the sp (semi-variogram) -->
+
+<!-- ### INLA -->
+
+<!-- Genus level -->
+
+<!-- ```{r} -->
+<!-- #| label: fig-genus-4 -->
+<!-- #| include: true -->
+<!-- #| fig-width: 10 -->
+<!-- #| fig-height: 5 -->
+<!-- #| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each genus in New York city." -->
+<!-- #| warning: false -->
+<!-- #| eval: true -->
+
+
+<!-- r_output_dir <- paste0("~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/inla_year_random_genus_check/", city, "/") -->
+<!-- plots_coef <- list() -->
+
+<!-- for (phe_type in phe_types) { -->
+<!--   p1 <- plot_coef_genus_city(r_output_dir, phe_type) -->
+<!--   plots_coef[[phe_type]] <- p1$coef_summary_plot -->
+<!-- } -->
+
+<!-- ny_genus = wrap_plots(plots_coef, ncol = 2) -->
+<!-- ny_genus -->
+<!-- ``` -->
+
+<!-- Species level -->
+
+<!-- ```{r} -->
+<!-- #| label: fig-species-4 -->
+<!-- #| include: true -->
+<!-- #| fig-width: 10 -->
+<!-- #| fig-height: 5 -->
+<!-- #| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each species in New York city." -->
+<!-- #| warning: false -->
+<!-- #| eval: true -->
+
+
+<!-- r_output_dir <- paste0("~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/inla_year_random_species_check/", city, "/") -->
+<!-- plots_coef <- list() -->
+
+<!-- for (phe_type in phe_types) { -->
+<!--   p1 <- plot_coef_sp_city(r_output_dir, phe_type) -->
+<!--   plots_coef[[phe_type]] <- p1$coef_summary_plot -->
+<!-- } -->
+
+<!-- ny_sp = wrap_plots(plots_coef, ncol = 2) -->
+<!-- ny_sp -->
+<!-- ``` -->
+
+<!-- diagnostic plots -->
+
+<!-- As for the INLA model, the coefficients do not show significant differences from the MCMC model, with most genera showed negative association between temperature and the start of season. -->
+
+<!-- Why so convergent? INLA first finds the Maximum A Posteriori (MAP) estimate, which is the highest point of the posterior distribution. Then it uses Laplace Approximation, which inherently assumes that the posterior distribution is approximately normal near its peak (the MAP estimate). -->
+
+<!-- ```{r} -->
+<!-- #| label: fig-ny_sos_tavg_coef -->
+<!-- #| include: true -->
+<!-- #| fig-width: 12 -->
+<!-- #| fig-height: 8 -->
+<!-- #| warning: false -->
+<!-- #| eval: true -->
+<!-- #| fig-cap: "The density of the posterior distribution of regression coefficients for `Temp~avg~` with `SOS` as the response variable for each genus in New York city, generated via INLA." -->
+
+<!-- r_output_dir <- paste0("~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/inla_year_random_species_check/", city, "/") -->
+<!-- p1 <- plot_coef_sp_city(r_output_dir, phe_type = "SOS") -->
+
+<!-- p1$combined_plot_semi -->
+<!-- ``` -->
+
+<!-- Compared to the previous MCMC results, these spatial fields appear to be smoother overall, with gradual transitions rather than sharp local variations.Some genera (Ulmus, Alnus) have fewer high/low value clusters dueu to fewer observations. -->
+
+# Change the data input
+
+## HUMID
+
+```{r}
+#| label: fig-ny-coef6
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each taxon group in New York city."
+#| warning: false
+#| eval: true
+
+g_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp_humid/NY/genus/"
+s_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp_humid/NY/species/"
+
+g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "beta[2]", fixed_sp = F)
+s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
+
+(g_plot_obj$coef_summary_plot + ggtitle("Genus")) / (s_plot_obj$coef_summary_plot +  ggtitle("Species"))
+```
+
+```{r}
+#| label: fig-ny-density6
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of regression coefficients in density form."
+#| warning: false
+#| eval: true
+
+(g_plot_obj$coef_density_plot + ggtitle("Genus")) / (s_plot_obj$coef_density_plot +  ggtitle("Species"))
+```
+
+```{r}
+#| label: fig-ny-randomsp-humid
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of spatial random effect in density form."
+#| warning: false
+#| eval: true
+
+g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "sp_effect", fixed_sp = F)
+s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "sp_effect", fixed_sp = F)
+
+(g_plot_obj$coef_density_plot + ggtitle("Genus")) / (s_plot_obj$coef_density_plot +  ggtitle("Species"))
+```

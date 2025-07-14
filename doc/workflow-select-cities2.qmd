@@ -483,18 +483,20 @@ ggplot(pca_scores, aes(x = PC1, y = PC2, text = NAME20)) +
 
 **Potential additional cities**
 
-In addition to the 59 cities with tree inventories, I identified 42 more U.S. cities listed in the GUTI dataset (@Ossola_GUTI), which was compiled through an extensive search of published and unpublished inventories, online data portals, and tree species lists from scientific studies. While the GUTI dataset itself does not contain full inventory records, I filtered for entries explicitly labeled as “tree inventory” and cross-referenced them with the U.S. Census Bureau’s list to ensure a consistent definition of "city". This identified 42 cities that are not in the current list but are reported by GUTI to have publicly available inventory data.
+In addition to the 59 cities with tree inventories, I identified 42 more U.S. cities listed in the GUTI dataset (@Ossola_GUTI), which was compiled through an extensive search of published and unpublished inventories, online data portals, and tree species lists from scientific studies. While the GUTI dataset itself does not contain full inventory records, I filtered for entries explicitly labeled as “tree inventory” and cross-referenced them with the U.S. Census Bureau’s list to ensure a consistent definition of "city". This identified 42 cities that are not in the current list but are reported by GUTI to have publicly available inventory data ([@fig-potential-city]).
 
-```{r}
-#| include: false
+```{r fig-potential-city}
+#| warning: false
+#| fig-cap: "Spatial distribution of cities from OpenTrees."
+
 GUTI_list <- read_excel("~/urban-niche/data/raw/CONUS/climate-niche/guti/GUTI_v1.0.xlsx", 
     sheet = "Appendix 3.1", skip = 3) |>
   separate(Country, into = c("country", "state"), sep = " \\(|\\)", remove = FALSE) |>
   filter(country == "USA" & Continent == "North America" & `Source type` == "Tree inventory") |>
   st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326) |>
-  st_join(st_read(here("data/raw/CONUS/boundary/USCities/tl_2024_us_uac20.shp")) |> 
+  st_join(st_read(here("data/raw/CONUS/boundary/USCities/tl_2024_us_uac20.shp"), quiet = T) |> 
             st_transform(4326) |>
-            select(NAME20), join = st_nearest_feature) |>
+            dplyr::select(NAME20), join = st_nearest_feature) |>
   # select(City, state, NAME20)|>
   mutate(
     city_words = str_split(City, "\\s+") |> 
@@ -503,6 +505,54 @@ GUTI_list <- read_excel("~/urban-niche/data/raw/CONUS/climate-niche/guti/GUTI_v1
   ) |>
   filter(matched == TRUE) |>
   pull(NAME20)
+
+list_city <- st_read(here("data/proc/urban/City_list/list_city.shp"), quiet = T) |>
+  st_transform(3857) |>         # project to planar coordinates
+  st_centroid() |>              # compute centroid
+  st_transform(4326) |>
+  st_join(st_read(here("data/raw/CONUS/boundary/USCities/tl_2024_us_uac20.shp"), quiet = T) |> 
+            st_transform(4326) |>
+            dplyr::select(NAME20), join = st_nearest_feature) |>
+  mutate(
+    NAME20_nospace = str_replace_all(NAME20, "\\s+", ""), 
+    matched = ifelse(city == "WashingtonDC", TRUE, str_detect(NAME20_nospace, fixed(city, ignore_case = TRUE)))
+  ) |>
+  filter(matched == TRUE) |>
+  pull(NAME20)
+
+potential_city_sf <- st_read(here("data/raw/CONUS/boundary/USCities/tl_2024_us_uac20.shp"), quiet = TRUE) |>
+  st_transform(4326) |>
+  dplyr::select(NAME20) |>
+  filter(NAME20 %in% c(GUTI_list, list_city)) |>
+  mutate(
+    source = case_when(
+      NAME20 %in% list_city ~ "City in current list",
+      NAME20 %in% GUTI_list & !(NAME20 %in% list_city) ~ "City with GUTI-recorded inventory",
+      TRUE ~ NA_character_
+    )
+  ) |>
+  st_centroid()
+
+leaflet(data = potential_city_sf) |>
+  addProviderTiles(providers$OpenStreetMap, options = providerTileOptions(opacity = 0.9)) |>
+  addCircleMarkers(
+    popup = ~ paste0(
+      "<strong>", NAME20, "</strong><br>"
+    ),
+    stroke = FALSE,
+    fillOpacity = 0.7,
+    radius = 6,
+    color = ~ case_when(
+      source == "City in current list" ~ "darkblue",
+      source == "City with GUTI-recorded inventory" ~ "cornflowerblue"
+    )
+  ) |>
+  addLegend(
+    position = "bottomright",
+    colors = c("darkblue", "cornflowerblue"),
+    labels = c("City in current list", "City with GUTI-recorded inventory"),
+    title = "City Type"
+  )
 ```
 
 I then projected both cities with tree inventories and available cities fro GUTI onto the PCA space. The PCA scores of these cities are highlighted in red in the PCA plot (@fig-pca-add). These selected cities plus additional citiesare relatively evenly distributed across the PCA space, with no extreme clustering. However, there are still some gaps in the PCA space, particularly in the upper left quadrant, which is characterized by high temperature, low precipitation, low building and low population. 
@@ -514,21 +564,6 @@ I then projected both cities with tree inventories and available cities fro GUTI
 #| fig-cap: "PCA of city climate and population variables, with cities in the current list highlighted in blue."
 #| fig-width: 10
 #| fig-height: 7
-
-list_city <- st_read(here("data/proc/urban/City_list/list_city.shp"), quiet = T) |>
-  st_transform(3857) |>         # project to planar coordinates
-  st_centroid() |>              # compute centroid
-  st_transform(4326) |>
-  st_join(st_read(here("data/raw/CONUS/boundary/USCities/tl_2024_us_uac20.shp"), quiet = T) |> 
-            st_transform(4326) |>
-            select(NAME20), join = st_nearest_feature) |>
-  mutate(
-    NAME20_nospace = str_replace_all(NAME20, "\\s+", ""), 
-    matched = ifelse(city == "WashingtonDC", TRUE, str_detect(NAME20_nospace, fixed(city, ignore_case = TRUE)))
-  ) |>
-  filter(matched == TRUE) |>
-  pull(NAME20)
-
 pca_scores <- pca_scores |>
   mutate(
     selected = NAME20 %in% list_city,
