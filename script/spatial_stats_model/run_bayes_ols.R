@@ -36,87 +36,77 @@ taxon_col <- Sys.getenv("TAXON_COL")  # column name for species
 # taxon_col <- "canonicalname"
 
 #################### Read data ####################
-
-city <- "NY"
+# Given the temporal variation required, we will use the WU data
 
 ## prepare input data
-metadata <- read_csv("~/lab-data/datasets/vegetation/PS/urban/metadata.csv") %>%
-  filter(site == !!city)
-file_list <- list.files(path = "~/lab-data/datasets/vegetation/PS/urban/doy", pattern = paste0("^doy_",city,"_.*\\.rds$"), full.names = TRUE)
-data_list <- file_list %>%
-  map(~ readRDS(.x))
-all_doy <- bind_rows(data_list)
-tree_location <- metadata %>%
-  mutate(genus = str_extract(taxa, "^[^ ]+")) %>%
-  left_join(all_doy, by = "id") %>%
-  filter(!is.na(doy)) %>%
-  mutate(geometry = paste0("c(", lon, ", ", lat, ")"))
+points_in_buffer <- read_csv(paste0("~/phenology-urban/data/proc/urban/",city,"/tree_WU_500_buffer_PS.csv"), show_col_types = FALSE)
 
-# List of Humid variable names and their corresponding filenames
-files <- c("temp_monthly_all_tree.rds",
-           "srad_monthly_all_tree.rds")
-base_path <- "~/phenology-urban/data/raw/"
-processed_humid_list <- lapply(files, function(file_name) {
-  # Read the file
-  var_name <- sub("_monthly_all_tree.rds", "", file_name)
-  data <- readRDS(paste0(base_path, city, "/HUMID/", file_name)) %>%
-    select(id, value, date) %>%
-    mutate(
-      season = case_when(
-        substr(date, 6, 7) %in% c("03", "04", "05") ~ "spring",
-        substr(date, 6, 7) %in% c("06", "07", "08") ~ "summer",
-        substr(date, 6, 7) %in% c("09", "10", "11") ~ "fall",
-        substr(date, 6, 7) %in% c("12", "01", "02") ~ "winter"
-      )) %>%
-    mutate(year = as.integer(substr(date, 1, 4)),
-           year = if_else(substr(date, 6, 7) == "12", year + 1, year)) %>%
-    filter(year < 2019) %>% 
-    group_by(id, year, season) %>%
-    summarise(
-      # Use sum for prcp, and mean for temp and srad
-      Avg_value = mean(as.numeric(value), na.rm = TRUE),
-      .groups = "drop"
-    ) %>%
-    # Rename the Avg_value column to the variable name (e.g., tmax, tmin, prcp)
-    rename(!!var_name := Avg_value)
-  return(data)
-})
+points_sf <- st_as_sf(points_in_buffer, coords = c("lon", "lat"), crs = 4326, remove = F) |>
+  st_transform(crs = 9311)
+hex_size <- 5000
+bbox <- st_bbox(points_sf)
+hex_grid_geom <- st_make_grid(bbox, cellsize = hex_size, square = FALSE)
+hex_grid <- st_sf(geometry = hex_grid_geom) |>
+  mutate(hex_id = row_number()) |>
+  mutate(centroid = st_centroid(geometry)) |>
+  mutate(
+    hex_lon = st_coordinates(centroid)[, 1],
+    hex_lat = st_coordinates(centroid)[, 2]
+  ) |>
+  select(-centroid)
+# Assign each point to a hexagon
+points_in_buffer <- st_join(points_sf, hex_grid, join = st_within) %>%
+  mutate(hex_id = as.factor(hex_id)) |>
+  select(-hex_lon, -hex_lat) |>
+  st_drop_geometry()
 
-files <- c("prcp_monthly_all_tree.rds")
-processed_daymet_list <- lapply(files, function(file_name) {
-  # Read the file
-  var_name <- sub("_monthly_all_tree.rds", "", file_name)
-  data <- readRDS(paste0(base_path, city, "/Daymet/monthly2016-2024/", file_name)) %>%
-    select(id, value, date) %>%
-    mutate(
-      season = case_when(
-        substr(date, 6, 7) %in% c("03", "04", "05") ~ "spring",
-        substr(date, 6, 7) %in% c("06", "07", "08") ~ "summer",
-        substr(date, 6, 7) %in% c("09", "10", "11") ~ "fall",
-        substr(date, 6, 7) %in% c("12", "01", "02") ~ "winter"
-      )) %>%
-    mutate(year = as.integer(substr(date, 1, 4)),
-           year = if_else(substr(date, 6, 7) == "12", year + 1, year)) %>%
-    group_by(id, year, season) %>%
-    summarise(
-      # Use sum for prcp, and mean for temp and srad
-      Avg_value = sum(as.numeric(value), na.rm = TRUE),
-      .groups = "drop"
-    ) %>%
-    # Rename the Avg_value column to the variable name (e.g., tmax, tmin, prcp)
-    rename(!!var_name := Avg_value)
-  
-  return(data)
-})
 
-all_sites_climate <- processed_humid_list[[1]] |>
-  left_join(processed_daymet_list[[1]], by = c("id", "season", "year")) 
+all_sites_temp <- readRDS(paste0("~/urban-cooling/data_gl/raw/WU/",city,"/",city,"_wu.rds")) %>%
+  dplyr::select(c(Date, HighTemp, AvgTemp, LowTemp, Sum_mm, name)) %>%
+  mutate(season = case_when(
+    month(Date) %in% 3:5 ~ "spring",
+    month(Date) %in% 6:8 ~ "summer",
+    month(Date) %in% 9:11 ~ "fall",
+    month(Date) %in% c(12, 1, 2) ~ "winter"
+  )) %>%
+  mutate(year = year(Date),
+         year = if_else(month(Date) == 12, year + 1, year)) %>%
+  group_by(name, year, season) %>%
+  summarise(
+    Avg_AvgTemp = mean(AvgTemp, na.rm = TRUE),
+    Sum_Sum_mm = sum(Sum_mm, na.rm = TRUE),
+    AvgTemp_count = sum(!is.na(AvgTemp)),
+    Sum_mm_count = sum(!is.na(Sum_mm)),
+    .groups = "drop"
+  )
 
-srad_daily <- processed_humid_list[[2]] |>
-  rename(Avg_srad = srad)
+srad_daily <- readRDS(paste0("~/phenology-urban/data/raw/",city,"/Daymet/daily2016-2024/srad_daily_2016-2023.rds")) %>%
+  select(id, value, date)  %>%
+  mutate(season = case_when(
+    month(date) %in% 3:5 ~ "spring",
+    month(date) %in% 6:8 ~ "summer",
+    month(date) %in% 9:11 ~ "fall",
+    month(date) %in% c(12, 1, 2) ~ "winter"
+  )) %>%
+  mutate(year = year(date),
+         year = if_else(month(date) == 12, year + 1, year)) %>%
+  group_by(id, year, season) %>%
+  summarise(
+    Avg_srad = mean(value, na.rm = TRUE),
+    srad_count = sum(!is.na(value)),
+    .groups = "drop"
+  )
 
-source("script/spatial_stats_model/run_species_inla.R")
-model_input_all <- prepare_species_data(phe_type, tree_location, all_sites_climate, srad_daily)
+if (taxon_col  == "canonicalname"){
+  source("script/spatial_stats_model/run_species_inla.R")
+  model_input_all <- prepare_species_data(phe_type, points_in_buffer, all_sites_temp, srad_daily, source = "WU")
+} else if (taxon_col == "genus") {
+  source("script/spatial_stats_model/run_genus_inla_fixpre.R")
+  model_input_all <- prepare_genus_data(phe_type, points_in_buffer, all_sites_temp, srad_daily, source = "WU")
+} else {
+  stop("Invalid taxon_col. Must be 'canonicalname' or 'species'.")
+}
+
 
 #################### Find the optimal cov model ####################
 
@@ -147,12 +137,12 @@ for (taxon in taxon_list) {
   model_path <- paste0(out_dir, taxon_clean, "_", phe_type, ".rds")
   
   if (file.exists(model_path)) {
-    cat(sprintf("\n File already exists for taxon: %s, phe_type: %s, city: %s. Skipping INLA run.\n", 
+    cat(sprintf("\n File already exists for taxon: %s, phe_type: %s, city: %s. Skipping model run.\n", 
                 taxon, phe_type, city))
     next  # Skip the current iteration of the loop
   } # if the file exists, skip to the next iteration  
   
-  cat(sprintf("\n Running INLA for taxon: %s, phe_type: %s, city: %s\n", 
+  cat(sprintf("\n Running model for taxon: %s, phe_type: %s, city: %s\n", 
               taxon, phe_type, city))
   model_input_sf <- model_input_all %>%
     filter(!!sym(taxon_col) == !!taxon) %>%
@@ -169,28 +159,31 @@ for (taxon in taxon_list) {
   tavg_phe_df <- model_input_sf %>% 
     st_drop_geometry()
   
+  
   #################### Run the spatial model ####################
   temp_col <- names(tavg_phe_df)[grepl("^temp", names(tavg_phe_df))]
   prcp_col <- names(tavg_phe_df)[grepl("^prcp", names(tavg_phe_df))]
   srad_col <- names(tavg_phe_df)[grepl("^srad", names(tavg_phe_df))]
   
   sp_formula <- as.formula(paste0(phe_metric, " ~ ", temp_col, "+", prcp_col, "+", srad_col))
-  
+  ols_model <- lm(sp_formula, data = tavg_phe_df)
   # Define Nimble model code
   model_code <- nimbleCode({
     for (i in 1:N) {
       y[i] ~ dnorm(mu[i], tau)
       mu[i] <- inprod(X[i, 1:P], beta[]) + year_effect[year[i]]
+      y_pred[i] ~ dnorm(mu[i], tau)
     }
     for (q in 1:nyears) {
-      year_effect[q] ~ dnorm(0, sd = sqrt(tau.year))
+      z_year[q] ~ dnorm(0, 1)                     
+      year_effect[q] <- z_year[q] * sigma_year   
     }
-    for (j in 1:P) {
-      beta[j] ~ dnorm(0, sd = 1000)
-    }
-    
+    sigma_year ~ dexp(1)
+    beta[1] ~ dnorm(180, sd = 40)    
+    beta[2] ~ dnorm(0, sd = 5) 
+    beta[3] ~ dnorm(0, sd = 1) 
+    beta[4] ~ dnorm(0, sd = 1) 
     tau ~ dgamma(0.001, 0.001)
-    tau.year ~ dinvgamma(2.001, 0.667)
   })
   
   # Data inputs
@@ -202,34 +195,40 @@ for (taxon in taxon_list) {
   year_index <- as.integer(factor(tavg_phe_df$year))  # Create fixed year indices
   data <- list(y = y, X = X)  # Remove 'year' from data
   inits <- list(
-    beta = rep(0, ncol(X)),
+    beta = as.numeric(ols_model$coefficients),
     tau = 1, 
-    tau.year = 1,
+    sigma_year = 1,
     year_effect = rep(0, nyears)
   )
-  
   ### Change based on semi-variogram fitting
   constants <- list(N = N, P = ncol(X), 
                     nyears = nyears, 
                     year = year_index, 
                     I = diag(1,N))
-  monitors <- c("beta", "tau.year", "year_effect")
-  
-  ni <- 20000   # nb iterations 
-  nt <- 1       # thinning interval
-  nb <- 5000    # nb iterations as burn-in 
-  nc <- 1         # nb chains
-  
+  monitors <- c("beta", "year_effect", "y_pred")
+
+  ni <- 100000   # nb iterations 
+  nt <- 10       # thinning interval
+  nb <- 50000    # nb iterations as burn-in 
+  nc <- 2         # nb chains
   
   #################### Run/Save the model ####################
   
-  modelMCMCrun <- nimbleMCMC(code = model_code, data = data, constants = constants, inits = inits, 
-                             monitors = monitors,
-                             niter = ni, nburnin = nb, thin = nt, nchains = nc, setSeed = 2025,
-                             progressBar = TRUE, 
-                             samplesAsCodaMCMC = TRUE, 
-                             summary = TRUE, 
-                             WAIC = TRUE)
+  my_model <- nimbleModel(code = model_code, data = data, inits = inits, constants = constants)
+  compiled_model <- compileNimble(my_model)
+  
+  conf <- configureMCMC(my_model, enableWAIC = TRUE)
+  conf$removeSampler(paste0("beta[", 1:4, "]"))
+  conf$addSampler(target = paste0("beta[", 1:4, "]"), type = "RW_block")
+  conf$removeSampler("tau")
+  conf$addSampler(target = "tau", type = "slice")
+  conf$addMonitors(monitors)
+  
+  mcmc <- buildMCMC(conf)
+  compiled_mcmc <- compileNimble(mcmc, project = compiled_model)
+  modelMCMCrun <- runMCMC(compiled_mcmc,
+                          niter = ni, nburnin = nb, thin = nt, nchains = nc,
+                          samplesAsCodaMCMC = TRUE, summary = TRUE, WAIC = TRUE)
   
   # beta_label <- data.frame(Parameter = "beta[2]", Label = "AvgTemp")
   # param_data <- ggs(modelMCMCrun$samples, par_labels = beta_label) %>%
@@ -242,7 +241,17 @@ for (taxon in taxon_list) {
   #   theme(plot.title = element_text(hjust = 0.5)) +
   #   annotate("text", x = beta_mean, y = 0, label = paste0("Mean: ", round(beta_mean, 2)),vjust = -1.5, color = "red", size = 4)
   # 
+  samples_matrix <- as.matrix(modelMCMCrun$samples)
+  y_pred_cols <- grep("y_pred\\[", colnames(samples_matrix))
+  y_pred_mean <- colMeans(samples_matrix[, y_pred_cols])
+  rmse <- sqrt(mean((y - y_pred_mean)^2))
+  
+  modelMCMCrun <- list(
+    samples = modelMCMCrun$samples,
+    summary = modelMCMCrun$summary,
+    WAIC = modelMCMCrun$WAIC,
+    rmse = rmse
+  )
   saveRDS(modelMCMCrun, file = model_path)
 }
-
 
