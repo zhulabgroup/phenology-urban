@@ -158,7 +158,8 @@ for (taxon in taxon_list) {
   }
   
   tavg_phe_df <- model_input_sf %>% 
-    st_drop_geometry()
+    st_drop_geometry() 
+  tavg_phe_df$hex_id <- droplevels(tavg_phe_df$hex_id)
   
   #################### Run the spatial model ####################
   temp_col <- names(tavg_phe_df)[grepl("^temp", names(tavg_phe_df))]
@@ -168,35 +169,40 @@ for (taxon in taxon_list) {
   sp_formula <- as.formula(paste0(
     phe_metric, " ~ ", temp_col, " + ", prcp_col, " + ", srad_col, " + hex_id"
   ))
-  
+  ols_model <- lm(sp_formula, data = tavg_phe_df)
   # Define Nimble model code
   model_code <- nimbleCode({
     for (i in 1:N) {
       y[i] ~ dnorm(mu[i], tau)
       mu[i] <- inprod(X[i, 1:P], beta[]) + year_effect[year[i]]
+      y_pred[i] ~ dnorm(mu[i], tau)
     }
     for (q in 1:nyears) {
-      year_effect[q] ~ dnorm(0, sd = sqrt(tau.year))
+      z_year[q] ~ dnorm(0, 1)                     
+      year_effect[q] <- z_year[q] * sigma_year   
     }
-    for (j in 1:P) {
-      beta[j] ~ dnorm(0, sd = 1000)
+    sigma_year ~ dexp(1) 
+    beta[1] ~ dnorm(180, sd = 40)    
+    beta[2] ~ dnorm(0, sd = 5) 
+    beta[3] ~ dnorm(0, sd = 1) 
+    beta[4] ~ dnorm(0, sd = 1) 
+    for (j in 5:P) {
+      beta[j] ~ dnorm(0, sd = 10)
     }
     tau ~ dgamma(0.001, 0.001)
-    tau.year ~ dinvgamma(2.001, 0.667)
   })
   
   # Data inputs
-  
   N <- nrow(tavg_phe_df)
   nyears <- length(unique(tavg_phe_df$year))
   X <- model.matrix(sp_formula, data = tavg_phe_df)
   y <- tavg_phe_df[[all.vars(sp_formula)[1]]]
-  year_index <- as.integer(factor(tavg_phe_df$year))  # Create fixed year indices
+  year_index <- as.integer(factor(tavg_phe_df$year))  # Create year indices
   data <- list(y = y, X = X)  # Remove 'year' from data
   inits <- list(
-    beta = rep(0, ncol(X)),
+    beta = as.numeric(ols_model$coefficients),
     tau = 1, 
-    tau.year = 1,
+    sigma_year = 1,
     year_effect = rep(0, nyears)
   )
   
@@ -205,23 +211,31 @@ for (taxon in taxon_list) {
                     nyears = nyears, 
                     year = year_index,
                     I = diag(1,N))
-  monitors <- c("beta", "tau.year", "year_effect")
+  monitors <- c("beta", "year_effect", "y_pred")
   
-  ni <- 40000   # nb iterations 
-  nt <- 1       # thinning interval
-  nb <- 5000    # nb iterations as burn-in 
+  ni <- 100000   # nb iterations 
+  nt <- 10       # thinning interval
+  nb <- 50000    # nb iterations as burn-in 
   nc <- 2         # nb chains
   
   
   #################### Run/Save the model ####################
   
-  modelMCMCrun <- nimbleMCMC(code = model_code, data = data, constants = constants, inits = inits, 
-                             monitors = monitors,
-                             niter = ni, nburnin = nb, thin = nt, nchains = nc, setSeed = rep(2025, nc),
-                             progressBar = TRUE, 
-                             samplesAsCodaMCMC = TRUE, 
-                             summary = TRUE, 
-                             WAIC = TRUE)
+  my_model <- nimbleModel(code = model_code, data = data, inits = inits, constants = constants)
+  compiled_model <- compileNimble(my_model)
+  
+  conf <- configureMCMC(my_model, enableWAIC = TRUE)
+  conf$removeSampler(paste0("beta[", 1:ncol(X), "]"))
+  conf$addSampler(target = paste0("beta[", 1:ncol(X), "]"), type = "RW_block")
+  conf$removeSampler("tau")
+  conf$addSampler(target = "tau", type = "slice")
+  conf$addMonitors(monitors)
+  
+  mcmc <- buildMCMC(conf)
+  compiled_mcmc <- compileNimble(mcmc, project = compiled_model)
+  modelMCMCrun <- runMCMC(compiled_mcmc,
+                          niter = ni, nburnin = nb, thin = nt, nchains = nc,
+                          samplesAsCodaMCMC = TRUE, summary = TRUE, WAIC = TRUE)
 
   # library(ggmcmc)
   # beta_label <- data.frame(Parameter = "beta[2]", Label = "AvgTemp")
@@ -235,6 +249,17 @@ for (taxon in taxon_list) {
   #   theme(plot.title = element_text(hjust = 0.5)) +
   #   annotate("text", x = beta_mean, y = 0, label = paste0("Mean: ", round(beta_mean, 2)),vjust = -1.5, color = "red", size = 4)
 
+  samples_matrix <- as.matrix(modelMCMCrun$samples)
+  y_pred_cols <- grep("y_pred\\[", colnames(samples_matrix))
+  y_pred_mean <- colMeans(samples_matrix[, y_pred_cols])
+  rmse <- sqrt(mean((y - y_pred_mean)^2))
+  
+  modelMCMCrun <- list(
+    samples = modelMCMCrun$samples,
+    summary = modelMCMCrun$summary,
+    WAIC = modelMCMCrun$WAIC,
+    rmse = rmse
+  )
   saveRDS(modelMCMCrun, file = model_path)
 }
 

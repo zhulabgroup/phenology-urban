@@ -3,7 +3,7 @@
 #SBATCH --account=zhukai0                   # Account name
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err
-#SBATCH --array=1-2
+#SBATCH --array=1-4
 #SBATCH --time=6:00:00
 #SBATCH --partition=standard
 #SBATCH --mem=32G
@@ -22,7 +22,7 @@
 
 
 # Define combinations of chains and iterations
-PHE_TYPES=("EOS")
+PHE_TYPES=("SOS" "EOS")
 TAXON_COLS=("canonicalname" "genus")
 NUM_PHE=${#PHE_TYPES[@]}
 NUM_COL=${#TAXON_COLS[@]}
