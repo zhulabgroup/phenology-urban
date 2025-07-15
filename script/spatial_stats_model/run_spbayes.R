@@ -167,7 +167,7 @@ for (taxon in taxon_list) {
   
   tavg_phe_df <- as.data.frame(tavg_phe)
   sp_formula <- as.formula(paste0(phe_metric, " ~ ", temp_col, "+", prcp_col, "+", srad_col))
-  
+  ols_model <- lm(sp_formula, data = tavg_phe_df) 
   # Define covariance functions
   # 
   # spherical_covariance <- nimbleFunction(
@@ -214,15 +214,18 @@ for (taxon in taxon_list) {
     for (i in 1:N) {
       y[i] ~ dnorm(mu[i], tau)
       mu[i] <- inprod(X[i, 1:P], beta[]) + spatial_effect[i] + year_effect[year[i]]
+      y_pred[i] ~ dnorm(mu[i], tau)
     }
     for (q in 1:nyears) {
-      year_effect[q] ~ dnorm(0, sd = sqrt(tau.year))
+      z_year[q] ~ dnorm(0, 1)                     
+      year_effect[q] <- z_year[q] * sigma_year   
     }
-    for (j in 1:P) {
-      beta[j] ~ dnorm(0, sd = 1000)
-    }
+    sigma_year ~ dexp(1) 
+    beta[1] ~ dnorm(180, sd = 40)    
+    beta[2] ~ dnorm(0, sd = 5) 
+    beta[3] ~ dnorm(0, sd = 1) 
+    beta[4] ~ dnorm(0, sd = 1) 
     spatial_effect[1:N] ~ dmnorm(Mu[1:N], cov = cov_matrix[1:N, 1:N])
-    
     
     # Choose the covariance function based on variogram fitting
     if (N_knots <= N_unique){
@@ -272,9 +275,8 @@ for (taxon in taxon_list) {
     }
       
     tau ~ dgamma(0.001, 0.001)
-    sigma.sq ~ dinvgamma(2.5, 120)
+    sigma.sq ~ dexp(1)
     phi ~ dunif(5 / 1, 5 / 0.1)
-    tau.year ~ dinvgamma(2.001, 0.667)
     range ~ dunif(0, 1)
     nu ~ dunif(0.5, 5)
   })
@@ -288,10 +290,11 @@ for (taxon in taxon_list) {
   data <- list(y = y, X = X)  # Remove 'year' from data
   inits <- list(
     beta = rep(0, ncol(X)),
-    tau = 1, sigma.sq = 80, phi = 25, tau.year = 1,
+    tau = 1, sigma.sq = 80, phi = 25,
     range = 0.5,
     spatial_effect = rep(0, N), 
     nu = 1,
+    sigma_year = 1,
     year_effect = rep(0, nyears)
   )
   
@@ -302,28 +305,41 @@ for (taxon in taxon_list) {
                     year = year_index, I = diag(1e-6,N), cov_type = cov_type)  # Add 'year' to constants
   monitors <- switch(
     cov_type,
-    "Mat" = c("beta", "tau.year", "range", "sigma.sq", "nu", "spatial_effect", "year_effect"),
-    "Gau" = c("beta", "tau", "sigma.sq", "phi", "tau.year", "spatial_effect", "year_effect"),
-    "Exp" = c("beta", "tau", "sigma.sq", "phi", "tau.year", "spatial_effect", "year_effect"),
-    "Sph" = c("beta", "tau.year", "range", "sigma.sq", "spatial_effect", "year_effect"),
+    "Mat" = c("beta", "range", "sigma.sq", "nu", "spatial_effect", "year_effect"),
+    "Gau" = c("beta", "tau", "sigma.sq", "phi", "spatial_effect", "year_effect"),
+    "Exp" = c("beta", "tau", "sigma.sq", "phi", "spatial_effect", "year_effect"),
+    "Sph" = c("beta", "range", "sigma.sq", "spatial_effect", "year_effect"),
     stop("Unknown cov_type!")
   )
   
-  ni <- 20000   # nb iterations 
+  ni <- 2000   # nb iterations 
   nt <- 1       # thinning interval
-  nb <- 5000    # nb iterations as burn-in 
+  nb <- 500    # nb iterations as burn-in 
   nc <- 2         # nb chains
   
   
   #################### Run/Save the model ####################
   
-  modelMCMCrun <- nimbleMCMC(code = model_code, data = data, constants = constants, inits = inits, 
-                             monitors = monitors,
-                             niter = ni, nburnin = nb, thin = nt, nchains = nc,  setSeed = rep(2025, nc),
-                             progressBar = TRUE, 
-                             samplesAsCodaMCMC = TRUE, 
-                             summary = TRUE, 
-                             WAIC = TRUE)
+  my_model <- nimbleModel(code = model_code, data = data, inits = inits, constants = constants)
+  compiled_model <- compileNimble(my_model)
+  
+  conf <- configureMCMC(my_model, enableWAIC = TRUE)
+  conf$removeSampler(paste0("beta[", 1:4, "]"))
+  conf$addSampler(target = paste0("beta[", 1:4, "]"), type = "RW_block")
+  conf$removeSampler(c("sigma.sq", "range", "tau", "nu"))
+  conf$addSampler("sigma.sq", type = "slice")
+  conf$addSampler("range", type = "slice")
+  conf$addSampler("tau", type = "slice")
+  conf$addSampler("nu", type = "slice")
+  
+  conf$addMonitors(monitors)
+  conf$addMonitors2("y_pred")
+  
+  mcmc <- buildMCMC(conf)
+  compiled_mcmc <- compileNimble(mcmc, project = compiled_model)
+  modelMCMCrun <- runMCMC(compiled_mcmc,
+                          niter = ni, nburnin = nb, thin = nt, nchains = nc,
+                          samplesAsCodaMCMC = TRUE, summary = TRUE, WAIC = TRUE)
   
   # beta_label <- data.frame(Parameter = "beta[2]", Label = "AvgTemp")
   # param_data <- ggs(modelMCMCrun$samples, par_labels = beta_label) %>%
@@ -337,7 +353,18 @@ for (taxon in taxon_list) {
   #   annotate("text", x = beta_median, y = 0, label = paste0("Median: ", round(beta_median, 2)),vjust = -1.5, color = "red", size = 4)
   # 
   
-  saveRDS(modelMCMCrun, file = model_path)
+  samples_matrix <- as.matrix(modelMCMCrun$samples2)
+  y_pred_cols <- grep("y_pred\\[", colnames(samples_matrix))
+  y_pred_mean <- colMeans(samples_matrix[, y_pred_cols])
+  rmse <- sqrt(mean((y - y_pred_mean)^2))
+  
+  modelMCMCrun <- list(
+    samples = modelMCMCrun$samples,
+    summary = modelMCMCrun$summary,
+    WAIC = modelMCMCrun$WAIC,
+    rmse = rmse
+  )
+  write_rds(modelMCMCrun, file = model_path, compress = "gz")
 }
 
 
