@@ -207,10 +207,10 @@ for (taxon in taxon_list) {
                     I = diag(1,N))
   monitors <- c("beta", "year_effect")
 
-  ni <- 100000   # nb iterations 
+  ni <- 200000   # nb iterations 
   nt <- 10       # thinning interval
-  nb <- 50000    # nb iterations as burn-in 
-  nc <- 2         # nb chains
+  nb <- 150000    # nb iterations as burn-in 
+  nc <- 4         # nb chains
   
   #################### Run/Save the model ####################
   
