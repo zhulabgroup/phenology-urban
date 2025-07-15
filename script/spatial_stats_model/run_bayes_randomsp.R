@@ -218,7 +218,7 @@ for (taxon in taxon_list) {
                     nhex = nhex, 
                     hex_id = hex_index,
                     I = diag(1,N))
-  monitors <- c("beta", "year_effect", "sp_effect", "y_pred")
+  monitors <- c("beta", "year_effect", "sp_effect")
   
   ni <- 100000   # nb iterations 
   nt <- 10       # thinning interval
@@ -237,6 +237,7 @@ for (taxon in taxon_list) {
   conf$removeSampler("tau")
   conf$addSampler(target = "tau", type = "slice")
   conf$addMonitors(monitors)
+  conf$addMonitors2("y_pred")
   
   mcmc <- buildMCMC(conf)
   compiled_mcmc <- compileNimble(mcmc, project = compiled_model)
@@ -256,7 +257,7 @@ for (taxon in taxon_list) {
   #   theme(plot.title = element_text(hjust = 0.5)) +
   #   annotate("text", x = beta_median, y = 0, label = paste0("Median: ", round(beta_mean, 2)),vjust = -1.5, color = "red", size = 4)
   
-  samples_matrix <- as.matrix(modelMCMCrun$samples)
+  samples_matrix <- as.matrix(modelMCMCrun$samples2)
   y_pred_cols <- grep("y_pred\\[", colnames(samples_matrix))
   y_pred_mean <- colMeans(samples_matrix[, y_pred_cols])
   rmse <- sqrt(mean((y - y_pred_mean)^2))
@@ -267,7 +268,7 @@ for (taxon in taxon_list) {
     WAIC = modelMCMCrun$WAIC,
     rmse = rmse
   )
-  saveRDS(modelMCMCrun, file = model_path)
+  write_rds(modelMCMCrun, file = model_path, compress = "gz")
 }
 
 
