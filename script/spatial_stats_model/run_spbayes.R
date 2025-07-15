@@ -32,7 +32,7 @@ taxon_col <- Sys.getenv("TAXON_COL")  # column name for species
 # r_input_dir <- "~/phenology-urban/data/"
 # r_output_dir <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/spbayes/"
 # city <- "NY"
-# phe_type <- "SOS"
+# phe_type <- "EOS"
 # taxon_col <- "canonicalname"
 
 #################### Read data ####################
@@ -274,10 +274,10 @@ for (taxon in taxon_list) {
       }
     }
       
-    tau ~ dgamma(0.001, 0.001)
+    tau ~ dexp(1)
     sigma.sq ~ dexp(1)
     phi ~ dunif(5 / 1, 5 / 0.1)
-    range ~ dunif(0, 1)
+    range ~ dunif(0.01, 1)
     nu ~ dunif(0.5, 5)
   })
   
@@ -290,12 +290,15 @@ for (taxon in taxon_list) {
   data <- list(y = y, X = X)  # Remove 'year' from data
   inits <- list(
     beta = rep(0, ncol(X)),
-    tau = 1, sigma.sq = 80, phi = 25,
-    range = 0.5,
+    tau = 1, 
     spatial_effect = rep(0, N), 
-    nu = 1,
     sigma_year = 1,
-    year_effect = rep(0, nyears)
+    year_effect = rep(0, nyears),
+    
+    sigma.sq = 10, 
+    range = 0.2,
+    phi = 10,
+    nu = 1.5
   )
   
   ### Change based on semi-variogram fitting

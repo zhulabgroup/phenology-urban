@@ -33,7 +33,7 @@ taxon_col <- Sys.getenv("TAXON_COL")  # column name for species
 # r_output_dir <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp/"
 # city <- "NY"
 # phe_type <- "EOS"
-# taxon_col <- "canonicalname"
+# taxon_col <- "genus"
 
 #################### Read data ####################
 
@@ -220,10 +220,10 @@ for (taxon in taxon_list) {
                     I = diag(1,N))
   monitors <- c("beta", "year_effect", "sp_effect")
   
-  ni <- 100000   # nb iterations 
+  ni <- 200000   # nb iterations 
   nt <- 10       # thinning interval
-  nb <- 50000    # nb iterations as burn-in 
-  nc <- 2         # nb chains
+  nb <- 150000    # nb iterations as burn-in 
+  nc <- 4         # nb chains
   
   
   #################### Run/Save the model ####################
@@ -255,7 +255,7 @@ for (taxon in taxon_list) {
   #   theme_bw() +
   #   ggtitle(paste("taxon:", taxon)) +
   #   theme(plot.title = element_text(hjust = 0.5)) +
-  #   annotate("text", x = beta_median, y = 0, label = paste0("Median: ", round(beta_mean, 2)),vjust = -1.5, color = "red", size = 4)
+  #   annotate("text", x = beta_median, y = 0, label = paste0("Median: ", round(beta_median, 2)),vjust = -1.5, color = "red", size = 4)
   
   samples_matrix <- as.matrix(modelMCMCrun$samples2)
   y_pred_cols <- grep("y_pred\\[", colnames(samples_matrix))
