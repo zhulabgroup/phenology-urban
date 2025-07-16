@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=bayes_randomsp_humid
+#SBATCH --job-name=bayes_randomsp
 #SBATCH --account=zhukai0                   # Account name
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err
 #SBATCH --array=1-4
-#SBATCH --time=6:00:00
+#SBATCH --time=24:00:00
 #SBATCH --partition=standard
-#SBATCH --mem=32G
+#SBATCH --mem=48G
 #SBATCH --cpus-per-task=2
 #SBATCH --mail-user=jializ@umich.edu        # Where to send mail
 #SBATCH --mail-type=BEGIN,END               # Mail notifications at the start and end of the job
