@@ -1,4 +1,3 @@
-library(nimble)
 library(sp)
 library(sf)
 library(dplyr)
@@ -11,6 +10,7 @@ library(taxize)
 library(purrr)
 library(terra)
 library(rgbif)
+library(bmstdr)
 
 # Read file paths from environment variables
 r_input_dir <- Sys.getenv("R_INPUT_DIR")
@@ -41,25 +41,25 @@ taxon_col <- Sys.getenv("TAXON_COL")  # column name for species
 
 ## prepare input data
 points_in_buffer <- read_csv(paste0("~/phenology-urban/data/proc/urban/",city,"/tree_WU_500_buffer_PS.csv"), show_col_types = FALSE)
-
-points_sf <- st_as_sf(points_in_buffer, coords = c("lon", "lat"), crs = 4326, remove = F) |>
-  st_transform(crs = 9311)
-hex_size <- 5000
-bbox <- st_bbox(points_sf)
-hex_grid_geom <- st_make_grid(bbox, cellsize = hex_size, square = FALSE)
-hex_grid <- st_sf(geometry = hex_grid_geom) |>
-  mutate(hex_id = row_number()) |>
-  mutate(centroid = st_centroid(geometry)) |>
-  mutate(
-    hex_lon = st_coordinates(centroid)[, 1],
-    hex_lat = st_coordinates(centroid)[, 2]
-  ) |>
-  select(-centroid)
-# Assign each point to a hexagon
-points_in_buffer <- st_join(points_sf, hex_grid, join = st_within) %>%
-  mutate(hex_id = as.factor(hex_id)) |>
-  select(-hex_lon, -hex_lat) |>
-  st_drop_geometry()
+# 
+# points_sf <- st_as_sf(points_in_buffer, coords = c("lon", "lat"), crs = 4326, remove = F) |>
+#   st_transform(crs = 9311)
+# hex_size <- 5000
+# bbox <- st_bbox(points_sf)
+# hex_grid_geom <- st_make_grid(bbox, cellsize = hex_size, square = FALSE)
+# hex_grid <- st_sf(geometry = hex_grid_geom) |>
+#   mutate(hex_id = row_number()) |>
+#   mutate(centroid = st_centroid(geometry)) |>
+#   mutate(
+#     hex_lon = st_coordinates(centroid)[, 1],
+#     hex_lat = st_coordinates(centroid)[, 2]
+#   ) |>
+#   select(-centroid)
+# # Assign each point to a hexagon
+# points_in_buffer <- st_join(points_sf, hex_grid, join = st_within) %>%
+#   mutate(hex_id = as.factor(hex_id)) |>
+#   select(-hex_lon, -hex_lat) |>
+#   st_drop_geometry()
 
 
 all_sites_temp <- readRDS(paste0("~/urban-cooling/data_gl/raw/WU/",city,"/",city,"_wu.rds")) %>%
@@ -137,16 +137,6 @@ for (taxon in taxon_list) {
   temp_col <- names(tavg_phe)[grepl("^temp", names(tavg_phe))]
   prcp_col <- names(tavg_phe)[grepl("^prcp", names(tavg_phe))]
   srad_col <- names(tavg_phe)[grepl("^srad", names(tavg_phe))]
-  
-  # OLS_formula <- as.formula(paste0(phe_metric, " ~ ", temp_col, "+", prcp_col, "+", srad_col , "+ (1|year)"))
-  # random_OLS <- lmer(OLS_formula, data = tavg_phe)
-  # tavg_phe$residual_random <- tavg_phe[[phe_metric]] - fitted(random_OLS)
-  # coordinates(tavg_phe) <- ~ lon + lat
-  # vgm.emt <- variogram(residual_random ~ 1, tavg_phe, cloud = FALSE)
-  # vgm.las.init <- vgm(model = c("Exp", "Sph", "Gau", "Mat"))
-  # vgm_exn_fit <- fit.variogram(vgm.emt, vgm.las.init)
-  # cov_type <- as.character(vgm_exn_fit$model)
-  cov_type = "Mat"
   
   #################### Run the spatial model ####################
   coords <- st_coordinates(tavg_phe)

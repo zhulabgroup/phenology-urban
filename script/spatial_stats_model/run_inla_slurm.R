@@ -18,6 +18,12 @@ city <- Sys.getenv("CITY")
 phe_type <- Sys.getenv("PHE_TYPE")
 taxon_col <- Sys.getenv("TAXON_COL")  # column name for species
 
+# r_input_dir <- "~/phenology-urban/data/"
+# r_output_dir <- "~/phenology-urban/"
+# city <- "NY"
+# phe_type <- "EOS"
+# taxon_col <- "canonicalname"  # column name for species
+
 ################################## data input ##################################
 
 points_in_buffer <- read_csv(paste0("~/phenology-urban/data/proc/urban/",city,"/tree_WU_500_buffer_PS.csv"), show_col_types = FALSE)
