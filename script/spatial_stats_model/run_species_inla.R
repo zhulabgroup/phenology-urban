@@ -225,7 +225,7 @@ run_inla_species = function(model_input_all, r_output_dir, phe_type, city){
     res <- inla(formula,
                 family = "gaussian",
                 data = inla.stack.data(stk.full),
-                control.compute = list(return.marginals = TRUE, waic = TRUE),
+                control.compute = list(cpo = TRUE, dic = TRUE, waic = TRUE),
                 control.predictor = list(
                   compute = TRUE,
                   A = inla.stack.A(stk.full)))

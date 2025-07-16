@@ -270,7 +270,7 @@ run_inla_genus = function(model_input_all, r_output_dir, phe_type, city){
                        compute = TRUE,
                        A = inla.stack.A(stk.full)
                      ),
-                     control.compute = list(dic = TRUE, waic = TRUE))
+                     control.compute = list(cpo = TRUE, dic = TRUE, waic = TRUE))
     # summary(res_nosp)
     # Extract variance components
     var_fixed_with_spatial <- res$summary.fixed$mean^2 %>% sum()

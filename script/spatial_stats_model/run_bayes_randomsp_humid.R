@@ -11,6 +11,7 @@ library(taxize)
 library(purrr)
 library(terra)
 library(rgbif)
+library(bridgesampling)
 
 # Read file paths from environment variables
 r_input_dir <- Sys.getenv("R_INPUT_DIR")
@@ -248,7 +249,11 @@ for (taxon in taxon_list) {
     sigma_year = 1,
     sigma_hex = 1,
     year_effect = rep(0, nyears),
-    sp_effect = rep(0, nhex)
+    sp_effect = rep(0, nhex),
+    mu = rep(180, N),
+    y_pred = rep(180, N),  # Initialize y_pred
+    z_year = rep(0, nyears),  # Initialize year effects
+    z_hex = rep(0, nhex)  # Initialize spatial effects
   )
   
   ### Change based on semi-variogram fitting
@@ -260,10 +265,10 @@ for (taxon in taxon_list) {
                     I = diag(1,N))
   monitors <- c("beta", "year_effect", "sp_effect")
   
-  ni <- 200000   # nb iterations 
+  ni <- 300000   # nb iterations 
   nt <- 10       # thinning interval
-  nb <- 150000    # nb iterations as burn-in 
-  nc <- 2         # nb chains
+  nb <- 250000    # nb iterations as burn-in 
+  nc <- 4         # nb chains
 
   
   #################### Run/Save the model ####################
@@ -276,13 +281,19 @@ for (taxon in taxon_list) {
   conf$addSampler(target = paste0("beta[", 1:4, "]"), type = "RW_block")
   conf$removeSampler("tau")
   conf$addSampler(target = "tau", type = "slice")
-  conf$addMonitors2("y_pred")  # Add y_pred to monitors
+  # conf$addMonitors2("y_pred")  # Add y_pred to monitors
   
-  mcmc <- buildMCMC(conf)
-  compiled_mcmc <- compileNimble(mcmc, project = compiled_model)
+  mymcmc <- buildMCMC(conf)
+  compiled_mcmc <- compileNimble(mymcmc, project = compiled_model)
   modelMCMCrun <- runMCMC(compiled_mcmc,
                           niter = ni, nburnin = nb, thin = nt, nchains = nc,
-                          samplesAsCodaMCMC = TRUE, summary = TRUE, WAIC = TRUE)
+                          samplesAsCodaMCMC = T, summary = TRUE, WAIC = TRUE)
+  
+  beta2_mcmc <- lapply(modelMCMCrun$samples, function(chain) {
+    as.mcmc(chain[, "beta[2]", drop = FALSE])
+  }) |> as.mcmc.list()
+  converge <- gelman.diag(beta2_mcmc, confidence = 0.95, transform=FALSE, autoburnin=TRUE,
+              multivariate=TRUE)
   
   # library(ggmcmc)
   # beta_label <- data.frame(Parameter = "beta[2]", Label = "AvgTemp")
@@ -295,17 +306,79 @@ for (taxon in taxon_list) {
   #   ggtitle(paste("taxon:", taxon)) +
   #   theme(plot.title = element_text(hjust = 0.5)) +
   #   annotate("text", x = beta_mean, y = 0, label = paste0("Mean: ", round(beta_mean, 2)),vjust = -1.5, color = "red", size = 4)
-  # Save the model output
-  samples_matrix <- as.matrix(modelMCMCrun$samples2)
-  y_pred_cols <- grep("y_pred\\[", colnames(samples_matrix))
-  y_pred_mean <- colMeans(samples_matrix[, y_pred_cols])
-  rmse <- sqrt(mean((y - y_pred_mean)^2))
+  # 
+  
+  
+  
+  log_posterior_nimble <- function(samples_row, data) {
+    constants <- data$constants
+    param_names <- names(samples_row)
+    if (is.null(param_names)) stop("samples_row does not have named parameters")
+    
+    # unpack parameter values
+    beta <- samples_row[grep("^beta\\[", param_names)]
+    tau <- samples_row["tau"]
+    sigma_year <- samples_row["sigma_year"]
+    sigma_hex <- samples_row["sigma_hex"]
+    
+    z_year <- samples_row[grep("^z_year\\[", param_names)]
+    z_hex  <- samples_row[grep("^z_hex\\[",  param_names)]
+    
+    # log-prior
+    log_prior <- sum(
+      dnorm(beta[1], mean = 180, sd = 40, log = TRUE),
+      dnorm(beta[2], 0, 5, log = TRUE),
+      dnorm(beta[3], 0, 1, log = TRUE),
+      dnorm(beta[4], 0, 1, log = TRUE),
+      dexp(sigma_year, rate = 1, log = TRUE),
+      dexp(sigma_hex, rate = 1, log = TRUE),
+      dgamma(tau, shape = 0.001, rate = 0.001, log = TRUE),
+      sum(dnorm(z_year, 0, 1, log = TRUE)),
+      sum(dnorm(z_hex, 0, 1, log = TRUE))
+    )
+    
+    # log-likelihood
+    X <- data$X
+    y <- data$y
+    year <- constants$year
+    hex_id <- constants$hex_id
+    N <- constants$N
+    
+    year_effect <- z_year * sigma_year
+    sp_effect   <- z_hex  * sigma_hex
+    
+    mu <- as.vector(X %*% beta) + year_effect[year] + sp_effect[hex_id]
+    log_lik <- sum(dnorm(y, mean = mu, sd = 1 / sqrt(tau), log = TRUE))
+    
+    return(log_lik + log_prior)
+  }
+  
+  posterior_samples <- as.matrix(modelMCMCrun$samples)
+  param_names <- colnames(posterior_samples)
+  model_bridge <- bridge_sampler(samples = posterior_samples,
+                              log_posterior = log_posterior_nimble,
+                              data = list(y = y, X = X, constants = constants),
+                              lb=setNames(rep(-Inf, length(param_names)), param_names),
+                              ub=setNames(rep( Inf, length(param_names)), param_names),
+                              param_types = rep("real", ncol(posterior_samples)),
+                              repetitions = 10,
+                              method = "normal",
+                              cores = 1,
+                              use_neff = T,
+                              silent = FALSE,
+                              verbose = TRUE,
+                              varlist = ls(),
+                              envir = environment())
+  mean_logml <- mean(model_bridge$logml)
+  
+  
   
   modelMCMCrun <- list(
     samples = modelMCMCrun$samples,
     summary = modelMCMCrun$summary,
     WAIC = modelMCMCrun$WAIC,
-    rmse = rmse
+    converge = converge$psrf[1],
+    mean_logml = mean_logml
   )
   write_rds(modelMCMCrun, file = model_path, compress = "gz")
 }
