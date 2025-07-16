@@ -31,9 +31,9 @@ taxon_col <- Sys.getenv("TAXON_COL")  # column name for species
 
 # r_input_dir <- "~/phenology-urban/data/"
 # r_output_dir <- "~/phenology-urban/data/proc/urban/ols_model/bayes_species/"
-city <- "NY"
-phe_type <- "EOS"
-taxon_col <- "canonicalname"
+# city <- "NY"
+# phe_type <- "EOS"
+# taxon_col <- "canonicalname"
 
 #################### Read data ####################
 # Given the temporal variation required, we will use the WU data

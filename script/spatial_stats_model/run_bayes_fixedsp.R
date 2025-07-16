@@ -11,6 +11,7 @@ library(taxize)
 library(purrr)
 library(terra)
 library(rgbif)
+library(bridgesampling)
 
 # Read file paths from environment variables
 r_input_dir <- Sys.getenv("R_INPUT_DIR")
@@ -203,7 +204,10 @@ for (taxon in taxon_list) {
     beta = as.numeric(ols_model$coefficients),
     tau = 1, 
     sigma_year = 1,
-    year_effect = rep(0, nyears)
+    year_effect = rep(0, nyears),
+    mu = rep(180, N),
+    y_pred = rep(180, N),  # Initialize y_pred
+    z_year = rep(0, nyears) # Initialize year effects
   )
   
   ### Change based on semi-variogram fitting
@@ -214,10 +218,10 @@ for (taxon in taxon_list) {
   monitors <- c("beta", "year_effect")
   
   
-  ni <- 300000   # nb iterations 
+  ni <- 30000   # nb iterations 
   nt <- 10       # thinning interval
-  nb <- 250000    # nb iterations as burn-in 
-  nc <- 4         # nb chains
+  nb <- 25000    # nb iterations as burn-in 
+  nc <- 2         # nb chains
   
   
   #################### Run/Save the model ####################
@@ -243,19 +247,19 @@ for (taxon in taxon_list) {
   }) |> as.mcmc.list()
   converge <- gelman.diag(beta2_mcmc, confidence = 0.95, transform=FALSE, autoburnin=TRUE,
                           multivariate=TRUE)
-  
-  # library(ggmcmc)
-  # beta_label <- data.frame(Parameter = "beta[2]", Label = "AvgTemp")
-  # param_data <- ggs(modelMCMCrun$samples, par_labels = beta_label) %>%
-  #   filter(Parameter == "AvgTemp")
-  # beta_mean <- mean(param_data$value)
-  # param_data %>%
-  #   ggs_density() + # traceplot
-  #   theme_bw() +
-  #   ggtitle(paste("taxon:", taxon)) +
-  #   theme(plot.title = element_text(hjust = 0.5)) +
-  #   annotate("text", x = beta_mean, y = 0, label = paste0("Mean: ", round(beta_mean, 2)),vjust = -1.5, color = "red", size = 4)
-  # 
+
+  library(ggmcmc)
+  beta_label <- data.frame(Parameter = "beta[2]", Label = "AvgTemp")
+  param_data <- ggs(modelMCMCrun$samples, par_labels = beta_label) %>%
+    filter(Parameter == "AvgTemp")
+  beta_mean <- mean(param_data$value)
+  param_data %>%
+    ggs_density() + # traceplot
+    theme_bw() +
+    ggtitle(paste("taxon:", taxon)) +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    annotate("text", x = beta_mean, y = 0, label = paste0("Mean: ", round(beta_mean, 2)),vjust = -1.5, color = "red", size = 4)
+
   
   
   
@@ -265,39 +269,33 @@ for (taxon in taxon_list) {
     if (is.null(param_names)) stop("samples_row does not have named parameters")
     
     # unpack parameter values
-    # beta <- samples_row[grep("^beta\\[", param_names)]
-    # tau <- samples_row["tau"]
-    # sigma_year <- samples_row["sigma_year"]
-    # sigma_hex <- samples_row["sigma_hex"]
-    # 
-    # z_year <- samples_row[grep("^z_year\\[", param_names)]
-    # z_hex  <- samples_row[grep("^z_hex\\[",  param_names)]
-    # 
-    # # log-prior
-    # log_prior <- sum(
-    #   dnorm(beta[1], mean = 180, sd = 40, log = TRUE),
-    #   dnorm(beta[2], 0, 5, log = TRUE),
-    #   dnorm(beta[3], 0, 1, log = TRUE),
-    #   dnorm(beta[4], 0, 1, log = TRUE),
-    #   dexp(sigma_year, rate = 1, log = TRUE),
-    #   dexp(sigma_hex, rate = 1, log = TRUE),
-    #   dgamma(tau, shape = 0.001, rate = 0.001, log = TRUE),
-    #   sum(dnorm(z_year, 0, 1, log = TRUE)),
-    #   sum(dnorm(z_hex, 0, 1, log = TRUE))
-    # )
-    # 
-    # # log-likelihood
-    # X <- data$X
-    # y <- data$y
-    # year <- constants$year
-    # hex_id <- constants$hex_id
-    # N <- constants$N
-    # 
-    # year_effect <- z_year * sigma_year
-    # sp_effect   <- z_hex  * sigma_hex
-    # 
-    # mu <- as.vector(X %*% beta) + year_effect[year] + sp_effect[hex_id]
-    # log_lik <- sum(dnorm(y, mean = mu, sd = 1 / sqrt(tau), log = TRUE))
+    beta <- samples_row[grep("^beta\\[", param_names)]
+    tau <- samples_row["tau"]
+    sigma_year <- samples_row["sigma_year"]
+    z_year <- samples_row[grep("^z_year\\[", param_names)]
+
+    # log-prior
+    log_prior <- sum(
+      dnorm(beta[1], mean = 180, sd = 40, log = TRUE),
+      dnorm(beta[2], 0, 5, log = TRUE),
+      dnorm(beta[3], 0, 1, log = TRUE),
+      dnorm(beta[4], 0, 1, log = TRUE),
+      dnorm(beta[5:length(beta)], 0, 10, log = TRUE),
+      dexp(sigma_year, rate = 1, log = TRUE),
+      dgamma(tau, shape = 0.001, rate = 0.001, log = TRUE),
+      sum(dnorm(z_year, 0, 1, log = TRUE))
+    )
+
+    # log-likelihood
+    X <- data$X
+    y <- data$y
+    year <- constants$year
+    N <- constants$N
+
+    year_effect <- z_year * sigma_year
+
+    mu <- as.vector(X %*% beta) + year_effect[year]
+    log_lik <- sum(dnorm(y, mean = mu, sd = 1 / sqrt(tau), log = TRUE))
     
     return(log_lik + log_prior)
   }
