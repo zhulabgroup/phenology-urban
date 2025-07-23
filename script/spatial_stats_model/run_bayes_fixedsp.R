@@ -33,8 +33,8 @@ taxon_col <- Sys.getenv("TAXON_COL")  # column name for species
 # r_input_dir <- "~/phenology-urban/data/"
 # r_output_dir <- "~/phenology-urban/data/proc/urban/ols_model/bayes_fixed_sp/"
 # city <- "NY"
-# phe_type <- "SOS"
-# taxon_col <- "canonicalname"
+# phe_type <- "EOS"
+# taxon_col <- "genus"
 
 #################### Read data ####################
 
@@ -218,10 +218,10 @@ for (taxon in taxon_list) {
   monitors <- c("beta", "year_effect")
   
   
-  ni <- 30000   # nb iterations 
+  ni <- 300000   # nb iterations 
   nt <- 10       # thinning interval
-  nb <- 25000    # nb iterations as burn-in 
-  nc <- 2         # nb chains
+  nb <- 250000    # nb iterations as burn-in 
+  nc <- 4         # nb chains
   
   
   #################### Run/Save the model ####################

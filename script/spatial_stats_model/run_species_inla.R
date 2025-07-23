@@ -46,7 +46,7 @@ prepare_species_data <- function(phe_type, points_in_buffer, all_sites_temp, sra
     thres <- 0.5
     model_input <- points_in_buffer_joined %>%
       filter(direction == !!direction & thres == !!thres) %>%
-      select(id, taxa, lon, lat, year, doy, hex_id,ends_with("summer")) %>%
+      select(id, taxa, lon, lat, year, doy, hex_id, ends_with("summer")) %>%
       drop_na()
   } else if (phe_type == "GreenUp") {
     phe_metric <- "doy_diff"
@@ -61,7 +61,7 @@ prepare_species_data <- function(phe_type, points_in_buffer, all_sites_temp, sra
     model_input = points_in_buffer_joined %>%
       filter(direction == !!direction & thres == 0.2) %>%
       left_join(diff, by = c("year", "id")) %>%
-      select(id, taxa, lon, lat, year, doy_diff, hex_id,ends_with("spring")) %>%
+      select(id, taxa, lon, lat, year, doy_diff, hex_id, ends_with("spring")) %>%
       drop_na()
     
   } else {
@@ -117,17 +117,17 @@ run_inla_species = function(model_input_all, r_output_dir, phe_type, city){
   species_list <- unique(model_input_all$canonicalname)
   boundary <- switch(
     city,
-    "NY" = st_read("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp"),
-    "DT" = st_read("~/urban-cooling/data/raw/WU/DT/City_of_Detroit_Boundary/City_of_Detroit_Boundary.shp"),
-    "ST" = st_read("~/urban-cooling/data/raw/WU/ST/seattle_boundary/CityUGA.shp") %>%
+    "NY" = st_read("~/urban-cooling/data_gl/raw/WU/NY/Untitled/nybb_dissolved.shp"),
+    "DT" = st_read("~/urban-cooling/data_gl/raw/WU/DT/City_of_Detroit_Boundary/City_of_Detroit_Boundary.shp"),
+    "ST" = st_read("~/urban-cooling/data_gl/raw/WU/ST/seattle_boundary/CityUGA.shp") %>%
       filter(CITY_NM == "Seattle"),
-    "HT" = st_read("~/urban-cooling/data/raw/WU/HT/HGAC_City_Boundaries/HGAC_City_Boundaries.shp") %>%
+    "HT" = st_read("~/urban-cooling/data_gl/raw/WU/HT/HGAC_City_Boundaries/HGAC_City_Boundaries.shp") %>%
       filter(NAME == "Houston"),  # change to some distance
-    "TP" = st_read("~/urban-cooling/data/raw/WU/TP/Municipal_Boundary/Municipal_Boundary.shp") %>%
+    "TP" = st_read("~/urban-cooling/data_gl/raw/WU/TP/Municipal_Boundary/Municipal_Boundary.shp") %>%
       filter(NAME == "Tampa"),
-    "DV" = st_read("~/urban-cooling/data/raw/WU/DV/DRCOG_Municipalities/DRCOG_Municipalities.shp") %>%
+    "DV" = st_read("~/urban-cooling/data_gl/raw/WU/DV/DRCOG_Municipalities/DRCOG_Municipalities.shp") %>%
       filter(city == "Denver"),
-    "AT" = st_read("~/urban-cooling/data/raw/WU/AT/TxDOT_City_Boundaries/Cities.shp") %>%
+    "AT" = st_read("~/urban-cooling/data_gl/raw/WU/AT/TxDOT_City_Boundaries/Cities.shp") %>%
       filter(CITY_NM == "Austin"),
     stop("Invalid city abbreviation.")
   )

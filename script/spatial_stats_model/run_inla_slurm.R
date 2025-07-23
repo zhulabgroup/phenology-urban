@@ -2,13 +2,8 @@
 
 library(zhulabtools)
 
-# Manage packages: check, install, and load specific packages
-check_install_packages(c("rgbif", "dplyr","lubridate", "ggplot2", "sf","sp", "readr", "purrr", "stringr","glue", "tidyr", "broom","lme4", "broom.mixed", "coda", "patchwork", "terra", "stats", "viridis","INLA"))
-if (!require(plotbiomes)) {
-  devtools::install_github("valentinitnelav/plotbiomes")
-}
-load_packages(c("rgbif", "dplyr","lubridate", "ggplot2", "sf","sp", "readr", "purrr", "stringr","glue", "tidyr", "broom","lme4", "broom.mixed", "coda", "patchwork", "terra", "stats", "viridis","INLA"))
-
+load_packages(c("rgbif", "dplyr","lubridate", "ggplot2", "sf","sp", "readr", "purrr", "stringr","glue", "tidyr", "broom","lme4", "broom.mixed", "coda", "patchwork", "terra", "stats", "viridis"))
+library(INLA)
 ################################## parameter loading ##################################
 
 # Read file paths from environment variables
@@ -28,7 +23,7 @@ taxon_col <- Sys.getenv("TAXON_COL")  # column name for species
 
 points_in_buffer <- read_csv(paste0("~/phenology-urban/data/proc/urban/",city,"/tree_WU_500_buffer_PS.csv"), show_col_types = FALSE)
 
-all_sites_temp <- readRDS(paste0("~/urban-cooling/data/raw/WU/",city,"/",city,"_wu.rds")) %>%
+all_sites_temp <- readRDS(paste0("~/urban-cooling/data_gl/raw/WU/",city,"/",city,"_wu.rds")) %>%
   dplyr::select(c(Date, HighTemp, AvgTemp, LowTemp, Sum_mm, name)) %>%
   mutate(season = case_when(
     month(Date) %in% 3:5 ~ "spring",
