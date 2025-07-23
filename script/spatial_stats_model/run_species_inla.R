@@ -38,7 +38,7 @@ prepare_species_data <- function(phe_type, points_in_buffer, all_sites_temp, sra
     thres <- 0.5
     model_input <- points_in_buffer_joined %>%
       filter(direction == !!direction & thres == !!thres) %>%
-      select(id, taxa, lon, lat, year, doy, hex_id, ends_with("winter")) %>%
+      select(id, taxa, lon, lat, year, doy,  ends_with("winter")) %>%
       drop_na()
   } else if (phe_type == "EOS") {
     phe_metric <- "doy"
@@ -76,7 +76,7 @@ prepare_species_data <- function(phe_type, points_in_buffer, all_sites_temp, sra
     model_input = points_in_buffer_joined %>%
       filter(direction == !!direction & thres == 0.2) %>%
       left_join(diff, by = c("year", "id")) %>%
-      select(id, taxa, lon, lat, year, doy_diff, hex_id, ends_with("fall")) %>%
+      select(id, taxa, lon, lat, year, doy_diff,  ends_with("fall")) %>%
       drop_na()
   }
   
@@ -271,6 +271,7 @@ plot_coef_sp_city <- function(r_output_dir, phe_type){
   plots_mean <- list()
   plots_sd <- list()
   plots_semi <- list()
+  assess <- data.frame()
   
   # for one genus
   for (file in files) {
@@ -302,7 +303,17 @@ plot_coef_sp_city <- function(r_output_dir, phe_type){
     
     coef_summary <- coef_summary %>%
       rbind(model_data$fix_effect)
+    summary_res <- summary(model_data$res)
     
+    assess <- assess |>
+      rbind(data.frame(
+        mlik_type = rownames(summary_res$mlik),
+        mlik = as.numeric(summary_res$mlik[, 1]),
+        Parameter = genus,
+        phe_type = phe_type,
+        waic = summary_res$waic$waic,
+        row.names = NULL
+      ))
     
     proj <- inla.mesh.projector(model_data$mesh,dims = c(300, 300))
     mean_s <- inla.mesh.project(proj, model_data$res$summary.random$s$mean)
@@ -387,7 +398,8 @@ plot_coef_sp_city <- function(r_output_dir, phe_type){
     combined_plot_semi = combined_plot_semi,
     combined_plot_mean = combined_plot_mean,
     combined_plot_sd = combined_plot_sd,
-    coef_summary_plot = p_coef
+    coef_summary_plot = p_coef,
+    assess = assess
   ))
 }
 
