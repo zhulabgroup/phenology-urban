@@ -238,6 +238,7 @@ for (taxon in taxon_list) {
   conf$addSampler(target = paste0("beta[", 1:4, "]"), type = "RW_block")
   conf$removeSampler("tau")
   conf$addSampler(target = "tau", type = "slice")
+  conf$addMonitors(monitors)
   # conf$addMonitors2("y_pred")  # Add y_pred to monitors
   
   mymcmc <- buildMCMC(conf)

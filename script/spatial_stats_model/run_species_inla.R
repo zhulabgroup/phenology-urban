@@ -38,7 +38,7 @@ prepare_species_data <- function(phe_type, points_in_buffer, all_sites_temp, sra
     thres <- 0.5
     model_input <- points_in_buffer_joined %>%
       filter(direction == !!direction & thres == !!thres) %>%
-      select(id, taxa, lon, lat, year, doy,  ends_with("winter")) %>%
+      select(id, taxa, lon, lat, year, doy, hex_id, ends_with("winter")) %>%
       drop_na()
   } else if (phe_type == "EOS") {
     phe_metric <- "doy"
@@ -76,7 +76,7 @@ prepare_species_data <- function(phe_type, points_in_buffer, all_sites_temp, sra
     model_input = points_in_buffer_joined %>%
       filter(direction == !!direction & thres == 0.2) %>%
       left_join(diff, by = c("year", "id")) %>%
-      select(id, taxa, lon, lat, year, doy_diff,  ends_with("fall")) %>%
+      select(id, taxa, lon, lat, year, doy_diff, hex_id, ends_with("fall")) %>%
       drop_na()
   }
   

@@ -42,7 +42,7 @@ prepare_genus_data <- function(phe_type, points_in_buffer, all_sites_temp, srad_
     thres <- 0.5
     model_input <- points_in_buffer_joined %>%
       filter(direction == !!direction & thres == !!thres) %>%
-      select(id, taxa,genus, lon, lat, year, doy, hex_id, ends_with("winter")) %>%
+      select(id, taxa,genus, lon, lat, year, doy, hex_id,  ends_with("winter")) %>%
       drop_na()
   } else if (phe_type == "EOS") {
     phe_metric <- "doy"
@@ -50,7 +50,7 @@ prepare_genus_data <- function(phe_type, points_in_buffer, all_sites_temp, srad_
     thres <- 0.5
     model_input <- points_in_buffer_joined %>%
       filter(direction == !!direction & thres == !!thres) %>%
-      select(id, taxa, genus, lon, lat, year, doy, hex_id, ends_with("summer")) %>%
+      select(id, taxa, genus, lon, lat, year, doy, hex_id,  ends_with("summer")) %>%
       drop_na()
   } else if (phe_type == "GreenUp") {
     phe_metric <- "doy_diff"
@@ -330,6 +330,7 @@ plot_coef_genus_city <- function(r_output_dir, phe_type){
   plots_mean <- list()
   plots_sd <- list()
   plots_semi <- list()
+  assess <- data.frame()
   
   # for one genus
   for (file in files) {
@@ -361,6 +362,18 @@ plot_coef_genus_city <- function(r_output_dir, phe_type){
     
     coef_summary <- coef_summary %>%
       rbind(model_data$fix_effect)
+    
+    summary_res <- summary(model_data$res)
+    
+    assess <- assess |>
+      rbind(data.frame(
+        mlik_type = rownames(summary_res$mlik),
+        mlik = as.numeric(summary_res$mlik[, 1]),
+        Parameter = genus,
+        phe_type = phe_type,
+        waic = summary_res$waic$waic,
+        row.names = NULL
+      ))
     
     
     proj <- inla.mesh.projector(model_data$mesh,dims = c(300, 300))
@@ -444,7 +457,8 @@ plot_coef_genus_city <- function(r_output_dir, phe_type){
     combined_plot_semi = combined_plot_semi,
     combined_plot_mean = combined_plot_mean,
     combined_plot_sd = combined_plot_sd,
-    coef_summary_plot = p_coef
+    coef_summary_plot = p_coef,
+    assess = assess
   ))
 }
 

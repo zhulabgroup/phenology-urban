@@ -14,10 +14,10 @@ phe_type <- Sys.getenv("PHE_TYPE")
 taxon_col <- Sys.getenv("TAXON_COL")  # column name for species
 
 # r_input_dir <- "~/phenology-urban/data/"
-# r_output_dir <- "~/phenology-urban/"
+# r_output_dir <- "~/phenology-urban/temp/"
 # city <- "NY"
 # phe_type <- "EOS"
-# taxon_col <- "canonicalname"  # column name for species
+# taxon_col <- "genus"  # column name for species
 
 ################################## data input ##################################
 
