@@ -34,7 +34,7 @@ taxon_col <- Sys.getenv("TAXON_COL")  # column name for species
 # r_output_dir <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/spbayes/"
 # city <- "NY"
 # phe_type <- "EOS"
-# taxon_col <- "genus"
+# taxon_col <- "canonicalname"
 
 #################### Read data ####################
 
@@ -139,16 +139,6 @@ for (taxon in taxon_list) {
   prcp_col <- names(tavg_phe)[grepl("^prcp", names(tavg_phe))]
   srad_col <- names(tavg_phe)[grepl("^srad", names(tavg_phe))]
   
-  # OLS_formula <- as.formula(paste0(phe_metric, " ~ ", temp_col, "+", prcp_col, "+", srad_col , "+ (1|year)"))
-  # random_OLS <- lmer(OLS_formula, data = tavg_phe)
-  # tavg_phe$residual_random <- tavg_phe[[phe_metric]] - fitted(random_OLS)
-  # coordinates(tavg_phe) <- ~ lon + lat
-  # vgm.emt <- variogram(residual_random ~ 1, tavg_phe, cloud = FALSE)
-  # vgm.las.init <- vgm(model = c("Exp", "Sph", "Gau", "Mat"))
-  # vgm_exn_fit <- fit.variogram(vgm.emt, vgm.las.init)
-  # cov_type <- as.character(vgm_exn_fit$model)
-  cov_type = "Gau"
-  
   #################### Run the spatial model ####################
   coords <- st_coordinates(tavg_phe)
   dist_matrix <- as.matrix(dist(coords))
@@ -169,53 +159,11 @@ for (taxon in taxon_list) {
   tavg_phe_df <- as.data.frame(tavg_phe)
   sp_formula <- as.formula(paste0(phe_metric, " ~ ", temp_col, "+", prcp_col, "+", srad_col))
   ols_model <- lm(sp_formula, data = tavg_phe_df) 
-  # Define covariance functions
-  # 
-  # spherical_covariance <- nimbleFunction(
-  #   run = function(d = double(2), range = double(0), sigma.sq = double(0)) {
-  #     returnType(double(2))  # Return type is a matrix
-  #     nrow_d <- dim(d)[1]
-  #     ncol_d <- dim(d)[2]
-  #     result <- matrix(0, nrow_d, ncol_d)  # Initialize result matrix
-  #     for (i in 1:nrow_d) {
-  #       for (j in 1:ncol_d) {
-  #         if (d[i, j] <= range) {
-  #           result[i, j] = sigma.sq * (1 - (3 * d[i, j] / (2 * range)) + (d[i, j]^3 / (2 * range^3)))
-  #         } else {
-  #           result[i, j] = 0.0
-  #         }
-  #       }
-  #     }
-  #     return(result)
-  #   }
-  # )
-  # 
-  # matern_covariance <- nimbleFunction(
-  #   run = function(d = double(2), range = double(0), sigma.sq = double(0), nu = double(0)) {
-  #     returnType(double(2))
-  #     nrow_d <- dim(d)[1]
-  #     ncol_d <- dim(d)[2]
-  #     result <- matrix(0, nrow_d, ncol_d)  # Initialize result matrix
-  #     for (i in 1:nrow_d) {
-  #       for (j in 1:ncol_d) {
-  #           if (d[i, j] == 0) {
-  #             result[i, j] = 0.0
-  #         } else {
-  #             part <- (2^(1 - nu)) / gamma(nu)  * (sqrt(2 * nu) * d[i, j] / range)^nu
-  #             result[i,j] = sigma.sq * part * besselK(d[i, j] / range, nu)
-  #         }
-  #       }
-  #     }  
-  #     return(result)
-  #   }
-  # )
-  
   # Define Nimble model code
   model_code <- nimbleCode({
     for (i in 1:N) {
       y[i] ~ dnorm(mu[i], tau)
       mu[i] <- inprod(X[i, 1:P], beta[]) + spatial_effect[i] + year_effect[year[i]]
-      y_pred[i] ~ dnorm(mu[i], tau)
     }
     for (q in 1:nyears) {
       z_year[q] ~ dnorm(0, 1)                     
@@ -227,59 +175,24 @@ for (taxon in taxon_list) {
     beta[3] ~ dnorm(0, sd = 1) 
     beta[4] ~ dnorm(0, sd = 1) 
     spatial_effect[1:N] ~ dmnorm(Mu[1:N], cov = cov_matrix[1:N, 1:N])
+    # spatial_effect[1:N] ~ dmnorm_cholesky(Mu[1:N], chol = chol_cov_matrix[1:N, 1:N])
     
     # Choose the covariance function based on variogram fitting
     if (N_knots <= N_unique){
-      if (cov_type == "Mat") {
-        knots_cov_matrix[1:N_knots, 1:N_knots] <- matern_covariance(knots_dist_matrix[1:N_knots, 1:N_knots], range, sigma.sq, nu) + I[1:N_knots, 1:N_knots]
-        data_knots_cov_matrix[1:N, 1:N_knots] <- matern_covariance(data_knots_dist_matrix[1:N, 1:N_knots], range, sigma.sq, nu)
-      } else if (cov_type == "Gau") {
-        knots_cov_matrix[1:N_knots, 1:N_knots] <- sigma.sq * exp(-phi * knots_dist_matrix[1:N_knots, 1:N_knots]^2) + I[1:N_knots, 1:N_knots]
-        data_knots_cov_matrix[1:N, 1:N_knots] <- sigma.sq * exp(-phi * data_knots_dist_matrix[1:N, 1:N_knots]^2)
-      } else if (cov_type == "Exp") {
-        knots_cov_matrix[1:N_knots, 1:N_knots] <- sigma.sq * exp(-phi * knots_dist_matrix[1:N_knots, 1:N_knots]) + I[1:N_knots, 1:N_knots]
-        data_knots_cov_matrix[1:N, 1:N_knots] <- sigma.sq * exp(-phi * data_knots_dist_matrix[1:N, 1:N_knots])
-      # } else if (cov_type == "Sph") {
-      #   for (m in 1:N_knots) {
-      #     for (n in 1:N_knots) {
-      #       knots_cov_matrix[m, n] <- spherical_covariance(knots_dist_matrix[m, n], range, sigma.sq)
-      #     }
-      #   }
-      #   for (i in 1:N) {
-      #     for (j in 1:N_knots) {
-      #       data_knots_cov_matrix[i, j] <- spherical_covariance(data_knots_dist_matrix[i, j], range, sigma.sq)
-      #     }
-      #   }
-      #   cov_matrix_ori[1:N, 1:N] <- data_knots_cov_matrix[1:N, 1:N_knots] %*% 
-      #     inverse(knots_cov_matrix[1:N_knots, 1:N_knots]) %*% 
-      #     t(data_knots_cov_matrix[1:N, 1:N_knots])
-      #   cov_matrix[1:N, 1:N] <- cov_matrix_ori[1:N, 1:N] + I[1:N, 1:N]
-      # }
-      } else if (cov_type == "Sph") {
-        knots_cov_matrix[1:N_knots, 1:N_knots] <- spherical_covariance(knots_dist_matrix[1:N_knots, 1:N_knots], range, sigma.sq) + I[1:N_knots, 1:N_knots]
-        data_knots_cov_matrix[1:N, 1:N_knots] <- spherical_covariance(data_knots_dist_matrix[1:N, 1:N_knots], range, sigma.sq)
-      }
+      knots_cov_matrix[1:N_knots, 1:N_knots] <- sigma.sq * exp(-phi * knots_dist_matrix[1:N_knots, 1:N_knots]^2) + I[1:N_knots, 1:N_knots]
+      data_knots_cov_matrix[1:N, 1:N_knots] <- sigma.sq * exp(-phi * data_knots_dist_matrix[1:N, 1:N_knots]^2)
       knots_cov_chol_inv[1:N_knots, 1:N_knots] <- inverse(chol(knots_cov_matrix[1:N_knots, 1:N_knots]))
       cov_matrix[1:N, 1:N] <- data_knots_cov_matrix[1:N, 1:N_knots] %*% 
         knots_cov_chol_inv[1:N_knots, 1:N_knots] %*% t(knots_cov_chol_inv[1:N_knots, 1:N_knots]) %*% 
         t(data_knots_cov_matrix[1:N, 1:N_knots]) + I[1:N, 1:N]
     } else {
-      if (cov_type == "Mat") {
-        cov_matrix[1:N, 1:N] <-  matern_covariance(dist_matrix[1:N, 1:N], range, sigma.sq, nu) + I[1:N, 1:N]
-      } else if (cov_type == "Gau") {
-        cov_matrix[1:N, 1:N] <- sigma.sq * exp(-phi * dist_matrix[1:N, 1:N]^2) + I[1:N, 1:N]
-      } else if (cov_type == "Exp") {
-        cov_matrix[1:N, 1:N] <- sigma.sq * exp(-phi * dist_matrix[1:N, 1:N]) + I[1:N, 1:N]
-      } else if (cov_type == "Sph") {
-        cov_matrix[1:N, 1:N] <- spherical_covariance(dist_matrix[1:N, 1:N], range, sigma.sq) + I[1:N, 1:N]
-      }
+      cov_matrix[1:N, 1:N] <- sigma.sq * exp(-phi * dist_matrix[1:N, 1:N]^2) + I[1:N, 1:N]
     }
       
     tau ~ dexp(1)
     sigma.sq ~ dexp(1)
     phi ~ dunif(5 / 1, 5 / 0.1)
     range ~ dunif(0.01, 1)
-    nu ~ dunif(0.5, 5)
   })
   
   # Data inputs
@@ -298,23 +211,15 @@ for (taxon in taxon_list) {
     
     sigma.sq = 10, 
     range = 0.2,
-    phi = 10,
-    nu = 1.5
+    phi = 10
   )
   
   ### Change based on semi-variogram fitting
   constants <- list(N = N, N_knots = N_knots, N_unique = N_unique, P = ncol(X), Mu = rep(0, N), nyears = nyears, 
                     dist_matrix = dist_matrix, knots_dist_matrix = knots_dist_matrix, 
                     data_knots_dist_matrix = data_knots_dist_matrix,
-                    year = year_index, I = diag(1e-6,N), cov_type = cov_type)  # Add 'year' to constants
-  monitors <- switch(
-    cov_type,
-    "Mat" = c("beta", "range", "sigma.sq", "nu", "spatial_effect", "year_effect"),
-    "Gau" = c("beta", "tau", "sigma.sq", "phi", "spatial_effect", "year_effect"),
-    "Exp" = c("beta", "tau", "sigma.sq", "phi", "spatial_effect", "year_effect"),
-    "Sph" = c("beta", "range", "sigma.sq", "spatial_effect", "year_effect"),
-    stop("Unknown cov_type!")
-  )
+                    year = year_index, I = diag(1e-6,N))  # Add 'year' to constants
+  monitors <- c("beta", "tau", "sigma.sq", "phi", "spatial_effect", "year_effect")
   
   ni <- 300000   # nb iterations 
   nt <- 10       # thinning interval
@@ -330,12 +235,10 @@ for (taxon in taxon_list) {
   conf <- configureMCMC(my_model, enableWAIC = TRUE)
   conf$removeSampler(paste0("beta[", 1:4, "]"))
   conf$addSampler(target = paste0("beta[", 1:4, "]"), type = "RW_block")
-  conf$removeSampler(c("sigma.sq", "range", "tau", "nu"))
-  conf$addSampler("sigma.sq", type = "slice")
-  conf$addSampler("range", type = "slice")
-  conf$addSampler("tau", type = "slice")
-  conf$addSampler("nu", type = "slice")
-  
+  for (p in c("sigma.sq", "range", "tau", "phi")) {
+    conf$removeSampler(p)
+    conf$addSampler(target = p, type = "slice")
+  }
   conf$addMonitors(monitors)
   
   mcmc <- buildMCMC(conf)
