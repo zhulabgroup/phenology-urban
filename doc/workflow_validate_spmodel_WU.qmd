@@ -65,7 +65,7 @@ hex_grid <- st_sf(geometry = hex_grid_geom) |>
     hex_lat = st_coordinates(centroid)[, 2]
   )
 # Assign each point to a hexagon
-points_in_buffer <- st_join(points_sf, hex_grid, join = st_within) %>%
+points_in_buffer <- st_join(points_sf, hex_grid, join = st_within) |>
   mutate(hex_id = as.factor(hex_id)) |>
   filter(thres == 0.5 & year == 2020 & taxa == "Acer platanoides") |>
   st_transform(crs = 4326)
@@ -73,7 +73,7 @@ points_in_buffer <- st_join(points_sf, hex_grid, join = st_within) %>%
 boundary <- read_sf("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp", quiet = T) |>
   st_transform(crs = 4326)
 
-wu_location <- read_csv(paste0("~/urban-cooling/data/raw/WU/", city, "/location.csv"), show_col_types = FALSE) %>%
+wu_location <- read_csv(paste0("~/urban-cooling/data/raw/WU/", city, "/location.csv"), show_col_types = FALSE) |>
   st_as_sf(coords = c("Lon", "Lat"), crs = 4326)
   
 tempprep = ggplot() +
@@ -194,7 +194,6 @@ To explore how spatial structure influences model performance and inference, I c
 #| include: false
 # Helper to process files by pattern
 
-
 generate_mcmc_plot <- function(dir_path, coef, fixed_sp){
   process_files <- function(file_list, phe_type_label) {
     param_list <- map(file_list, function(file) {
@@ -203,25 +202,27 @@ generate_mcmc_plot <- function(dir_path, coef, fixed_sp){
       if (fixed_sp) {
         param_data <- ggs(model_data$samples) |>
           filter(str_starts(Parameter, fixed("beta["))) |>
-          arrange(desc(Iteration)) |>
-          slice_head(n = 10000) |>
           mutate(beta_index = as.integer(str_extract(Parameter, "(?<=beta\\[)\\d+"))) |>
           filter(beta_index >= 5)|>
           rename(ParameterOriginal = Parameter) |>
-          mutate(Parameter = genus)
+          mutate(Parameter = genus) |>
+          mutate(waic = model_data$WAIC$WAIC,
+                 converge = model_data$converge,
+                 milk = model_data$mean_logml)
       } else {
         param_data <- ggs(model_data$samples) |>
           filter(str_starts(Parameter, fixed(coef))) |>
-          arrange(desc(Iteration)) |>
-          slice_head(n = 10000) |>
           rename(ParameterOriginal = Parameter) |>
-          mutate(Parameter = genus)
+          mutate(Parameter = genus)|>
+          mutate(waic = model_data$WAIC$WAIC,
+                 converge = model_data$converge,
+                 milk = model_data$mean_logml)
       }
 
       return(param_data)
     })
-    combined_param_data <- bind_rows(param_list) %>%
-      filter(Parameter != "Alnus") %>%
+    combined_param_data <- bind_rows(param_list) |>
+      filter(Parameter != "Alnus") |>
       mutate(phe_type = phe_type_label)
     return(combined_param_data)
 }
@@ -237,20 +238,24 @@ generate_mcmc_plot <- function(dir_path, coef, fixed_sp){
   combined_param_data$phe_type <- factor(combined_param_data$phe_type, levels = c("SOS", "EOS"))
 
   # Summarize
-  summary_data <- combined_param_data %>%
-    group_by(Parameter, phe_type) %>%
+  summary_data <- combined_param_data |>
+    group_by(Parameter, phe_type) |>
     summarise(
       median_value = median(value, na.rm = TRUE),
       lower_2_5 = quantile(value, 0.025, na.rm = TRUE),
       upper_97_5 = quantile(value, 0.975, na.rm = TRUE),
+      waic = first(waic),
+      converge = first(converge),
+      milk = first(milk),
       .groups = "drop"
-    ) %>%
+    ) |>
     mutate(Sig = ifelse(lower_2_5 * upper_97_5 > 0, "*", ""),
            SigAlpha = ifelse(Sig == "*", 1, 0.2)) 
 
   param_levels <- rev(unique(summary_data$Parameter))
 
   # Plot
+  
   p1 <- ggplot(summary_data, aes(x = factor(as.character(Parameter), levels = param_levels), y = median_value)) +
     geom_point(aes(alpha = SigAlpha), size=3) +
     geom_errorbar(aes(ymin = lower_2_5, ymax = upper_97_5, alpha = SigAlpha), width = 0.4) +
@@ -310,7 +315,8 @@ generate_mcmc_plot <- function(dir_path, coef, fixed_sp){
         y = "Density"
       ) +
       facet_grid(Parameter ~ phe_type, scales = "free_y")+
-      geom_text(data = summary_data, aes(x = median_value-3, y = 0, label = round(median_value, 3)), vjust = -1, size = 3) +
+      # geom_text(data = summary_data, aes(x = median_value-3, y = 0, label = round(median_value, 3)), vjust = -1, size = 3) +
+      geom_text(data = summary_data, aes(x = median_value+3, y = 0, label = paste0("gelman.diag: ", round(converge, 4))), vjust = -1, color = "red", size = 3) +
       theme_minimal(base_size = 12) +
       theme(
         axis.text.y = element_blank(),
@@ -318,7 +324,7 @@ generate_mcmc_plot <- function(dir_path, coef, fixed_sp){
         panel.spacing = unit(0.4, "lines")
       )
   }
-  p <- list(coef_summary_plot = p1, coef_density_plot = p2)
+  p <- list(coef_summary_plot = p1, coef_density_plot = p2, summary_data = summary_data)
   return(p)
 }
 
@@ -341,13 +347,15 @@ $$w(\mathbf{s}_i)=0$$
 #| warning: false
 #| eval: true
 
-g_dir_path <- "~/phenology-urban/data/proc/urban/ols_model/bayes_genus/NY/"
-s_dir_path <- "~/phenology-urban/data/proc/urban/ols_model/bayes_species/NY/"
+g_dir_path <- "~/phenology-urban/temp/data_local/bayes_nosp/NY/genus/"
+s_dir_path <- "~/phenology-urban/temp/data_local/bayes_nosp/NY/species/"
 
 g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "beta[2]", fixed_sp = F)
 s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
 
 (g_plot_obj$coef_summary_plot + ggtitle("Genus")) / (s_plot_obj$coef_summary_plot +  ggtitle("Species"))
+
+no_sp <- rbind(g_plot_obj$summary_data, s_plot_obj$summary_data)
 ```
 
 When examining the posterior distributions in density form, the SOS coefficients appear more concentrated and consistent across taxa, indicating a clear and strong temperature signal. In contrast, the EOS responses are more dispersed, suggesting that the effect of temperature on EOS is less consistent and possibly weaker across species.
@@ -370,7 +378,7 @@ When examining the posterior distributions in density form, the SOS coefficients
 
 $$w(\mathbf{s}_i) \sim \mathcal{GP}(0, \Sigma)$$
 
-#### MCMC
+#### MCMC (not yet tuned)
 
 Bayesian inference was performed using the `NIMBLE` package, which implements traditional MCMC algorithms to sample from the posterior distributions of model parameters.
 
@@ -385,13 +393,15 @@ The posterior distributions of the regression coefficients for average temperatu
 #| warning: false
 #| eval: true
 
-g_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/spbayes/NY/genus"
-s_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/spbayes/NY/species/"
+g_dir_path <- "~/phenology-urban/temp/data_local/spbayes/NY/genus"
+s_dir_path <- "~/phenology-urban/temp/data_local/spbayes/NY/species/"
 
 g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "beta[2]", fixed_sp = F)
 s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
 
 (g_plot_obj$coef_summary_plot + ggtitle("Genus")) / (s_plot_obj$coef_summary_plot +  ggtitle("Species"))
+
+mcmc_sp <- rbind(g_plot_obj$summary_data, s_plot_obj$summary_data)
 ```
 
 ```{r}
@@ -427,27 +437,33 @@ It is important to note that the density form of the posterior distribution is n
 #| warning: false
 #| eval: true
 
-r_output_dir <- paste0("~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/inla_year_random_genus_check/", city, "/")
+r_output_dir <- paste0("~/phenology-urban/temp/data_local/inla_random_year/", city, "/genus/")
 plots_coef <- list()
+assess_genus <- data.frame()
 
 for (phe_type in phe_types) {
   p1 <- plot_coef_genus_city(r_output_dir, phe_type)
   plots_coef[[phe_type]] <- p1$coef_summary_plot
+  assess_genus <- rbind(assess_genus, p1$assess)
 }
 
 ny_genus = wrap_plots(plots_coef, ncol = 2)
 
-r_output_dir <- paste0("~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/inla_year_random_species_check/", city, "/")
+r_output_dir <- paste0("~/phenology-urban/temp/data_local/inla_random_year/", city, "/species/")
 plots_coef <- list()
+assess_species <- data.frame()
 
 for (phe_type in phe_types) {
   p1 <- plot_coef_sp_city(r_output_dir, phe_type)
   plots_coef[[phe_type]] <- p1$coef_summary_plot
+  assess_species <- rbind(assess_species, p1$assess)
 }
 
 ny_sp = wrap_plots(plots_coef, ncol = 2)
 
 ny_genus/ny_sp
+
+inla_sp <- rbind(assess_genus, assess_species)
 ```
 
 The fitted Matern correlation functions for most taxonomic groups exhibit two extreme patterns. For some groups, the correlation decays very rapidly with distance, effectively capturing only highly localized spatial structure and individual-level variance (potential overfitting) and failing to reflect broader spatial autocorrelation. In contrast, for other species, the correlation remains high across long distances, indicating a weak or overly diffuse spatial structure. This may reflect insufficient spatial signal (potential underfitting).
@@ -461,10 +477,10 @@ The fitted Matern correlation functions for most taxonomic groups exhibit two ex
 #| eval: true
 #| fig-cap: "The fitted Matern correlation functions and spatial fields for each genus in New York city, generated via INLA."
 
-r_output_dir <- paste0("~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/inla_year_random_genus_check/", city, "/")
+r_output_dir <- paste0("~/phenology-urban/temp/data_local/inla_random_year/", city, "/")
 p1 <- plot_coef_genus_city(r_output_dir, phe_type = "EOS")
 
-r_output_dir <- paste0("~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/inla_year_random_species_check/", city, "/")
+r_output_dir <- paste0("~/phenology-urban/temp/data_local/inla_random_year/", city, "/species/")
 p2 <- plot_coef_sp_city(r_output_dir, phe_type = "EOS")
 p1$combined_plot_semi/p1$combined_plot_mean
 ```
@@ -518,13 +534,15 @@ ggplot() +
 #| warning: false
 #| eval: true
 
-g_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp/NY/genus/"
-s_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp/NY/species/"
+g_dir_path <- "~/phenology-urban/temp/data_local/random_sp/NY/genus/"
+s_dir_path <- "~/phenology-urban/temp/data_local/random_sp/NY/species/"
 
 g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "beta[2]", fixed_sp = F)
 s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
 
 (g_plot_obj$coef_summary_plot + ggtitle("Genus")) / (s_plot_obj$coef_summary_plot +  ggtitle("Species"))
+
+group_random_sp <- rbind(g_plot_obj$summary_data, s_plot_obj$summary_data)
 ```
 
 ```{r}
@@ -552,8 +570,8 @@ Take `EOS` for *Betula papyrifera* as an example, the flat spatial random effect
 #| warning: false
 #| eval: true
 
-g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "sp_effect", fixed_sp = F)
-s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "sp_effect", fixed_sp = F)
+g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "z_hex", fixed_sp = F)
+s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "z_hex", fixed_sp = F)
 
 (g_plot_obj$coef_density_plot + ggtitle("Genus")) / (s_plot_obj$coef_density_plot +  ggtitle("Species"))
 ```
@@ -575,13 +593,15 @@ The limitations of Model 4 are also evident in [@fig-ny-coef5]. For SOS, where t
 #| warning: false
 #| eval: true
 
-g_dir_path <- "~/phenology-urban/data/proc/urban/ols_model/bayes_fixed_sp/NY/genus"
-s_dir_path <- "~/phenology-urban/data/proc/urban/ols_model/bayes_fixed_sp/NY/species"
+g_dir_path <- "~/phenology-urban/temp/data_local/bayes_fixed_sp/NY/genus"
+s_dir_path <- "~/phenology-urban/temp/data_local/bayes_fixed_sp/NY/species"
 
 g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "beta[2]", fixed_sp = F)
 s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
 
 (g_plot_obj$coef_summary_plot + ggtitle("Genus")) / (s_plot_obj$coef_summary_plot +  ggtitle("Species"))
+
+group_fixed_sp <- rbind(g_plot_obj$summary_data, s_plot_obj$summary_data)
 ```
 
 
@@ -596,6 +616,27 @@ s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
 
 (g_plot_obj$coef_density_plot + ggtitle("Genus")) / (s_plot_obj$coef_density_plot +  ggtitle("Species"))
 ```
+
+# Compare and validation and selection
+
+selection based on estimation inference (i.e., inference that seeks to improve our understanding of model parameters rather than predictions [Bondell and Reich 2012
+
+```{r}
+group_random_sp <- group_random_sp |>
+  mutate(model = "Random spatial effect without covariance")
+group_fixed_sp <- group_fixed_sp |>
+  mutate(model = "Fixed spatial effect without covariance")
+no_sp <- no_sp |>
+  mutate(model = "No spatial effect") |>
+  select(Parameter, phe_type, waic, mlik)
+inla_sp <- inla_sp |>
+  mutate(model = "Spatial random effect with covariance (INLA)")|>
+  filter(mlik_type == "log marginal-likelihood (integration)") |>
+  select(-mlik_type)
+mcmc_sp <- mcmc_sp |>
+  mutate(model = "Spatial random effect with covariance (MCMC)")
+```
+
 
 # Conclusion
 
@@ -743,8 +784,8 @@ In this analysis, I compared four different spatial modeling approaches for urba
 #| warning: false
 #| eval: true
 
-g_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp_humid/NY/genus/"
-s_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp_humid/NY/species/"
+g_dir_path <- "~/phenology-urban/temp/data_local/random_sp_humid/NY/genus/"
+s_dir_path <- "~/phenology-urban/temp/data_local/random_sp_humid/NY/species/"
 
 g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "beta[2]", fixed_sp = F)
 s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)

@@ -1,0 +1,109 @@
+---
+title: "Validation of using spatial statistic model"
+author: "Jiali Zhu"
+date: "today"
+editor_options:
+  chunk_output_type: console
+---
+
+```{r}
+#| label: load-packages
+#| include: false
+#| warning: false
+
+# Install and load 'zhulabtools' package
+library(zhulabtools)
+
+# Manage packages: check, install, and load specific packages
+check_install_packages(c("dplyr","lubridate", "ggplot2", "sf","sp", "readr", "purrr", "stringr","glue", "tidyr", "broom","lme4", "broom.mixed", "ppcor", "spdep", "spatialreg", "lmtest","car", "spBayes", "coda", "patchwork", "performance", "terra", "ggpmisc", "gstat", "ggmcmc", "taxize", "stats", "viridis"))
+if (!require(plotbiomes)) {
+  devtools::install_github("valentinitnelav/plotbiomes")
+}
+load_packages(c("dplyr","lubridate", "ggplot2", "sf","sp", "readr", "purrr", "stringr","glue", "tidyr", "broom","lme4", "broom.mixed", "ppcor", "spdep", "spatialreg", "lmtest","car", "spBayes", "coda", "patchwork", "performance", "terra", "ggpmisc", "gstat", "ggmcmc", "taxize", "stats", "viridis","INLA"))
+
+select <- dplyr::select # Avoid masking by base R's select function
+city <- "NY" # Set the city for analysis
+phe_types <- c("SOS", "EOS")
+```
+
+
+## Treat the spatial random effect as a random effect without covariance
+
+$$w(\mathbf{s}_i) = u_{g_i},\ u_{g_i} \sim \mathcal{N}(0, \sigma^2_w)$$
+
+### NY
+
+[@fig-ny-coef4] shows the posterior distributions of the regression coefficients for average temperature (Temp~avg~) across different taxonomic groups in New York City. After applying a more conservative spatial effect, the SOS responses still generally exhibit negative temperature effects. In contrast, the effects on EOS are more variable, with most groups showing non-significant responses.
+
+```{r}
+#| label: fig-ny-coef4
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each taxon group in New York city."
+#| warning: false
+#| eval: true
+
+g_dir_path <- "~/phenology-urban/temp/data_local/random_sp/NY/genus/"
+s_dir_path <- "~/phenology-urban/temp/data_local/random_sp/NY/species/"
+
+g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "beta[2]", fixed_sp = F)
+s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
+
+(g_plot_obj$coef_summary_plot + ggtitle("Genus")) / (s_plot_obj$coef_summary_plot +  ggtitle("Species"))
+
+group_random_sp <- rbind(g_plot_obj$summary_data, s_plot_obj$summary_data)
+```
+
+```{r}
+#| label: fig-ny-density4
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of regression coefficients in density form."
+#| warning: false
+#| eval: true
+
+(g_plot_obj$coef_density_plot + ggtitle("Genus")) / (s_plot_obj$coef_density_plot +  ggtitle("Species"))
+```
+
+[@fig-ny-randomsp] shows the posterior distributions of the spatial random effects for each hexagon in New York City. Each color represents a different hexagon. This plot also helps to visualize how spatial variation manifests across hexagonal grid cells. If the histograms of different hexagons resemble normal distributions and are clearly separated, it indicates that phenological responses vary across space,  and different hexagons exhibit distinct effects. In contrast, if the histograms largely overlap and cluster around zero, this suggests minimal spatial heterogeneity, with similar responses across hexagons. Moreover, if the histograms are flat or broad within each hexagon, this implies greater within-hexagon variability, indicating less internal consistency in phenological responses.
+
+Take `EOS` for *Betula papyrifera* as an example, the flat spatial random effect shows greater within-hexagon (local) variability. But the fitted spatial random effect in INLA [@fig-ny-inla-plot_semi2] shows a more structured spatial pattern extend to large distance, indicating that the localized spatial variation is not well captured. And this may lead to the large shift in EOS coefficients in INLA compared to other models.
+
+```{r}
+#| label: fig-ny-randomsp
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of spatial random effect in density form."
+#| warning: false
+#| eval: true
+
+g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "sp_effect", fixed_sp = F)
+s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "sp_effect", fixed_sp = F)
+
+(g_plot_obj$coef_density_plot + ggtitle("Genus")) / (s_plot_obj$coef_density_plot +  ggtitle("Species"))
+```
+
+### DV
+
+```{r}
+#| label: fig-ny-coef4
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each taxon group in New York city."
+#| warning: false
+#| eval: true
+
+g_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp/DV/genus/"
+s_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp/DV/species/"
+
+g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "beta[2]", fixed_sp = F)
+s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
+
+(g_plot_obj$coef_summary_plot + ggtitle("Genus")) / (s_plot_obj$coef_summary_plot +  ggtitle("Species"))
+
+group_random_sp <- rbind(g_plot_obj$summary_data, s_plot_obj$summary_data)
+```
