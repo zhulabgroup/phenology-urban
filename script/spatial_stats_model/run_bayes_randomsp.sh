@@ -3,7 +3,7 @@
 #SBATCH --account=zhukai0                   # Account name
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err
-#SBATCH --array=1-4
+#SBATCH --array=1-8
 #SBATCH --time=24:00:00
 #SBATCH --partition=standard
 #SBATCH --mem=48G
@@ -23,24 +23,25 @@
 
 # Define combinations of chains and iterations
 PHE_TYPES=("SOS" "EOS")
-TAXON_COLS=("canonicalname" "genus")
+CITIES=("ST" "HT" "DV" "TP")
+
 NUM_PHE=${#PHE_TYPES[@]}
-NUM_COL=${#TAXON_COLS[@]}
+NUM_COL=${#CITIES[@]}
 INDEX=$((SLURM_ARRAY_TASK_ID - 1))
 PHE_INDEX=$((INDEX / NUM_COL))
 COL_INDEX=$((INDEX % NUM_COL))
 PHE_TYPE=${PHE_TYPES[$PHE_INDEX]}
-TAXON_COL=${TAXON_COLS[$COL_INDEX]}
+CITY=${CITIES[$COL_INDEX]}
 
-echo "Running combination: PHE_TYPE=$PHE_TYPE, TAXON_COL=$TAXON_COL"
+echo "Running combination: PHE_TYPE=$PHE_TYPE, CITY=$CITY"
 
 
 # Define the R script and input/output files
 R_SCRIPT=../phenology-urban/script/spatial_stats_model/run_bayes_randomsp.R
 WORKING_DIR=../phenology-urban/
 R_INPUT_DIR=../phenology-urban/data/
-R_OUTPUT_DIR=../phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp/
-CITY="NY"
+R_OUTPUT_DIR=../phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp_all_species/
+TAXON_COL="canonicalname"
 
 # Export variables to be used in the R script
 export R_INPUT_DIR

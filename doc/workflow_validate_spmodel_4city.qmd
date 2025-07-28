@@ -27,6 +27,149 @@ phe_types <- c("SOS", "EOS")
 ```
 
 
+```{r}
+#| include: false
+# Helper to process files by pattern
+
+generate_mcmc_plot <- function(dir_path, coef, fixed_sp){
+  process_files <- function(file_list, phe_type_label) {
+    param_list <- map(file_list, function(file) {
+      model_data <- readRDS(file)
+      genus <- sub(paste0("(.*?)_", phe_type_label, "\\.rds"), "\\1", basename(file))
+      if (fixed_sp) {
+        param_data <- ggs(model_data$samples) |>
+          filter(str_starts(Parameter, fixed("beta["))) |>
+          mutate(beta_index = as.integer(str_extract(Parameter, "(?<=beta\\[)\\d+"))) |>
+          filter(beta_index >= 5)|>
+          rename(ParameterOriginal = Parameter) |>
+          mutate(Parameter = genus) |>
+          mutate(waic = model_data$WAIC$WAIC,
+                 converge = model_data$converge,
+                 milk = model_data$mean_logml)
+      } else {
+        param_data <- ggs(model_data$samples) |>
+          filter(str_starts(Parameter, fixed(coef))) |>
+          rename(ParameterOriginal = Parameter) |>
+          mutate(Parameter = genus)|>
+          mutate(waic = model_data$WAIC$WAIC,
+                 converge = model_data$converge,
+                 milk = model_data$mean_logml)
+      }
+
+      return(param_data)
+    })
+    combined_param_data <- bind_rows(param_list) |>
+      filter(Parameter != "Alnus") |>
+      mutate(phe_type = phe_type_label)
+    return(combined_param_data)
+}
+  # Collect files
+  SOS_files <- list.files(dir_path, pattern = "SOS\\.rds$", full.names = TRUE)
+  EOS_files <- list.files(dir_path, pattern = "EOS\\.rds$", full.names = TRUE)
+
+  # Process each type
+  sos_data <- process_files(SOS_files, "SOS")
+  eos_data <- process_files(EOS_files, "EOS")
+
+  combined_param_data <- bind_rows(sos_data, eos_data)
+  combined_param_data$phe_type <- factor(combined_param_data$phe_type, levels = c("SOS", "EOS"))
+
+  # Summarize
+  summary_data <- combined_param_data |>
+    group_by(Parameter, phe_type) |>
+    summarise(
+      median_value = median(value, na.rm = TRUE),
+      lower_2_5 = quantile(value, 0.025, na.rm = TRUE),
+      upper_97_5 = quantile(value, 0.975, na.rm = TRUE),
+      waic = first(waic),
+      converge = first(converge),
+      milk = first(milk),
+      .groups = "drop"
+    ) |>
+    mutate(Sig = ifelse(lower_2_5 * upper_97_5 > 0, "*", ""),
+           SigAlpha = ifelse(Sig == "*", 1, 0.2)) 
+
+  param_levels <- rev(unique(summary_data$Parameter))
+
+  # Plot
+  
+  p1 <- ggplot(summary_data, aes(x = factor(as.character(Parameter), levels = param_levels), y = median_value)) +
+    geom_point(aes(alpha = SigAlpha), size=3) +
+    geom_errorbar(aes(ymin = lower_2_5, ymax = upper_97_5, alpha = SigAlpha), width = 0.4) +
+    geom_hline(yintercept = 0, linetype = 2, color = "black") +
+    geom_text(aes(label = round(median_value, 3)),
+              vjust = -0.7, size = 4) +
+    scale_alpha_identity() +
+    guides(alpha = "none") +
+    facet_wrap(~ phe_type, scales = "free_x") +  # flip x/y means free_x
+    theme_minimal() +
+    labs(x = NULL, y = "Estimate") +
+    theme(
+      strip.text = element_text(face = "bold"),
+      axis.text.x = element_text(size = 14)
+    ) +
+      coord_flip()
+
+  if (coef == "sp_effect") {
+    p2 <- ggplot(combined_param_data, aes(x = value, fill = ParameterOriginal)) +
+      geom_density(linewidth = 0.1, alpha = 0.5) +
+      scale_x_continuous(limits = c(-50, 50)) +
+      facet_wrap(~ Parameter, ncol = 1, scales = "free_y") +
+      labs(
+        x = paste0("Posterior distribution of ", coef),
+        y = "Density"
+      ) +
+      facet_grid(Parameter ~ phe_type, scales = "free_y") +
+      theme_minimal(base_size = 12) +
+      theme(
+        axis.text.y = element_blank(),
+        strip.text.y = element_text(angle = 0),
+        panel.spacing = unit(0.4, "lines"),
+        legend.position = "none"
+      )
+  } else if (coef == "spatial_effect") {
+    p2 <- ggplot(combined_param_data, aes(x = value)) +
+      geom_density(fill = "skyblue", alpha = 0.5) +
+      scale_x_continuous(limits = c(-100, 100)) +
+      facet_wrap(~ Parameter, ncol = 1, scales = "free_y") +
+      labs(
+        x = paste0("Posterior distribution of ", coef),
+        y = "Density"
+      ) +
+      facet_grid(Parameter ~ phe_type, scales = "free_y")+
+      theme_minimal(base_size = 12) +
+      theme(
+        axis.text.y = element_blank(),
+        strip.text.y = element_text(angle = 0),
+        panel.spacing = unit(0.4, "lines")
+      )
+  } else {
+    p2 <- ggplot(combined_param_data, aes(x = value)) +
+      geom_density(fill = "skyblue", alpha = 0.5) +
+      facet_wrap(~ Parameter, ncol = 1, scales = "free_y") +
+      labs(
+        x = paste0("Posterior distribution of ", coef),
+        y = "Density"
+      ) +
+      facet_grid(Parameter ~ phe_type, scales = "free_y")+
+      # geom_text(data = summary_data, aes(x = median_value-3, y = 0, label = round(median_value, 3)), vjust = -1, size = 3) +
+      geom_text(data = summary_data, aes(x = median_value+3, y = 0, label = paste0("gelman.diag: ", round(converge, 4))), vjust = -1, color = "red", size = 3) +
+      theme_minimal(base_size = 12) +
+      theme(
+        axis.text.y = element_blank(),
+        strip.text.y = element_text(angle = 0),
+        panel.spacing = unit(0.4, "lines")
+      )
+  }
+  p <- list(coef_summary_plot = p1, coef_density_plot = p2, summary_data = summary_data)
+  return(p)
+}
+
+source("~/phenology-urban/script/spatial_stats_model/run_genus_inla_fixpre.R")
+source("~/phenology-urban/script/spatial_stats_model/run_species_inla.R")
+```
+
+
 ## Treat the spatial random effect as a random effect without covariance
 
 $$w(\mathbf{s}_i) = u_{g_i},\ u_{g_i} \sim \mathcal{N}(0, \sigma^2_w)$$
@@ -44,8 +187,8 @@ $$w(\mathbf{s}_i) = u_{g_i},\ u_{g_i} \sim \mathcal{N}(0, \sigma^2_w)$$
 #| warning: false
 #| eval: true
 
-g_dir_path <- "~/phenology-urban/temp/data_local/random_sp/NY/genus/"
-s_dir_path <- "~/phenology-urban/temp/data_local/random_sp/NY/species/"
+g_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp/NY/genus/"
+s_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp_all_species/NY/"
 
 g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "beta[2]", fixed_sp = F)
 s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
@@ -86,10 +229,110 @@ s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "sp_effect", fixed_sp = F)
 (g_plot_obj$coef_density_plot + ggtitle("Genus")) / (s_plot_obj$coef_density_plot +  ggtitle("Species"))
 ```
 
+### HT
+
+```{r}
+#| label: fig-HT-coef4
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each taxon group in New York city."
+#| warning: false
+#| eval: true
+
+g_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp/HT/genus/"
+s_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp/HT/species/"
+
+g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "beta[2]", fixed_sp = F)
+s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
+
+(g_plot_obj$coef_summary_plot + ggtitle("Genus")) / (s_plot_obj$coef_summary_plot +  ggtitle("Species"))
+```
+
+
+```{r}
+#| label: fig-HT-density4
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of regression coefficients in density form."
+#| warning: false
+#| eval: true
+
+(g_plot_obj$coef_density_plot + ggtitle("Genus")) / (s_plot_obj$coef_density_plot +  ggtitle("Species"))
+```
+
+
+### TP
+
+```{r}
+#| label: fig-TP-coef4
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each taxon group in New York city."
+#| warning: false
+#| eval: true
+
+g_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp/TP/genus/"
+s_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp/TP/species/"
+
+g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "beta[2]", fixed_sp = F)
+s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
+
+(g_plot_obj$coef_summary_plot + ggtitle("Genus")) / (s_plot_obj$coef_summary_plot +  ggtitle("Species"))
+```
+
+
+```{r}
+#| label: fig-TP-density4
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of regression coefficients in density form."
+#| warning: false
+#| eval: true
+
+(g_plot_obj$coef_density_plot + ggtitle("Genus")) / (s_plot_obj$coef_density_plot +  ggtitle("Species"))
+```
+
+### ST
+
+```{r}
+#| label: fig-ST-coef4
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each taxon group in New York city."
+#| warning: false
+#| eval: true
+
+g_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp/ST/genus/"
+s_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp/ST/species/"
+
+g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "beta[2]", fixed_sp = F)
+s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
+
+(g_plot_obj$coef_summary_plot + ggtitle("Genus")) / (s_plot_obj$coef_summary_plot +  ggtitle("Species"))
+```
+
+
+```{r}
+#| label: fig-ST-density4
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of regression coefficients in density form."
+#| warning: false
+#| eval: true
+
+(g_plot_obj$coef_density_plot + ggtitle("Genus")) / (s_plot_obj$coef_density_plot +  ggtitle("Species"))
+```
+
 ### DV
 
 ```{r}
-#| label: fig-ny-coef4
+#| label: fig-dv-coef4
 #| include: true
 #| fig-width: 10
 #| fig-height: 10
@@ -104,6 +347,17 @@ g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "beta[2]", fixed_sp = F)
 s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
 
 (g_plot_obj$coef_summary_plot + ggtitle("Genus")) / (s_plot_obj$coef_summary_plot +  ggtitle("Species"))
+```
 
-group_random_sp <- rbind(g_plot_obj$summary_data, s_plot_obj$summary_data)
+
+```{r}
+#| label: fig-dv-density4
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of regression coefficients in density form."
+#| warning: false
+#| eval: true
+
+(g_plot_obj$coef_density_plot + ggtitle("Genus")) / (s_plot_obj$coef_density_plot +  ggtitle("Species"))
 ```
