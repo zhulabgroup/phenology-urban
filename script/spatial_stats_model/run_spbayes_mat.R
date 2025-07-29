@@ -37,8 +37,8 @@ taxon_col <- Sys.getenv("TAXON_COL")  # column name for species
 # r_input_dir <- "~/phenology-urban/data/"
 # r_output_dir <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/spbayes/"
 # city <- "NY"
-# phe_type <- "EOS"
-# taxon_col <- "canonicalname"
+# phe_type <- "SOS"
+# taxon_col <- "genus"
 
 #################### Read data ####################
 
@@ -148,6 +148,24 @@ for (taxon in taxon_list) {
   coords <- st_coordinates(tavg_phe)
   dist_mat <- as.matrix(dist(coords))
   max.d <- max(iDist(coords))
+  N_knots <- 50
+  N_unique <- nrow(unique(coords))
+  if (N_unique < 30) {
+    message(paste("Not enough unique coordinates for taxon:", taxon, "with", N_unique, "unique points. Skipping..."))
+    next  # Skip the current iteration of the loop
+  }
+  if (N_knots <= N_unique){
+    use_knots <- TRUE
+    knots <- kmeans(coords, centers = N_knots)$centers
+    dist_mat_nm <- as.matrix(rdist(coords, knots))
+    dist_mat_mm <- as.matrix(rdist(knots, knots))
+    
+  } else {
+    use_knots <- FALSE
+    knots <- NULL
+    dist_mat_nm <- dist_mat
+    dist_mat_mm <- dist_mat
+  }
   
   tavg_phe_df <- as.data.frame(tavg_phe)
   tavg_phe_df$year <- as.factor(tavg_phe_df$year) 
@@ -175,20 +193,7 @@ for (taxon in taxon_list) {
   n.samples = 10000
   burn.in = 5000
   
-  N_knots <- 50
-  N_unique <- nrow(unique(coords))
-  if (N_knots <= N_unique){
-    use_knots <- TRUE
-    knots <- kmeans(coords, centers = N_knots)$centers
-    dist_mat_nm <- as.matrix(rdist(coords, knots))
-    dist_mat_mm <- as.matrix(rdist(knots, knots))
-    
-  } else {
-    use_knots <- FALSE
-    knots <- NULL
-    dist_mat_nm <- dist_mat
-    dist_mat_mm <- dist_mat
-  }
+  
   
   run_spLM_chains <- function(
     formula, data, coords, knots,
