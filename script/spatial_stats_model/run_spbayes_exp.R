@@ -159,6 +159,7 @@ for (taxon in taxon_list) {
   ))
   ols_model <- lm(sp_formula, data = tavg_phe_df)
   X <- model.matrix(sp_formula, data = tavg_phe_df)
+  y <- tavg_phe_df[[phe_metric]]
   p <- ncol(X)
   
   tuning <- list("phi"=0.1, "sigma.sq"=0.1, "tau.sq"=0.1)
@@ -174,23 +175,23 @@ for (taxon in taxon_list) {
   N_knots <- 50
   N_unique <- nrow(unique(coords))
   if (N_knots <= N_unique){
+    use_knots <- TRUE
     knots <- kmeans(coords, centers = N_knots)$centers
     dist_mat_nm <- as.matrix(rdist(coords, knots))
     dist_mat_mm <- as.matrix(rdist(knots, knots))
-    
   } else {
+    use_knots <- FALSE
     knots <- NULL
     dist_mat_nm <- dist_mat
     dist_mat_mm <- dist_mat
   }
-  
   run_spLM_chains <- function(
     formula, data, coords, knots,
     starting_list, tuning, priors,
     cov.model = "matern", n.samples = n.samples,
     burn.in = burn.in,
     param_pattern = "temp_",  # 提取的参数匹配模式
-    n.report = 2000, verbose = TRUE
+    n.report = 2000, verbose = TRUE, use_knots
   ) {
     
     n.chains <- length(starting_list)
@@ -201,11 +202,10 @@ for (taxon in taxon_list) {
     for (i in seq_len(n.chains)) {
       if (verbose) message("Running ", i, " chain")
       
-      sp_model <- spLM(
+      args_list <- list(
         formula = formula,
         data = data,
         coords = coords,
-        knots = knots,
         starting = starting_list[[i]],
         tuning = tuning,
         priors = priors,
@@ -213,6 +213,10 @@ for (taxon in taxon_list) {
         n.samples = n.samples,
         n.report = n.report
       )
+      if (use_knots) args_list$knots <- knots
+      
+      # 运行 spLM
+      sp_model <- do.call(spLM, args_list)
       
       chain_object <- spRecover(sp_model, start = burn.in, verbose = FALSE)
       chain_recover[[i]] <- chain_object
@@ -244,7 +248,8 @@ for (taxon in taxon_list) {
     cov.model = "exponential",
     n.samples = n.samples,
     burn.in = burn.in,
-    param_pattern = "temp_"
+    param_pattern = "temp_",
+    use_knots = use_knots
   )
   beta2_mcmc <- lapply(res$beta_mcmc_list, function(chain) {
     temp_cols <- grep("^temp_", colnames(chain), value = TRUE)  # 匹配以 temp_ 开头的列
