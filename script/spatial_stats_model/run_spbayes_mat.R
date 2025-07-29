@@ -250,7 +250,8 @@ for (taxon in taxon_list) {
     param_pattern = "temp_"
   )
   beta2_mcmc <- lapply(res$beta_mcmc_list, function(chain) {
-    as.mcmc(chain[, "temp_summer", drop = FALSE])
+    temp_cols <- grep("^temp_", colnames(chain), value = TRUE)  
+    as.mcmc(chain[, temp_cols, drop = FALSE])
   }) |> as.mcmc.list()
   converge <- gelman.diag(beta2_mcmc, confidence = 0.95, transform=FALSE, autoburnin=TRUE,
                           multivariate=TRUE)
