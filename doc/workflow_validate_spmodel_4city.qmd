@@ -202,7 +202,7 @@ group_random_sp <- rbind(g_plot_obj$summary_data, s_plot_obj$summary_data)
 #| label: fig-ny-density4
 #| include: true
 #| fig-width: 10
-#| fig-height: 10
+#| fig-height: 20
 #| fig-cap: "The distribution of the posterior of regression coefficients in density form."
 #| warning: false
 #| eval: true
@@ -241,7 +241,7 @@ s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "sp_effect", fixed_sp = F)
 #| eval: true
 
 g_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp/HT/genus/"
-s_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp/HT/species/"
+s_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp_all_species/HT/"
 
 g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "beta[2]", fixed_sp = F)
 s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
@@ -254,7 +254,7 @@ s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
 #| label: fig-HT-density4
 #| include: true
 #| fig-width: 10
-#| fig-height: 10
+#| fig-height: 20
 #| fig-cap: "The distribution of the posterior of regression coefficients in density form."
 #| warning: false
 #| eval: true
@@ -275,7 +275,7 @@ s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
 #| eval: true
 
 g_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp/TP/genus/"
-s_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp/TP/species/"
+s_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp_all_species/TP/"
 
 g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "beta[2]", fixed_sp = F)
 s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
@@ -308,7 +308,7 @@ s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
 #| eval: true
 
 g_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp/ST/genus/"
-s_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp/ST/species/"
+s_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp_all_species/ST/"
 
 g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "beta[2]", fixed_sp = F)
 s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
@@ -321,7 +321,7 @@ s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
 #| label: fig-ST-density4
 #| include: true
 #| fig-width: 10
-#| fig-height: 10
+#| fig-height: 25
 #| fig-cap: "The distribution of the posterior of regression coefficients in density form."
 #| warning: false
 #| eval: true
@@ -341,7 +341,7 @@ s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
 #| eval: true
 
 g_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp/DV/genus/"
-s_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp/DV/species/"
+s_dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp_all_species/DV/"
 
 g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "beta[2]", fixed_sp = F)
 s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
@@ -354,7 +354,7 @@ s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
 #| label: fig-dv-density4
 #| include: true
 #| fig-width: 10
-#| fig-height: 10
+#| fig-height: 20
 #| fig-cap: "The distribution of the posterior of regression coefficients in density form."
 #| warning: false
 #| eval: true
