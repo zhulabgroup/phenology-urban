@@ -94,9 +94,9 @@ prepare_species_data <- function(phe_type, points_in_buffer, all_sites_temp, sra
                                  drop_na(canonicalName) %>% 
                                  group_by(canonicalName) %>%
                                  summarise(n = n(), .groups = "drop") %>%
-                                 filter(n >= 30) %>%
-                                 # arrange(desc(n)) %>%
-                                 # head(10) %>% # get the top 10 species, otherwise all sp
+                                 # filter(n >= 30) %>%
+                                 arrange(desc(n)) %>%
+                                 head(10) %>% # get the top 10 species, otherwise all sp
                                  pull(canonicalName))) |> # filter to the taxa in the original data)
     rename(canonicalname = canonicalName)
   

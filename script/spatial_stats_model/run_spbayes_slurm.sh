@@ -6,7 +6,7 @@
 #SBATCH --array=1-4
 #SBATCH --time=24:00:00
 #SBATCH --partition=standard
-#SBATCH --mem=48G
+#SBATCH --mem=36G
 #SBATCH --cpus-per-task=2
 #SBATCH --mail-user=jializ@umich.edu        # Where to send mail
 #SBATCH --mail-type=BEGIN,END               # Mail notifications at the start and end of the job
@@ -35,7 +35,7 @@ echo "Running combination: PHE_TYPE=$PHE_TYPE, TAXON_COL=$TAXON_COL"
 
 
 # Define the R script and input/output files
-R_SCRIPT=../phenology-urban/script/spatial_stats_model/run_spbayes_nimble.R
+R_SCRIPT=../phenology-urban/script/spatial_stats_model/run_spbayes_mat.R
 WORKING_DIR=../phenology-urban/
 R_INPUT_DIR=../phenology-urban/data/
 R_OUTPUT_DIR=../phenology-urban/data/proc/urban/sp_model/fixed_preseason/spbayes/
