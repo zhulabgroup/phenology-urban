@@ -13,6 +13,7 @@ library(rgbif)
 library(spBayes)
 library(bridgesampling)
 library(fields)
+library(invgamma)
 select <- dplyr::select
 
 
