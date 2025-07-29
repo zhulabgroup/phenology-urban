@@ -173,10 +173,19 @@ for (taxon in taxon_list) {
   )
   n.samples = 10000
   burn.in = 5000
+  
   N_knots <- 50
-  knots <- kmeans(coords, centers = N_knots)$centers
-  dist_mat_nm <- as.matrix(rdist(coords, knots))
-  dist_mat_mm <- as.matrix(rdist(knots, knots))
+  N_unique <- nrow(unique(coords))
+  if (N_knots <= N_unique){
+    knots <- kmeans(coords, centers = N_knots)$centers
+    dist_mat_nm <- as.matrix(rdist(coords, knots))
+    dist_mat_mm <- as.matrix(rdist(knots, knots))
+    
+  } else {
+    knots <- coords
+    dist_mat_nm <- dist_mat
+    dist_mat_mm <- dist_mat
+  }
   
   run_spLM_chains <- function(
     formula, data, coords, knots,
