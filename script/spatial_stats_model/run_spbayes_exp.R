@@ -179,7 +179,7 @@ for (taxon in taxon_list) {
     dist_mat_mm <- as.matrix(rdist(knots, knots))
     
   } else {
-    knots <- coords
+    knots <- NULL
     dist_mat_nm <- dist_mat
     dist_mat_mm <- dist_mat
   }
