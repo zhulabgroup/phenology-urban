@@ -155,7 +155,7 @@ for (taxon in taxon_list) {
     next  # Skip the current iteration of the loop
   }
   message(paste("Running spatial model for taxon:", taxon, "with", N_unique, "unique points."))
-  if (N_knots <= N_unique){
+  if (100 <= N_unique){
     use_knots <- TRUE
     knots <- kmeans(coords, centers = N_knots)$centers
     dist_mat_nm <- as.matrix(rdist(coords, knots))
@@ -191,8 +191,8 @@ for (taxon in taxon_list) {
     "tau.sq.IG" = c(2, 0.1),
     "nu.Unif" = c(0.5, 2.5)
   )
-  n.samples = 10000
-  burn.in = 5000
+  n.samples = 2000
+  burn.in = 1000
   
   
   
