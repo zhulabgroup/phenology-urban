@@ -154,6 +154,7 @@ for (taxon in taxon_list) {
     message(paste("Not enough unique coordinates for taxon:", taxon, "with", N_unique, "unique points. Skipping..."))
     next  # Skip the current iteration of the loop
   }
+  message(paste("Running spatial model for taxon:", taxon, "with", N_unique, "unique points."))
   if (N_knots <= N_unique){
     use_knots <- TRUE
     knots <- kmeans(coords, centers = N_knots)$centers
@@ -178,7 +179,7 @@ for (taxon in taxon_list) {
   ))
   ols_model <- lm(sp_formula, data = tavg_phe_df)
   X <- model.matrix(sp_formula, data = tavg_phe_df)
-  y <- tavg_phe_df[[all.vars(formula)[1]]]
+  y <- tavg_phe_df[[phe_metric]]
   p <- ncol(X)
   
   tuning <- list("phi"=0.1, "sigma.sq"=0.1, "tau.sq"=0.1, "nu"=0.1)
@@ -379,7 +380,7 @@ for (taxon in taxon_list) {
       ub = ub,
       param_types = rep("real", ncol(samples)),
       repetitions = 10,
-      method = "warp3",
+      method = "normal",
       cores = 1,
       use_neff = TRUE,
       silent = FALSE,
