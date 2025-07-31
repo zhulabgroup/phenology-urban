@@ -194,8 +194,8 @@ for (taxon in taxon_list) {
     "tau.sq.IG" = c(5, 10),
     "nu.Unif" = c(0.5, 2.5)
   )
-  n.samples = 50000
-  burn.in = 25000
+  n.samples = 30000
+  burn.in = 15000
   
   safe_spRecover_beta <- function(sp_model, burn.in = 1, n.samples = NULL) {
     beta_list <- list()
