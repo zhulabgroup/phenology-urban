@@ -113,7 +113,6 @@ if (taxon_col  == "canonicalname"){
   stop("Invalid taxon_col. Must be 'canonicalname' or 'species'.")
 }
 
-
 taxon_list <- unique(model_input_all[[taxon_col]])
 #################### Find the optimal cov model ####################
 for (taxon in taxon_list) {
@@ -127,29 +126,35 @@ for (taxon in taxon_list) {
   if (file.exists(model_path)) {
     next  # Skip the current iteration of the loop
   }
-  model_input_sf <- model_input_all %>%
-    filter(!!sym(taxon_col) == !!taxon) %>%
-    st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
-    # st_transform(crs = st_crs(boundary)) %>%
-    mutate(lon = st_coordinates(.)[,1], lat = st_coordinates(.)[,2],
-           year = as.factor(year)) 
+  model_input_sf <- model_input_all |>
+    filter(!!sym(taxon_col) == !!taxon) |>
+    mutate(
+      lon_jitter = lon,
+      lat_jitter = lat
+    )
+  dup_idx <- duplicated(model_input_sf[, c("lon", "lat")]) | 
+    duplicated(model_input_sf[, c("lon", "lat")], fromLast = TRUE)
+  model_input_sf[dup_idx, c("lon_jitter", "lat_jitter")] <-
+    model_input_sf[dup_idx, c("lon_jitter", "lat_jitter")] +
+    matrix(rnorm(sum(dup_idx) * 2, 0, 1e-5), ncol = 2)
   if (phe_type %in% c("SOS","EOS")) {
     phe_metric <- "doy"
   } else {
     phe_metric <- "doy_diff"
   }
-  tavg_phe <- model_input_sf
+  tavg_phe <- model_input_sf |> st_as_sf(coords = c("lon_jitter", "lat_jitter"), crs = 4326, remove = F)
   temp_col <- names(tavg_phe)[grepl("^temp", names(tavg_phe))]
   prcp_col <- names(tavg_phe)[grepl("^prcp", names(tavg_phe))]
   srad_col <- names(tavg_phe)[grepl("^srad", names(tavg_phe))]
   
   #################### Run the spatial model ####################
-  
+  coords_ori <- st_coordinates(model_input_sf |> st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F))
   coords <- st_coordinates(tavg_phe)
+  
   dist_mat <- as.matrix(dist(coords))
   max.d <- max(iDist(coords))
   N_knots <- 50
-  N_unique <- nrow(unique(coords))
+  N_unique <- nrow(unique(coords_ori))
   if (N_unique < 30) {
     message(paste("Not enough unique coordinates for taxon:", taxon, "with", N_unique, "unique points. Skipping..."))
     next  # Skip the current iteration of the loop
@@ -160,14 +165,12 @@ for (taxon in taxon_list) {
     knots <- kmeans(coords, centers = N_knots)$centers
     dist_mat_nm <- as.matrix(rdist(coords, knots))
     dist_mat_mm <- as.matrix(rdist(knots, knots))
-    
   } else {
     use_knots <- FALSE
     knots <- NULL
     dist_mat_nm <- dist_mat
     dist_mat_mm <- dist_mat
   }
-  
   tavg_phe_df <- as.data.frame(tavg_phe)
   tavg_phe_df$year <- as.factor(tavg_phe_df$year) 
   
@@ -186,15 +189,43 @@ for (taxon in taxon_list) {
   
   priors <- list(
     "beta.Norm" = list(rep(0, p), diag(100, p)),
-    "phi.Unif" = c(3/1, 3/0.1),  
+    "phi.Unif" = c(0.2, 2/0.1),  
     "sigma.sq.IG" = c(2, 2),
-    "tau.sq.IG" = c(2, 0.1),
+    "tau.sq.IG" = c(5, 10),
     "nu.Unif" = c(0.5, 2.5)
   )
-  n.samples = 2000
-  burn.in = 1000
+  n.samples = 50000
+  burn.in = 25000
   
-  
+  safe_spRecover_beta <- function(sp_model, burn.in = 1, n.samples = NULL) {
+    beta_list <- list()
+    theta_list <- list()
+    w_list <- list()
+    used_idx <- integer(0)
+    for (i in seq(from = burn.in, to = n.samples)) {
+      tryCatch({
+        co <- spRecover(sp_model, start = i, end = i, 
+                        get.w = T, verbose = F, n.report = 1)
+        beta_list[[length(beta_list) + 1]] <- as.matrix(co$p.beta.recover.samples)
+        w_list[[length(w_list) + 1]] <- as.numeric(co$p.w.recover.samples)
+        theta_list[[length(theta_list) + 1]] <- as.numeric(co$p.theta.recover.samples)
+        used_idx <- c(used_idx, i)
+      }, error = function(e) {
+      })
+    }
+    if (length(beta_list) == 0) stop("No samples recovered successfully.")
+    beta_mat <- do.call(rbind, beta_list)
+    w_mat <- do.call(cbind, w_list)
+    theta_mat <- do.call(rbind, theta_list)
+    beta_mcmc <- mcmc(beta_mat, start = 1, end = nrow(beta_mat), thin = 1)
+    theta_mcmc <- mcmc(theta_mat, start = 1, end = nrow(theta_mat), thin = 1)
+    return(list(
+      p.beta.recover.samples = beta_mcmc,
+      p.theta.recover.samples = theta_mcmc,
+      p.w.recover.samples = w_mat,
+      used_samples = nrow(beta_mat)
+    ))
+  }
   
   run_spLM_chains <- function(
     formula, data, coords, knots,
@@ -202,17 +233,14 @@ for (taxon in taxon_list) {
     cov.model = "matern", n.samples = n.samples,
     burn.in = burn.in,
     param_pattern = "temp_",  # 提取的参数匹配模式
-    n.report = 2000, verbose = TRUE, use_knots
+    n.report = 10000, verbose = TRUE, use_knots
   ) {
-    
     n.chains <- length(starting_list)
     if (is.null(burn.in)) burn.in <- floor(0.5 * n.samples)
     chain_results <- vector("list", n.chains)
     chain_recover <- vector("list", n.chains)
-    
     for (i in seq_len(n.chains)) {
       if (verbose) message("Running ", i, " chain")
-      
       args_list <- list(
         formula = formula,
         data = data,
@@ -225,11 +253,8 @@ for (taxon in taxon_list) {
         n.report = n.report
       )
       if (use_knots) args_list$knots <- knots
-      
-      # 运行 spLM
       sp_model <- do.call(spLM, args_list)
-      
-      chain_object <- spRecover(sp_model, start = burn.in, verbose = FALSE)
+      chain_object <- safe_spRecover_beta(sp_model, burn.in = burn.in, n.samples = n.samples)
       chain_recover[[i]] <- chain_object
       # param_cols <- grep(param_pattern, colnames(chain_recover[[i]]$p.beta.recover.samples))
       chain <- chain_object$p.beta.recover.samples
@@ -245,8 +270,8 @@ for (taxon in taxon_list) {
   }
   
   starting1 <- list("beta" = as.numeric(ols_model$coefficients),
-                    "sigma.sq" = 1, "tau.sq" = 1, "phi" = 3/(0.5*max.d), "nu" = 1.5)
-  starting2 <- list("beta" = rep(0, p), "sigma.sq" = 1, "tau.sq" = 1, "phi" = 3/0.5, "nu" = 1.5)
+                    "sigma.sq" = 1, "tau.sq" = 10, "phi" = 1, "nu" = 1.5)
+  starting2 <- list("beta" = rep(0, p), "sigma.sq" = 1, "tau.sq" = 10, "phi" = 1, "nu" = 1.5)
   starting_list <- list(chain1 = starting1, chain2 = starting2)
   res <- run_spLM_chains(
     formula = sp_formula,
