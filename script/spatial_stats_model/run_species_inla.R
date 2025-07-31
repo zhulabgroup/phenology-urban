@@ -31,7 +31,6 @@ prepare_species_data <- function(phe_type, points_in_buffer, all_sites_temp, sra
                 by = c("id", "year"))
   }
 
-  
   if (phe_type == "SOS") {
     phe_metric <- "doy"
     direction <- "up"
