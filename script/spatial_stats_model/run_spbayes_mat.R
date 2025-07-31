@@ -189,9 +189,9 @@ for (taxon in taxon_list) {
   
   priors <- list(
     "beta.Norm" = list(rep(0, p), diag(100, p)),
-    "phi.Unif" = c(0.2, 2/0.1),  
+    "phi.Unif" = c(0.3, 3/0.1),  
     "sigma.sq.IG" = c(2, 2),
-    "tau.sq.IG" = c(5, 10),
+    "tau.sq.IG" = c(2, 0.1),
     "nu.Unif" = c(0.5, 2.5)
   )
   n.samples = 10000
