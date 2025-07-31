@@ -37,8 +37,9 @@ taxon_col <- Sys.getenv("TAXON_COL")  # column name for species
 # r_input_dir <- "~/phenology-urban/data/"
 # r_output_dir <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/spbayes/"
 # city <- "NY"
-# phe_type <- "SOS"
-# taxon_col <- "genus"
+# phe_type <- "EOS"
+# taxon_col <- "canonicalname"
+
 
 #################### Read data ####################
 
@@ -142,7 +143,7 @@ for (taxon in taxon_list) {
   } else {
     phe_metric <- "doy_diff"
   }
-  tavg_phe <- model_input_sf |> st_as_sf(coords = c("lon_jitter", "lat_jitter"), crs = 4326, remove = F)
+  tavg_phe <- model_input_sf |> st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F) #jitter
   temp_col <- names(tavg_phe)[grepl("^temp", names(tavg_phe))]
   prcp_col <- names(tavg_phe)[grepl("^prcp", names(tavg_phe))]
   srad_col <- names(tavg_phe)[grepl("^srad", names(tavg_phe))]
@@ -276,8 +277,7 @@ for (taxon in taxon_list) {
     ))
   }
   
-  starting1 <- list("beta" = as.numeric(ols_model$coefficients),
-                    "sigma.sq" = 1, "tau.sq" = 10, "phi" = 1, "nu" = 1.5)
+  starting1 <- list("beta" = as.numeric(ols_model$coefficients), "sigma.sq" = 1, "tau.sq" = 10, "phi" = 1, "nu" = 1.5)
   starting2 <- list("beta" = rep(0, p), "sigma.sq" = 1, "tau.sq" = 10, "phi" = 1, "nu" = 1.5)
   starting_list <- list(chain1 = starting1, chain2 = starting2)
   res <- run_spLM_chains(

@@ -126,45 +126,52 @@ for (taxon in taxon_list) {
   if (file.exists(model_path)) {
     next  # Skip the current iteration of the loop
   }
-  model_input_sf <- model_input_all %>%
-    filter(!!sym(taxon_col) == !!taxon) %>%
-    st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
-    # st_transform(crs = st_crs(boundary)) %>%
-    mutate(lon = st_coordinates(.)[,1], lat = st_coordinates(.)[,2],
-           year = as.factor(year)) 
+  model_input_sf <- model_input_all |>
+    filter(!!sym(taxon_col) == !!taxon) |>
+    mutate(
+      lon_jitter = lon,
+      lat_jitter = lat
+    )
+  dup_idx <- duplicated(model_input_sf[, c("lon", "lat")]) | 
+    duplicated(model_input_sf[, c("lon", "lat")], fromLast = TRUE)
+  model_input_sf[dup_idx, c("lon_jitter", "lat_jitter")] <-
+    model_input_sf[dup_idx, c("lon_jitter", "lat_jitter")] +
+    matrix(rnorm(sum(dup_idx) * 2, 0, 1e-5), ncol = 2)
   if (phe_type %in% c("SOS","EOS")) {
     phe_metric <- "doy"
   } else {
     phe_metric <- "doy_diff"
   }
-  tavg_phe <- model_input_sf
+  tavg_phe <- model_input_sf |> st_as_sf(coords = c("lon_jitter", "lat_jitter"), crs = 4326, remove = F) #reduce jitter
   temp_col <- names(tavg_phe)[grepl("^temp", names(tavg_phe))]
   prcp_col <- names(tavg_phe)[grepl("^prcp", names(tavg_phe))]
   srad_col <- names(tavg_phe)[grepl("^srad", names(tavg_phe))]
   
   #################### Run the spatial model ####################
-  
+  coords_ori <- st_coordinates(model_input_sf |> st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F))
   coords <- st_coordinates(tavg_phe)
+  
   dist_mat <- as.matrix(dist(coords))
   max.d <- max(iDist(coords))
   N_knots <- 50
-  N_unique <- nrow(unique(coords))
+  N_unique <- nrow(unique(coords_ori))
   if (N_unique < 30) {
     message(paste("Not enough unique coordinates for taxon:", taxon, "with", N_unique, "unique points. Skipping..."))
     next  # Skip the current iteration of the loop
   }
-  if (N_knots <= N_unique){
+  message(paste("Running spatial model for taxon:", taxon, "with", N_unique, "unique points."))
+  if (100 <= N_unique){
     use_knots <- TRUE
     knots <- kmeans(coords, centers = N_knots)$centers
     dist_mat_nm <- as.matrix(rdist(coords, knots))
     dist_mat_mm <- as.matrix(rdist(knots, knots))
-    
   } else {
     use_knots <- FALSE
     knots <- NULL
     dist_mat_nm <- dist_mat
     dist_mat_mm <- dist_mat
   }
+  
   tavg_phe_df <- as.data.frame(tavg_phe)
   tavg_phe_df$year <- as.factor(tavg_phe_df$year) 
   
@@ -206,7 +213,6 @@ for (taxon in taxon_list) {
     
     for (i in seq_len(n.chains)) {
       if (verbose) message("Running ", i, " chain")
-      
       args_list <- list(
         formula = formula,
         data = data,
@@ -219,8 +225,6 @@ for (taxon in taxon_list) {
         n.report = n.report
       )
       if (use_knots) args_list$knots <- knots
-      
-      # 运行 spLM
       sp_model <- do.call(spLM, args_list)
       
       chain_object <- spRecover(sp_model, start = burn.in, verbose = FALSE)
@@ -239,7 +243,7 @@ for (taxon in taxon_list) {
   }
   
   starting1 <- list("beta" = as.numeric(ols_model$coefficients),
-                    "sigma.sq" = 1, "tau.sq" = 1, "phi" = 3/(0.5*max.d))
+                    "sigma.sq" = 1, "tau.sq" = 1, "phi" = 3/(0.5))
   starting2 <- list("beta" = rep(0, p), "sigma.sq" = 1, "tau.sq" = 1, "phi" = 3/0.5)
   starting_list <- list(chain1 = starting1, chain2 = starting2)
   res <- run_spLM_chains(
@@ -313,8 +317,6 @@ for (taxon in taxon_list) {
                                  mean = priors$beta.Norm[[1]],
                                  sigma = priors$beta.Norm[[2]],
                                  log = TRUE)
-    
-    # 先验：sigma.sq 和 tau.sq 逆伽马
     logprior <- logprior + invgamma::dinvgamma(sigma.sq,
                                                shape = priors$sigma.sq.IG[1],
                                                scale = priors$sigma.sq.IG[2],
