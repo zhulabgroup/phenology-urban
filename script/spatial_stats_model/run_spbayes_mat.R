@@ -208,7 +208,7 @@ for (taxon in taxon_list) {
                         get.w = T, verbose = F, n.report = 1)
         beta_list[[length(beta_list) + 1]] <- as.matrix(co$p.beta.recover.samples)
         w_list[[length(w_list) + 1]] <- as.numeric(co$p.w.recover.samples)
-        theta_list[[length(theta_list) + 1]] <- as.numeric(co$p.theta.recover.samples)
+        theta_list[[length(theta_list) + 1]] <- as.matrix(co$p.theta.recover.samples)
         used_idx <- c(used_idx, i)
       }, error = function(e) {
       })
@@ -261,7 +261,14 @@ for (taxon in taxon_list) {
       # varnames(chain) <- "beta_temp"
       chain_results[[i]] <- mcmc(chain)
     }
-    beta_mcmc_list <- mcmc.list(chain_results)
+    used_sets <- lapply(chain_recover, `[[`, "used_samples")
+    min_len <- min(sapply(chain_recover, function(x) x$used_samples))
+    chain_results_aligned <- lapply(chain_recover, function(ch) {
+      beta_mat <- as.matrix(ch$p.beta.recover.samples)[1:min_len, , drop = FALSE]
+      mcmc(beta_mat, start = 1, end = min_len, thin = 1)
+    })
+    
+    beta_mcmc_list <- mcmc.list(chain_results_aligned)
     
     return(list(
       beta_mcmc_list = beta_mcmc_list,
