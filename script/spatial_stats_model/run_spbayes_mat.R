@@ -215,7 +215,10 @@ for (taxon in taxon_list) {
       }, error = function(e) {
       })
     }
-    if (length(beta_list) == 0) stop("No samples recovered successfully.")
+    if (length(beta_list) == 0) {
+      warning("No samples recovered successfully.")
+      return(NULL)
+    }
     beta_mat <- do.call(rbind, beta_list)
     w_mat <- do.call(cbind, w_list)
     theta_mat <- do.call(rbind, theta_list)
@@ -257,11 +260,15 @@ for (taxon in taxon_list) {
       if (use_knots) args_list$knots <- knots
       sp_model <- do.call(spLM, args_list)
       chain_object <- safe_spRecover_beta(sp_model, burn.in = burn.in, n.samples = n.samples)
+      if (is.null(chain_object)) next
       chain_recover[[i]] <- chain_object
       # param_cols <- grep(param_pattern, colnames(chain_recover[[i]]$p.beta.recover.samples))
       chain <- chain_object$p.beta.recover.samples
       # varnames(chain) <- "beta_temp"
       chain_results[[i]] <- mcmc(chain)
+    }
+    if ((length(chain_results[[1]]) + length(chain_results[[2]])) == 0) {
+      return(NULL)
     }
     used_sets <- lapply(chain_recover, `[[`, "used_samples")
     min_len <- min(sapply(chain_recover, function(x) x$used_samples))
@@ -296,6 +303,7 @@ for (taxon in taxon_list) {
     param_pattern = "temp_",
     use_knots = use_knots
   )
+  if (is.null(res)) next
   beta2_mcmc <- lapply(res$beta_mcmc_list, function(chain) {
     temp_cols <- grep("^temp_", colnames(chain), value = TRUE)  
     as.mcmc(chain[, temp_cols, drop = FALSE])
