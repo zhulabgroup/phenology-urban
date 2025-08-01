@@ -190,11 +190,12 @@ for (taxon in taxon_list) {
   
   priors <- list(
     "beta.Norm" = list(rep(0, p), diag(100, p)),
-    "phi.Unif" = c(0.3, 3/0.1),  
+    "phi.Unif" = c(3, 3/0.1),  
     "sigma.sq.IG" = c(2, 2),
     "tau.sq.IG" = c(2, 0.1),
     "nu.Unif" = c(0.5, 2.5)
   )
+  
   n.samples = 10000
   burn.in = 5000
   
@@ -277,8 +278,9 @@ for (taxon in taxon_list) {
     ))
   }
   
-  starting1 <- list("beta" = as.numeric(ols_model$coefficients), "sigma.sq" = 1, "tau.sq" = 10, "phi" = 1, "nu" = 1.5)
-  starting2 <- list("beta" = rep(0, p), "sigma.sq" = 1, "tau.sq" = 10, "phi" = 1, "nu" = 1.5)
+  starting1 <- list("beta" = as.numeric(ols_model$coefficients), "sigma.sq" = 1, "tau.sq" = 1, "phi" = 3/0.5, "nu" = 1.5)
+  starting2 <- list("beta" = rep(0, p), "sigma.sq" = 1, "tau.sq" = 1, "phi" = 3/0.5, "nu" = 1.5)
+  
   starting_list <- list(chain1 = starting1, chain2 = starting2)
   res <- run_spLM_chains(
     formula = sp_formula,
