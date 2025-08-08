@@ -1,0 +1,584 @@
+---
+title: "Validation of using spatial statistic model"
+author: "Jiali Zhu"
+date: "today"
+editor_options:
+  chunk_output_type: console
+---
+
+```{r}
+#| label: load-packages
+#| include: false
+#| warning: false
+
+# Install and load 'zhulabtools' package
+library(zhulabtools)
+
+# Manage packages: check, install, and load specific packages
+check_install_packages(c("dplyr","lubridate", "ggplot2", "sf","sp", "readr", "purrr", "stringr","glue", "tidyr", "broom","lme4", "broom.mixed", "ppcor", "spdep", "spatialreg", "lmtest","car", "spBayes", "coda", "patchwork", "performance", "terra", "ggpmisc", "gstat", "ggmcmc", "inlabru", "stats", "viridis"))
+if (!require(plotbiomes)) {
+  devtools::install_github("valentinitnelav/plotbiomes")
+}
+load_packages(c("dplyr","lubridate", "ggplot2", "sf","sp", "readr", "purrr", "stringr","glue", "tidyr", "broom","lme4", "broom.mixed", "ppcor", "spdep", "spatialreg", "lmtest","car", "spBayes", "coda", "patchwork", "performance", "terra", "ggpmisc", "gstat", "ggmcmc", "inlabru", "stats", "viridis","INLA"))
+
+select <- dplyr::select # Avoid masking by base R's select function
+city <- "NY" # Set the city for analysis
+phe_types <- c("SOS", "EOS")
+```
+
+
+```{r}
+#| include: false
+# Helper to process files by pattern
+
+generate_mcmc_plot <- function(dir_path, coef, fixed_sp){
+  process_files <- function(file_list, phe_type_label) {
+    param_list <- map(file_list, function(file) {
+      model_data <- readRDS(file)
+      genus <- sub(paste0("(.*?)_", phe_type_label, "\\.rds"), "\\1", basename(file))
+      if (fixed_sp) {
+        param_data <- ggs(model_data$samples) |>
+          filter(str_starts(Parameter, fixed("beta["))) |>
+          mutate(beta_index = as.integer(str_extract(Parameter, "(?<=beta\\[)\\d+"))) |>
+          filter(beta_index >= 5)|>
+          rename(ParameterOriginal = Parameter) |>
+          mutate(Parameter = genus) |>
+          mutate(waic = model_data$WAIC$WAIC,
+                 converge = model_data$converge,
+                 milk = model_data$mean_logml)
+      } else {
+        param_data <- ggs(model_data$samples) |>
+          filter(str_starts(Parameter, fixed(coef))) |>
+          rename(ParameterOriginal = Parameter) |>
+          mutate(Parameter = genus)|>
+          mutate(waic = model_data$WAIC$WAIC,
+                 converge = model_data$converge,
+                 milk = model_data$mean_logml)
+      }
+
+      return(param_data)
+    })
+    combined_param_data <- bind_rows(param_list) |>
+      filter(Parameter != "Alnus") |>
+      mutate(phe_type = phe_type_label)
+    return(combined_param_data)
+}
+  # Collect files
+  SOS_files <- list.files(dir_path, pattern = "SOS\\.rds$", full.names = TRUE)
+  EOS_files <- list.files(dir_path, pattern = "EOS\\.rds$", full.names = TRUE)
+
+  # Process each type
+  sos_data <- process_files(SOS_files, "SOS")
+  eos_data <- process_files(EOS_files, "EOS")
+
+  combined_param_data <- bind_rows(sos_data, eos_data)
+  combined_param_data$phe_type <- factor(combined_param_data$phe_type, levels = c("SOS", "EOS"))
+
+  # Summarize
+  summary_data <- combined_param_data |>
+    group_by(Parameter, phe_type) |>
+    summarise(
+      median_value = median(value, na.rm = TRUE),
+      lower_2_5 = quantile(value, 0.025, na.rm = TRUE),
+      upper_97_5 = quantile(value, 0.975, na.rm = TRUE),
+      waic = first(waic),
+      converge = first(converge),
+      milk = first(milk),
+      .groups = "drop"
+    ) |>
+    mutate(Sig = ifelse(lower_2_5 * upper_97_5 > 0, "*", ""),
+           SigAlpha = ifelse(Sig == "*", 1, 0.2),
+           Color = ifelse(median_value >0, "#0D0887FF" , "#FCA636FF")) 
+
+  param_levels <- rev(unique(summary_data$Parameter))
+
+  # Plot
+  
+  p1 <- ggplot(summary_data, aes(x = factor(as.character(Parameter), levels = param_levels), y = median_value,
+                                 colour = Color)) +
+    geom_point(aes(alpha = SigAlpha), size=3) +
+    geom_errorbar(aes(ymin = lower_2_5, ymax = upper_97_5, alpha = SigAlpha), width = 0.4) +
+    geom_hline(yintercept = 0, linetype = 2) +
+    geom_text(aes(label = round(median_value, 3)),
+              vjust = -0.7, size = 4) +
+    scale_alpha_identity() +
+    scale_color_identity() +
+    guides(alpha = "none") +
+    facet_wrap(~ phe_type, scales = "free_x") +  # flip x/y means free_x
+    theme_minimal() +
+    labs(x = NULL, y = "Estimate") +
+    theme(
+      strip.text = element_text(face = "bold"),
+      axis.text.x = element_text(size = 14)
+    ) +
+      coord_flip()
+
+  if (coef %in% c("sp_effect", "z_hex")) {
+    p2 <- ggplot(combined_param_data, aes(x = value, fill = ParameterOriginal)) +
+      geom_density(linewidth = 0.1, alpha = 0.5) +
+      scale_x_continuous(limits = c(-50, 50)) +
+      facet_wrap(~ Parameter, ncol = 1, scales = "free_y") +
+      labs(
+        x = paste0("Posterior distribution of ", coef),
+        y = "Density"
+      ) +
+      facet_grid(Parameter ~ phe_type, scales = "free_y") +
+      theme_minimal(base_size = 12) +
+      theme(
+        axis.text.y = element_blank(),
+        strip.text.y = element_text(angle = 0),
+        panel.spacing = unit(0.4, "lines"),
+        legend.position = "none"
+      )
+  } else if (coef == "spatial_effect") {
+    p2 <- ggplot(combined_param_data, aes(x = value)) +
+      geom_density(fill = "skyblue", alpha = 0.5) +
+      scale_x_continuous(limits = c(-100, 100)) +
+      facet_wrap(~ Parameter, ncol = 1, scales = "free_y") +
+      labs(
+        x = paste0("Posterior distribution of ", coef),
+        y = "Density"
+      ) +
+      facet_grid(Parameter ~ phe_type, scales = "free_y")+
+      theme_minimal(base_size = 12) +
+      theme(
+        axis.text.y = element_blank(),
+        strip.text.y = element_text(angle = 0),
+        panel.spacing = unit(0.4, "lines")
+      )
+  } else {
+    p2 <- ggplot(combined_param_data, aes(x = value)) +
+      geom_density(fill = "skyblue", alpha = 0.5) +
+      facet_wrap(~ Parameter, ncol = 1, scales = "free_y") +
+      labs(
+        x = paste0("Posterior distribution of ", coef),
+        y = "Density"
+      ) +
+      facet_grid(Parameter ~ phe_type, scales = "free_y")+
+      # geom_text(data = summary_data, aes(x = median_value-3, y = 0, label = round(median_value, 3)), vjust = -1, size = 3) +
+      geom_text(data = summary_data, aes(x = median_value+3, y = 0, label = paste0("gelman.diag: ", round(converge, 4))), vjust = -1, color = "red", size = 3) +
+      theme_minimal(base_size = 12) +
+      theme(
+        axis.text.y = element_blank(),
+        strip.text.y = element_text(angle = 0),
+        panel.spacing = unit(0.4, "lines")
+      )
+  }
+  p <- list(coef_summary_plot = p1, coef_density_plot = p2, summary_data = summary_data)
+  return(p)
+}
+
+source("~/phenology-urban/script/spatial_stats_model/prepare_data_genus_species.R")
+```
+
+# Spatial random effect with covariance (INLA)
+
+$$w(\mathbf{s}_i) \sim \mathcal{GP}(0, \Sigma)$$
+In INLA, the SPDE approach is a way to represent a continuous Gaussian Random Field (GRF) as a sparse Gaussian Markov Random Field (GMRF). The mesh is used to discretize continuous space so that the SPDE can be represented as a finite-dimensional sparse matrix system.
+
+```{r}
+#| label: fig-mesh
+#| include: true
+#| fig-width: 6
+#| fig-height: 6
+#| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each taxon group in New York city."
+#| warning: false
+#| eval: true
+
+Acer_EOS <- readRDS("~/phenology-urban/data/proc/model_output/sp_model/fixed_preseason/inla_alg/spatial_spde/NY/genus/Acer_EOS.rds")
+boundary <- read_sf("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp", quiet = T)
+ggplot() +
+  geom_sf(data=boundary,color='turquoise',fill='transparent') +
+  gg(Acer_EOS$mesh)
+  # geom_sf(data=tavg_allyear_var_sf,col='purple',size=1.7,alpha=0.5)
+```
+
+
+
+```{r}
+#| label: fig-ny-coef3
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each taxon group in New York city."
+#| warning: false
+#| eval: true
+
+source("~/phenology-urban/script/spatial_stats_model/inla_alg/run_sp_inla.R")
+r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/sp_model/fixed_preseason/inla_alg/spatial_spde/NY/genus/")
+plots_coef <- list()
+assess_genus <- data.frame()
+
+for (phe_type in phe_types) {
+  p1 <- plot_coef_genus_city(r_output_dir, phe_type)
+  plots_coef[[phe_type]] <- p1$coef_summary_plot
+  assess_genus <- rbind(assess_genus, p1$assess)
+}
+
+ny_genus = wrap_plots(plots_coef, ncol = 2)
+
+r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/sp_model/fixed_preseason/inla_alg/spatial_spde/NY/species/")
+plots_coef <- list()
+assess_species <- data.frame()
+
+for (phe_type in phe_types) {
+  p1 <- plot_coef_sp_city(r_output_dir, phe_type)
+  plots_coef[[phe_type]] <- p1$coef_summary_plot
+  assess_species <- rbind(assess_species, p1$assess)
+}
+
+ny_sp = wrap_plots(plots_coef, ncol = 2)
+
+ny_genus/ny_sp
+
+inla_sp <- rbind(assess_genus, assess_species)
+```
+
+# Treat the spatial random effect as a random effect without covariance (MCMC)
+
+$$w(\mathbf{s}_i) = u_{g_i},\ u_{g_i} \sim \mathcal{N}(0, \sigma^2_w)$$
+```{r fig-grid}
+#| fig-width: 6
+#| fig-height: 6
+#| fig-cap: "The hexagonal grid used for spatial modeling in New York City."
+#| warning: false
+#| eval: true
+
+points_in_buffer <- read_csv(paste0("~/phenology-urban/data/proc/urban/",city,"/tree_WU_500_buffer_PS.csv"), show_col_types = FALSE)
+
+points_sf <- st_as_sf(points_in_buffer, coords = c("lon", "lat"), crs = 4326, remove = F) |>
+  st_transform(crs = 9311)
+hex_size <- 5000
+bbox <- st_bbox(points_sf)
+hex_grid_geom <- st_make_grid(bbox, cellsize = hex_size, square = FALSE)
+hex_grid <- st_sf(geometry = hex_grid_geom) |>
+  mutate(hex_id = row_number()) |>
+  mutate(centroid = st_centroid(geometry)) |>
+  mutate(
+    hex_lon = st_coordinates(centroid)[, 1],
+    hex_lat = st_coordinates(centroid)[, 2]
+  )
+
+ggplot() +
+  geom_sf(data = boundary, fill = "grey90", color = NA) +
+  geom_sf(data = hex_grid, fill = NA, color = "black", size = 0.2) +
+  geom_sf(
+    data = st_join(points_sf, hex_grid, join = st_within) |>
+      filter(year == 2020) |>
+      mutate(hex_id = factor(hex_id)),
+    aes(color = hex_id), size = 0.01
+  ) +
+  guides(col = "none") +
+  theme_minimal()
+```
+
+
+
+```{r}
+#| label: fig-ny-coef4
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each taxon group in New York city."
+#| warning: false
+#| eval: true
+
+g_dir_path <- "~/phenology-urban/data/proc/model_output/sp_model/fixed_preseason/mcmc_alg/random_sp/NY/genus/"
+s_dir_path <- "~/phenology-urban/data/proc/model_output/sp_model/fixed_preseason/mcmc_alg/random_sp/NY/species/"
+
+g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "beta[2]", fixed_sp = F)
+s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
+
+(g_plot_obj$coef_summary_plot + ggtitle("Genus")) / (s_plot_obj$coef_summary_plot +  ggtitle("Species"))
+
+mcmc_random_sp <- rbind(g_plot_obj$summary_data, s_plot_obj$summary_data)
+```
+
+```{r}
+#| label: fig-ny-randomsp
+#| include: true
+#| fig-width: 10
+#| fig-height: 10
+#| fig-cap: "The distribution of the posterior of spatial random effect in density form."
+#| warning: false
+#| eval: true
+
+g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "z_hex", fixed_sp = F)
+s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "z_hex", fixed_sp = F)
+
+(g_plot_obj$coef_density_plot + ggtitle("Genus")) / (s_plot_obj$coef_density_plot +  ggtitle("Species"))
+```
+
+
+# Comparison of models
+
+To compare the performance of different models, I used the `WAIC` (Widely Applicable Information Criterion) and the log marginal likelihood (`mlik`) as metrics. The WAIC is a measure of model fit that accounts for both the goodness of fit and model complexity, while the log marginal likelihood provides a measure of how well the model explains the data.
+
+I set the **"No spatial effect" model as the baseline for comparison**. The differences in `WAIC` and log marginal likelihood (`mlik`) between each model and the baseline are calculated. 
+
+-   For `mlik_diff`, a positive difference indicates that the model performs better than the baseline, while a negative difference suggests worse performance.
+-   For `WAIC_diff`, a positive difference indicates better performance for the alternative model, while a negative difference suggests worse performance.
+
+```{r}
+#| label: compare_genus
+#| include: true
+#| fig-width: 10
+#| fig-height: 8
+#| fig-cap: "Comparison of genera model performance using WAIC and log marginal likelihood (mlik)."
+#| warning: false
+#| eval: true
+
+mcmc_random_sp <- mcmc_random_sp |>
+  mutate(model = "Random spatial effect without covariance (MCMC)") |>
+  dplyr::select(milk, waic, Parameter, phe_type, model)
+inla_sp <- inla_sp |>
+  mutate(model = "Spatial random effect with covariance (INLA)")
+
+compare_models <- bind_rows(
+  mcmc_random_sp,
+  inla_sp|>
+    filter(milk_type == "log marginal-likelihood (integration)") |>
+    select(-milk_type))|>
+  mutate(Parameter = gsub(" ", "_", Parameter),
+         group = ifelse(grepl("_", Parameter), "species", "genus"))|>
+  group_by(Parameter, phe_type) |>
+  mutate(
+    waic_diff = waic[match("Random spatial effect without covariance (MCMC)", model)] - waic,
+    mlik_diff = milk - milk[match("Random spatial effect without covariance (MCMC)", model)] 
+  ) |>
+  ungroup() |>
+  mutate(model = factor(model, levels = c("Random spatial effect without covariance (MCMC)",
+                                          "Spatial random effect with covariance (INLA)")),
+         phe_type = factor(phe_type, levels = c("SOS", "EOS"))) |>
+  rename(mlik = milk) |>
+  pivot_longer(
+    cols = c("waic", "mlik"),
+    names_to = "matrices",
+    values_to = "value"
+  )
+
+ggplot(compare_models |> filter(group == "genus" & Parameter != "Alnus"), aes(x = Parameter, y = value, fill = model)) +
+  geom_col(position = position_dodge(width = 0.8)) +
+  facet_grid(matrices~ phe_type, scales = "free_y") +
+  scale_fill_brewer(palette = "Set2") +
+  # coord_cartesian(ylim = c(0, 200)) +
+  labs(x = "Parameter", y = "Model comparison \n(Log marginal likelihood or WAIC)",
+       fill = "Model") +
+  theme_bw(base_size = 12) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.spacing = unit(0.8, "lines")
+  )
+```
+
+```{r}
+#| label: compare_sp
+#| include: true
+#| fig-width: 10
+#| fig-height: 8
+#| fig-cap: "Comparison of species model performance using WAIC and log marginal likelihood (mlik)."
+#| warning: false
+#| eval: true
+ggplot(compare_models |> filter(group == "species"), aes(x = Parameter, y = value, fill = model)) +
+  geom_col(position = position_dodge(width = 0.8)) +
+  facet_grid(matrices~ phe_type, scales = "free_y") +
+  scale_fill_brewer(palette = "Set2") +
+  # coord_cartesian(ylim = c(0, 200)) +
+  labs(x = "Parameter", y = "Model comparison \n(Log marginal likelihood or WAIC)",
+       fill = "Model") +
+  theme_bw(base_size = 12) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.spacing = unit(0.8, "lines")
+  )
+```
+
+
+# Discussion
+
+The **spatial random effect with covariance (INLA)** model:
+
+    -   Very fast.
+    -   WAIC is slightly higher than that of the MCMC model for most cases.
+    -   SPDE mesh approximation is not fine enough.
+    -   Results are sensitive to priors and may get stuck in local optima.
+
+The **spatial random effect without covariance (MCMC)** model: 
+
+    -   Provides higher confidence in inference.
+    -   Provide more interpretable estimates of spatial heterogeneity, not requiring the latent spatial field to be Gaussian.
+    -   Less efficient (though still acceptable, ~2 hours for all models in NYC).
+    -   The 5,000 m grid size may need further consideration.
+
+<!-- ```{r} -->
+<!-- #| label: fig-ny-fixedsp -->
+<!-- #| include: true -->
+<!-- #| fig-width: 10 -->
+<!-- #| fig-height: 10 -->
+<!-- #| fig-cap: "The distribution of the posterior of spatial fixed effect in density form." -->
+<!-- #| warning: false -->
+<!-- #| eval: true -->
+
+<!-- g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "spatial_effect", fixed_sp = T) -->
+<!-- s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "spatial_effect", fixed_sp = T) -->
+
+<!-- (g_plot_obj$coef_density_plot + ggtitle("Genus")) / (s_plot_obj$coef_density_plot +  ggtitle("Species")) -->
+<!-- ``` -->
+
+<!-- ### MCMC -->
+
+<!-- Using `NIMBLE` package, the MCMC algorithm was used to sample from the posterior distribution of the model parameters. -->
+
+<!-- ```{r} -->
+<!-- #| label: fig-ny_genus -->
+<!-- #| include: true -->
+<!-- #| fig-width: 10 -->
+<!-- #| fig-height: 10 -->
+<!-- #| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each genus in New York city." -->
+<!-- #| warning: false -->
+<!-- #| eval: true -->
+
+<!-- dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/spbayes/NY/" -->
+<!-- plot_obj <- generate_mcmc_plot(dir_path, coef = "beta[2]") -->
+<!-- plot_obj$coef_summary_plot -->
+<!-- plot_obj$coef_density_plot -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- #| label: fig-ny_genus -->
+<!-- #| include: true -->
+<!-- #| fig-width: 10 -->
+<!-- #| fig-height: 10 -->
+<!-- #| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each species in New York city." -->
+<!-- #| warning: false -->
+<!-- #| eval: true -->
+
+<!-- dir_path <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/spbayes/NY/species/" -->
+<!-- plot_obj <- generate_mcmc_plot(dir_path, coef = "beta[2]") -->
+<!-- plot_obj$coef_summary_plot -->
+<!-- plot_obj$coef_density_plot -->
+<!-- ``` -->
+
+<!-- Show the sp (semi-variogram) -->
+
+<!-- ### INLA -->
+
+<!-- Genus level -->
+
+<!-- ```{r} -->
+<!-- #| label: fig-genus-4 -->
+<!-- #| include: true -->
+<!-- #| fig-width: 10 -->
+<!-- #| fig-height: 5 -->
+<!-- #| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each genus in New York city." -->
+<!-- #| warning: false -->
+<!-- #| eval: true -->
+
+
+<!-- r_output_dir <- paste0("~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/inla_year_random_genus_check/", city, "/") -->
+<!-- plots_coef <- list() -->
+
+<!-- for (phe_type in phe_types) { -->
+<!--   p1 <- plot_coef_genus_city(r_output_dir, phe_type) -->
+<!--   plots_coef[[phe_type]] <- p1$coef_summary_plot -->
+<!-- } -->
+
+<!-- ny_genus = wrap_plots(plots_coef, ncol = 2) -->
+<!-- ny_genus -->
+<!-- ``` -->
+
+<!-- Species level -->
+
+<!-- ```{r} -->
+<!-- #| label: fig-species-4 -->
+<!-- #| include: true -->
+<!-- #| fig-width: 10 -->
+<!-- #| fig-height: 5 -->
+<!-- #| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each species in New York city." -->
+<!-- #| warning: false -->
+<!-- #| eval: true -->
+
+
+<!-- r_output_dir <- paste0("~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/inla_year_random_species_check/", city, "/") -->
+<!-- plots_coef <- list() -->
+
+<!-- for (phe_type in phe_types) { -->
+<!--   p1 <- plot_coef_sp_city(r_output_dir, phe_type) -->
+<!--   plots_coef[[phe_type]] <- p1$coef_summary_plot -->
+<!-- } -->
+
+<!-- ny_sp = wrap_plots(plots_coef, ncol = 2) -->
+<!-- ny_sp -->
+<!-- ``` -->
+
+<!-- diagnostic plots -->
+
+<!-- As for the INLA model, the coefficients do not show significant differences from the MCMC model, with most genera showed negative association between temperature and the start of season. -->
+
+<!-- Why so convergent? INLA first finds the Maximum A Posteriori (MAP) estimate, which is the highest point of the posterior distribution. Then it uses Laplace Approximation, which inherently assumes that the posterior distribution is approximately normal near its peak (the MAP estimate). -->
+
+<!-- ```{r} -->
+<!-- #| label: fig-ny_sos_tavg_coef -->
+<!-- #| include: true -->
+<!-- #| fig-width: 12 -->
+<!-- #| fig-height: 8 -->
+<!-- #| warning: false -->
+<!-- #| eval: true -->
+<!-- #| fig-cap: "The density of the posterior distribution of regression coefficients for `Temp~avg~` with `SOS` as the response variable for each genus in New York city, generated via INLA." -->
+
+<!-- r_output_dir <- paste0("~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/inla_year_random_species_check/", city, "/") -->
+<!-- p1 <- plot_coef_sp_city(r_output_dir, phe_type = "SOS") -->
+
+<!-- p1$combined_plot_semi -->
+<!-- ``` -->
+
+<!-- Compared to the previous MCMC results, these spatial fields appear to be smoother overall, with gradual transitions rather than sharp local variations.Some genera (Ulmus, Alnus) have fewer high/low value clusters dueu to fewer observations. -->
+
+<!-- # Change the data input -->
+
+<!-- ## HUMID -->
+
+<!-- ```{r} -->
+<!-- #| label: fig-ny-coef6 -->
+<!-- #| include: true -->
+<!-- #| fig-width: 10 -->
+<!-- #| fig-height: 10 -->
+<!-- #| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each taxon group in New York city." -->
+<!-- #| warning: false -->
+<!-- #| eval: true -->
+
+<!-- g_dir_path <- "~/phenology-urban/temp/data_local/random_sp_humid/NY/genus/" -->
+<!-- s_dir_path <- "~/phenology-urban/temp/data_local/random_sp_humid/NY/species/" -->
+
+<!-- g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "beta[2]", fixed_sp = F) -->
+<!-- s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F) -->
+
+<!-- (g_plot_obj$coef_summary_plot + ggtitle("Genus")) / (s_plot_obj$coef_summary_plot +  ggtitle("Species")) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- #| label: fig-ny-density6 -->
+<!-- #| include: true -->
+<!-- #| fig-width: 10 -->
+<!-- #| fig-height: 10 -->
+<!-- #| fig-cap: "The distribution of the posterior of regression coefficients in density form." -->
+<!-- #| warning: false -->
+<!-- #| eval: true -->
+
+<!-- (g_plot_obj$coef_density_plot + ggtitle("Genus")) / (s_plot_obj$coef_density_plot +  ggtitle("Species")) -->
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- #| label: fig-ny-randomsp-humid -->
+<!-- #| include: true -->
+<!-- #| fig-width: 10 -->
+<!-- #| fig-height: 10 -->
+<!-- #| fig-cap: "The distribution of the posterior of spatial random effect in density form." -->
+<!-- #| warning: false -->
+<!-- #| eval: true -->
+
+<!-- g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "sp_effect", fixed_sp = F) -->
+<!-- s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "sp_effect", fixed_sp = F) -->
+
+<!-- (g_plot_obj$coef_density_plot + ggtitle("Genus")) / (s_plot_obj$coef_density_plot +  ggtitle("Species")) -->
+<!-- ``` -->

@@ -31,19 +31,31 @@ taxon_col <- Sys.getenv("TAXON_COL")  # column name for species
 # phe_type <- args[4]
 
 # r_input_dir <- "~/phenology-urban/data/"
-# r_output_dir <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp/"
+# r_output_dir <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/random_sp_humid/"
 # city <- "NY"
-# phe_type <- "EOS"
-# taxon_col <- "genus"
+# phe_type <- "SOS"
+# taxon_col <- "canonicalname"
 
 #################### Read data ####################
 
 # Given the temporal variation required, we will use the WU data
+# Try the HUMID one
 
 ## prepare input data
-points_in_buffer <- read_csv(paste0("~/phenology-urban/data/proc/urban/",city,"/tree_WU_500_buffer_PS.csv"), show_col_types = FALSE)
 
-points_sf <- st_as_sf(points_in_buffer, coords = c("lon", "lat"), crs = 4326, remove = F) |>
+metadata <- read_csv("~/lab-data/datasets/vegetation/PS/urban/metadata.csv") %>%
+  filter(site == !!city)
+file_list <- list.files(path = "~/lab-data/datasets/vegetation/PS/urban/doy", pattern = paste0("^doy_",city,"_.*\\.rds$"), full.names = TRUE)
+data_list <- file_list %>%
+  map(~ readRDS(.x))
+all_doy <- bind_rows(data_list)
+tree_location <- metadata %>%
+  mutate(genus = str_extract(taxa, "^[^ ]+")) %>%
+  left_join(all_doy, by = "id") %>%
+  filter(!is.na(doy)) %>%
+  mutate(geometry = paste0("c(", lon, ", ", lat, ")"))
+
+points_sf <- st_as_sf(tree_location |> distinct(lon, lat), coords = c("lon", "lat"), crs = 4326, remove = F) |>
   st_transform(crs = 9311)
 hex_size <- 5000
 bbox <- st_bbox(points_sf)
@@ -57,54 +69,83 @@ hex_grid <- st_sf(geometry = hex_grid_geom) |>
   ) |>
   select(-centroid)
 # Assign each point to a hexagon
-points_in_buffer <- st_join(points_sf, hex_grid, join = st_within) %>%
+tree_location_hex <- st_join(points_sf, hex_grid, join = st_within) %>%
   mutate(hex_id = as.factor(hex_id)) |>
   select(-hex_lon, -hex_lat) |>
-  st_drop_geometry()
+  st_drop_geometry() |>
+  right_join(tree_location, by = c("lon", "lat"))
 
 
-all_sites_temp <- readRDS(paste0("~/urban-cooling/data_gl/raw/WU/",city,"/",city,"_wu.rds")) %>%
-  dplyr::select(c(Date, HighTemp, AvgTemp, LowTemp, Sum_mm, name)) %>%
-  mutate(season = case_when(
-    month(Date) %in% 3:5 ~ "spring",
-    month(Date) %in% 6:8 ~ "summer",
-    month(Date) %in% 9:11 ~ "fall",
-    month(Date) %in% c(12, 1, 2) ~ "winter"
-  )) %>%
-  mutate(year = year(Date),
-         year = if_else(month(Date) == 12, year + 1, year)) %>%
-  group_by(name, year, season) %>%
-  summarise(
-    Avg_AvgTemp = mean(AvgTemp, na.rm = TRUE),
-    Sum_Sum_mm = sum(Sum_mm, na.rm = TRUE),
-    AvgTemp_count = sum(!is.na(AvgTemp)),
-    Sum_mm_count = sum(!is.na(Sum_mm)),
-    .groups = "drop"
-  )
 
-srad_daily <- readRDS(paste0("~/phenology-urban/data/raw/",city,"/Daymet/daily2016-2024/srad_daily_2016-2023.rds")) %>%
-  select(id, value, date)  %>%
-  mutate(season = case_when(
-    month(date) %in% 3:5 ~ "spring",
-    month(date) %in% 6:8 ~ "summer",
-    month(date) %in% 9:11 ~ "fall",
-    month(date) %in% c(12, 1, 2) ~ "winter"
-  )) %>%
-  mutate(year = year(date),
-         year = if_else(month(date) == 12, year + 1, year)) %>%
-  group_by(id, year, season) %>%
-  summarise(
-    Avg_srad = mean(value, na.rm = TRUE),
-    srad_count = sum(!is.na(value)),
-    .groups = "drop"
-  )
+# List of Humid variable names and their corresponding filenames
+files <- c("temp_monthly_all_tree.rds",
+           "srad_monthly_all_tree.rds")
+base_path <- "~/phenology-urban/data/raw/"
+processed_humid_list <- lapply(files, function(file_name) {
+  # Read the file
+  var_name <- sub("_monthly_all_tree.rds", "", file_name)
+  data <- readRDS(paste0(base_path, city, "/HUMID/", file_name)) %>%
+    select(id, value, date) %>%
+    mutate(
+      season = case_when(
+        substr(date, 6, 7) %in% c("03", "04", "05") ~ "spring",
+        substr(date, 6, 7) %in% c("06", "07", "08") ~ "summer",
+        substr(date, 6, 7) %in% c("09", "10", "11") ~ "fall",
+        substr(date, 6, 7) %in% c("12", "01", "02") ~ "winter"
+      )) %>%
+    mutate(year = as.integer(substr(date, 1, 4)),
+           year = if_else(substr(date, 6, 7) == "12", year + 1, year)) %>%
+    filter(year < 2019) %>% 
+    group_by(id, year, season) %>%
+    summarise(
+      # Use sum for prcp, and mean for temp and srad
+      Avg_value = mean(as.numeric(value), na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    # Rename the Avg_value column to the variable name (e.g., tmax, tmin, prcp)
+    rename(!!var_name := Avg_value)
+  return(data)
+})
+
+files <- c("prcp_monthly_all_tree.rds")
+processed_daymet_list <- lapply(files, function(file_name) {
+  # Read the file
+  var_name <- sub("_monthly_all_tree.rds", "", file_name)
+  data <- readRDS(paste0(base_path, city, "/Daymet/monthly2016-2024/", file_name)) %>%
+    select(id, value, date) %>%
+    mutate(
+      season = case_when(
+        substr(date, 6, 7) %in% c("03", "04", "05") ~ "spring",
+        substr(date, 6, 7) %in% c("06", "07", "08") ~ "summer",
+        substr(date, 6, 7) %in% c("09", "10", "11") ~ "fall",
+        substr(date, 6, 7) %in% c("12", "01", "02") ~ "winter"
+      )) %>%
+    mutate(year = as.integer(substr(date, 1, 4)),
+           year = if_else(substr(date, 6, 7) == "12", year + 1, year)) %>%
+    group_by(id, year, season) %>%
+    summarise(
+      # Use sum for prcp, and mean for temp and srad
+      Avg_value = sum(as.numeric(value), na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    # Rename the Avg_value column to the variable name (e.g., tmax, tmin, prcp)
+    rename(!!var_name := Avg_value)
+  
+  return(data)
+})
+
+all_sites_climate <- processed_humid_list[[1]] |>
+  left_join(processed_daymet_list[[1]], by = c("id", "season", "year")) 
+
+srad_daily <- processed_humid_list[[2]] |>
+  rename(Avg_srad = srad)
+
+source("~/phenology-urban/script/spatial_stats_model/prepare_species_data.R")
 
 if (taxon_col  == "canonicalname"){
-  source("script/spatial_stats_model/run_species_inla.R")
-  model_input_all <- prepare_species_data(phe_type, points_in_buffer, all_sites_temp, srad_daily, source = "WU")
+  model_input_all <- prepare_species_data(phe_type, tree_location_hex, all_sites_climate, srad_daily, source = "Grid")
 } else if (taxon_col == "genus") {
-  source("script/spatial_stats_model/run_genus_inla_fixpre.R")
-  model_input_all <- prepare_genus_data(phe_type, points_in_buffer, all_sites_temp, srad_daily, source = "WU")
+  model_input_all <- prepare_genus_data(phe_type, tree_location_hex, all_sites_climate, srad_daily, source = "Grid")
 } else {
   stop("Invalid taxon_col. Must be 'canonicalname' or 'species'.")
 }
@@ -161,7 +202,6 @@ for (taxon in taxon_list) {
   tavg_phe_df <- model_input_sf %>% 
     st_drop_geometry()
   
-  
   #################### Run the spatial model ####################
   temp_col <- names(tavg_phe_df)[grepl("^temp", names(tavg_phe_df))]
   prcp_col <- names(tavg_phe_df)[grepl("^prcp", names(tavg_phe_df))]
@@ -209,7 +249,11 @@ for (taxon in taxon_list) {
     sigma_year = 1,
     sigma_hex = 1,
     year_effect = rep(0, nyears),
-    sp_effect = rep(0, nhex)
+    sp_effect = rep(0, nhex),
+    mu = rep(180, N),
+    y_pred = rep(180, N),  # Initialize y_pred
+    z_year = rep(0, nyears),  # Initialize year effects
+    z_hex = rep(0, nhex)  # Initialize spatial effects
   )
   
   ### Change based on semi-variogram fitting
@@ -221,12 +265,11 @@ for (taxon in taxon_list) {
                     I = diag(1,N))
   monitors <- c("beta", "year_effect", "sp_effect")
   
-  
   ni <- 300000   # nb iterations 
   nt <- 10       # thinning interval
   nb <- 250000    # nb iterations as burn-in 
   nc <- 4         # nb chains
-  
+
   
   #################### Run/Save the model ####################
   
@@ -251,7 +294,7 @@ for (taxon in taxon_list) {
     as.mcmc(chain[, "beta[2]", drop = FALSE])
   }) |> as.mcmc.list()
   converge <- gelman.diag(beta2_mcmc, confidence = 0.95, transform=FALSE, autoburnin=TRUE,
-                          multivariate=TRUE)
+              multivariate=TRUE)
   
   # library(ggmcmc)
   # beta_label <- data.frame(Parameter = "beta[2]", Label = "AvgTemp")
@@ -314,19 +357,19 @@ for (taxon in taxon_list) {
   posterior_samples <- as.matrix(modelMCMCrun$samples)
   param_names <- colnames(posterior_samples)
   model_bridge <- bridge_sampler(samples = posterior_samples,
-                                 log_posterior = log_posterior_nimble,
-                                 data = list(y = y, X = X, constants = constants),
-                                 lb=setNames(rep(-Inf, length(param_names)), param_names),
-                                 ub=setNames(rep( Inf, length(param_names)), param_names),
-                                 param_types = rep("real", ncol(posterior_samples)),
-                                 repetitions = 10,
-                                 method = "normal",
-                                 cores = 1,
-                                 use_neff = T,
-                                 silent = FALSE,
-                                 verbose = TRUE,
-                                 varlist = ls(),
-                                 envir = environment())
+                              log_posterior = log_posterior_nimble,
+                              data = list(y = y, X = X, constants = constants),
+                              lb=setNames(rep(-Inf, length(param_names)), param_names),
+                              ub=setNames(rep( Inf, length(param_names)), param_names),
+                              param_types = rep("real", ncol(posterior_samples)),
+                              repetitions = 10,
+                              method = "normal",
+                              cores = 1,
+                              use_neff = T,
+                              silent = FALSE,
+                              verbose = TRUE,
+                              varlist = ls(),
+                              envir = environment())
   mean_logml <- mean(model_bridge$logml)
   
   

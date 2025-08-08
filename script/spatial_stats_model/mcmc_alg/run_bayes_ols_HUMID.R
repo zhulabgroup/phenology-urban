@@ -11,7 +11,6 @@ library(taxize)
 library(purrr)
 library(terra)
 library(rgbif)
-library(bridgesampling)
 
 # Read file paths from environment variables
 r_input_dir <- Sys.getenv("R_INPUT_DIR")
@@ -33,10 +32,11 @@ taxon_col <- Sys.getenv("TAXON_COL")  # column name for species
 # r_input_dir <- "~/phenology-urban/data/"
 # r_output_dir <- "~/phenology-urban/data/proc/urban/ols_model/bayes_species/"
 # city <- "NY"
-# phe_type <- "EOS"
+# phe_type <- "SOS"
 # taxon_col <- "canonicalname"
 
 #################### Read data ####################
+
 # Given the temporal variation required, we will use the WU data
 
 ## prepare input data
@@ -98,12 +98,11 @@ srad_daily <- readRDS(paste0("~/phenology-urban/data/raw/",city,"/Daymet/daily20
     .groups = "drop"
   )
 
+source("script/spatial_stats_model/prepare_data_genus_species.R")
 if (taxon_col  == "canonicalname"){
-  source("script/spatial_stats_model/run_species_inla.R")
-  model_input_all <- prepare_species_data(phe_type, points_in_buffer, all_sites_temp, srad_daily, source = "WU")
+  model_input_all <- prepare_species_data(phe_type, tree_location_hex, all_sites_climate, srad_daily, source = "Grid")
 } else if (taxon_col == "genus") {
-  source("script/spatial_stats_model/run_genus_inla_fixpre.R")
-  model_input_all <- prepare_genus_data(phe_type, points_in_buffer, all_sites_temp, srad_daily, source = "WU")
+  model_input_all <- prepare_genus_data(phe_type, tree_location_hex, all_sites_climate, srad_daily, source = "Grid")
 } else {
   stop("Invalid taxon_col. Must be 'canonicalname' or 'species'.")
 }
@@ -167,24 +166,22 @@ for (taxon in taxon_list) {
   srad_col <- names(tavg_phe_df)[grepl("^srad", names(tavg_phe_df))]
   
   sp_formula <- as.formula(paste0(phe_metric, " ~ ", temp_col, "+", prcp_col, "+", srad_col))
-  ols_model <- lm(sp_formula, data = tavg_phe_df)
+  
   # Define Nimble model code
   model_code <- nimbleCode({
     for (i in 1:N) {
       y[i] ~ dnorm(mu[i], tau)
       mu[i] <- inprod(X[i, 1:P], beta[]) + year_effect[year[i]]
-      y_pred[i] ~ dnorm(mu[i], tau)
     }
     for (q in 1:nyears) {
-      z_year[q] ~ dnorm(0, 1)                     
-      year_effect[q] <- z_year[q] * sigma_year   
+      year_effect[q] ~ dnorm(0, sd = sqrt(tau.year))
     }
-    sigma_year ~ dexp(1)
-    beta[1] ~ dnorm(180, sd = 40)    
-    beta[2] ~ dnorm(0, sd = 5) 
-    beta[3] ~ dnorm(0, sd = 1) 
-    beta[4] ~ dnorm(0, sd = 1) 
+    for (j in 1:P) {
+      beta[j] ~ dnorm(0, sd = 1000)
+    }
+    
     tau ~ dgamma(0.001, 0.001)
+    tau.year ~ dinvgamma(2.001, 0.667)
   })
   
   # Data inputs
@@ -196,129 +193,47 @@ for (taxon in taxon_list) {
   year_index <- as.integer(factor(tavg_phe_df$year))  # Create fixed year indices
   data <- list(y = y, X = X)  # Remove 'year' from data
   inits <- list(
-    beta = as.numeric(ols_model$coefficients),
+    beta = rep(0, ncol(X)),
     tau = 1, 
-    sigma_year = 1,
+    tau.year = 1,
     year_effect = rep(0, nyears)
   )
+  
   ### Change based on semi-variogram fitting
   constants <- list(N = N, P = ncol(X), 
                     nyears = nyears, 
                     year = year_index, 
                     I = diag(1,N))
-  monitors <- c("beta", "year_effect")
-
+  monitors <- c("beta", "tau.year", "year_effect")
   
-  ni <- 300000   # nb iterations 
-  nt <- 10       # thinning interval
-  nb <- 250000    # nb iterations as burn-in 
-  nc <- 4         # nb chains
+  ni <- 20000   # nb iterations 
+  nt <- 1       # thinning interval
+  nb <- 5000    # nb iterations as burn-in 
+  nc <- 1         # nb chains
   
   
   #################### Run/Save the model ####################
   
-  my_model <- nimbleModel(code = model_code, data = data, inits = inits, constants = constants)
-  compiled_model <- compileNimble(my_model)
+  modelMCMCrun <- nimbleMCMC(code = model_code, data = data, constants = constants, inits = inits, 
+                             monitors = monitors,
+                             niter = ni, nburnin = nb, thin = nt, nchains = nc, setSeed = 2025,
+                             progressBar = TRUE, 
+                             samplesAsCodaMCMC = TRUE, 
+                             summary = TRUE, 
+                             WAIC = TRUE)
   
-  conf <- configureMCMC(my_model, enableWAIC = TRUE)
-  conf$removeSampler(paste0("beta[", 1:4, "]"))
-  conf$addSampler(target = paste0("beta[", 1:4, "]"), type = "RW_block")
-  conf$removeSampler("tau")
-  conf$addSampler(target = "tau", type = "slice")
-  # conf$addMonitors2("y_pred")  # Add y_pred to monitors
-  
-  mymcmc <- buildMCMC(conf)
-  compiled_mcmc <- compileNimble(mymcmc, project = compiled_model)
-  modelMCMCrun <- runMCMC(compiled_mcmc,
-                          niter = ni, nburnin = nb, thin = nt, nchains = nc,
-                          samplesAsCodaMCMC = T, summary = TRUE, WAIC = TRUE)
-  
-  beta2_mcmc <- lapply(modelMCMCrun$samples, function(chain) {
-    as.mcmc(chain[, "beta[2]", drop = FALSE])
-  }) |> as.mcmc.list()
-  converge <- gelman.diag(beta2_mcmc, confidence = 0.95, transform=FALSE, autoburnin=TRUE,
-                          multivariate=TRUE)
-  
-  # library(ggmcmc)
   # beta_label <- data.frame(Parameter = "beta[2]", Label = "AvgTemp")
   # param_data <- ggs(modelMCMCrun$samples, par_labels = beta_label) %>%
   #   filter(Parameter == "AvgTemp")
   # beta_mean <- mean(param_data$value)
   # param_data %>%
-  #   ggs_density() + # traceplot
+  #   ggs_density() +
   #   theme_bw() +
   #   ggtitle(paste("taxon:", taxon)) +
   #   theme(plot.title = element_text(hjust = 0.5)) +
   #   annotate("text", x = beta_mean, y = 0, label = paste0("Mean: ", round(beta_mean, 2)),vjust = -1.5, color = "red", size = 4)
   # 
-  
-  
-  
-  log_posterior_nimble <- function(samples_row, data) {
-    constants <- data$constants
-    param_names <- names(samples_row)
-    if (is.null(param_names)) stop("samples_row does not have named parameters")
-    
-    # unpack parameter values
-    beta <- samples_row[grep("^beta\\[", param_names)]
-    tau <- samples_row["tau"]
-    sigma_year <- samples_row["sigma_year"]
-    
-    z_year <- samples_row[grep("^z_year\\[", param_names)]
-
-    # log-prior
-    log_prior <- sum(
-      dnorm(beta[1], mean = 180, sd = 40, log = TRUE),
-      dnorm(beta[2], 0, 5, log = TRUE),
-      dnorm(beta[3], 0, 1, log = TRUE),
-      dnorm(beta[4], 0, 1, log = TRUE),
-      dexp(sigma_year, rate = 1, log = TRUE),
-      dgamma(tau, shape = 0.001, rate = 0.001, log = TRUE),
-      sum(dnorm(z_year, 0, 1, log = TRUE))
-    )
-
-    # log-likelihood
-    X <- data$X
-    y <- data$y
-    year <- constants$year
-    N <- constants$N
-
-    year_effect <- z_year * sigma_year
-
-    mu <- as.vector(X %*% beta) + year_effect[year]
-    log_lik <- sum(dnorm(y, mean = mu, sd = 1 / sqrt(tau), log = TRUE))
-
-    return(log_lik + log_prior)
-  }
-  
-  posterior_samples <- as.matrix(modelMCMCrun$samples)
-  param_names <- colnames(posterior_samples)
-  model_bridge <- bridge_sampler(samples = posterior_samples,
-                                 log_posterior = log_posterior_nimble,
-                                 data = list(y = y, X = X, constants = constants),
-                                 lb=setNames(rep(-Inf, length(param_names)), param_names),
-                                 ub=setNames(rep( Inf, length(param_names)), param_names),
-                                 param_types = rep("real", ncol(posterior_samples)),
-                                 repetitions = 10,
-                                 method = "normal",
-                                 cores = 1,
-                                 use_neff = T,
-                                 silent = FALSE,
-                                 verbose = TRUE,
-                                 varlist = ls(),
-                                 envir = environment())
-  mean_logml <- mean(model_bridge$logml)
-  
-  
-  
-  modelMCMCrun <- list(
-    samples = modelMCMCrun$samples,
-    summary = modelMCMCrun$summary,
-    WAIC = modelMCMCrun$WAIC,
-    converge = converge$psrf[1],
-    mean_logml = mean_logml
-  )
-  
-  write_rds(modelMCMCrun, file = model_path, compress = "gz")
+  saveRDS(modelMCMCrun, file = model_path)
 }
+
 

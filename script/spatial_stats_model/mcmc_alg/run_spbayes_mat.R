@@ -37,7 +37,7 @@ taxon_col <- Sys.getenv("TAXON_COL")  # column name for species
 # r_input_dir <- "~/phenology-urban/data/"
 # r_output_dir <- "~/phenology-urban/data/proc/urban/sp_model/fixed_preseason/spbayes/"
 # city <- "NY"
-# phe_type <- "EOS"
+# phe_type <- "SOS"
 # taxon_col <- "canonicalname"
 
 
@@ -104,11 +104,10 @@ srad_daily <- readRDS(paste0("~/phenology-urban/data/raw/",city,"/Daymet/daily20
     .groups = "drop"
   )
 
+source("script/spatial_stats_model/prepare_data_genus_species.R")
 if (taxon_col  == "canonicalname"){
-  source("script/spatial_stats_model/run_species_inla.R")
   model_input_all <- prepare_species_data(phe_type, points_in_buffer, all_sites_temp, srad_daily, source = "WU")
 } else if (taxon_col == "genus") {
-  source("script/spatial_stats_model/run_genus_inla_fixpre.R")
   model_input_all <- prepare_genus_data(phe_type, points_in_buffer, all_sites_temp, srad_daily, source = "WU")
 } else {
   stop("Invalid taxon_col. Must be 'canonicalname' or 'species'.")
@@ -216,7 +215,7 @@ for (taxon in taxon_list) {
       })
     }
     if (length(beta_list) == 0) {
-      warning("No samples recovered successfully.")
+      message("No samples recovered successfully.")
       return(NULL)
     }
     beta_mat <- do.call(rbind, beta_list)
@@ -260,7 +259,9 @@ for (taxon in taxon_list) {
       if (use_knots) args_list$knots <- knots
       sp_model <- do.call(spLM, args_list)
       chain_object <- safe_spRecover_beta(sp_model, burn.in = burn.in, n.samples = n.samples)
-      if (is.null(chain_object)) next
+      if (is.null(chain_object)) {
+        next  # Skip the current iteration of the loop
+      }
       chain_recover[[i]] <- chain_object
       # param_cols <- grep(param_pattern, colnames(chain_recover[[i]]$p.beta.recover.samples))
       chain <- chain_object$p.beta.recover.samples
@@ -303,7 +304,9 @@ for (taxon in taxon_list) {
     param_pattern = "temp_",
     use_knots = use_knots
   )
-  if (is.null(res)) next
+  if (is.null(res)) {
+    next  # Skip the current iteration of the loop
+  }
   beta2_mcmc <- lapply(res$beta_mcmc_list, function(chain) {
     temp_cols <- grep("^temp_", colnames(chain), value = TRUE)  
     as.mcmc(chain[, temp_cols, drop = FALSE])

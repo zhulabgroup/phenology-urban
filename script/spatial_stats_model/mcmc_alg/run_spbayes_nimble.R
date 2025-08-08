@@ -100,11 +100,10 @@ srad_daily <- readRDS(paste0("~/phenology-urban/data/raw/",city,"/Daymet/daily20
     .groups = "drop"
   )
 
+source("script/spatial_stats_model/prepare_data_genus_species.R")
 if (taxon_col  == "canonicalname"){
-  source("script/spatial_stats_model/run_species_inla.R")
   model_input_all <- prepare_species_data(phe_type, points_in_buffer, all_sites_temp, srad_daily, source = "WU")
 } else if (taxon_col == "genus") {
-  source("script/spatial_stats_model/run_genus_inla_fixpre.R")
   model_input_all <- prepare_genus_data(phe_type, points_in_buffer, all_sites_temp, srad_daily, source = "WU")
 } else {
   stop("Invalid taxon_col. Must be 'canonicalname' or 'species'.")
