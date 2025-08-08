@@ -3,8 +3,11 @@ library(zhulabtools)
 
 load_packages(c("here", "rgbif", "dplyr","lubridate", "ggplot2", "sf","sp", 
                 "readr", "purrr", "stringr","glue", "tidyr", "broom","lme4", 
-                "broom.mixed", "coda", "patchwork", "terra", "stats", "viridis", "INLA"))
+                "broom.mixed", "coda", "patchwork", "terra", "stats", "viridis"))
 select <- dplyr::select
+## Rscript.r
+options(inla.call = "inla")
+library(INLA)
 ################################## parameter loading ##################################
 
 # Read file paths from environment variables
