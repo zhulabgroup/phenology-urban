@@ -13,16 +13,19 @@ run_mcmc_spatial_exp <- function(model_input_all, r_output_dir, phe_type, city, 
       next  # Skip the current iteration of the loop
     }
     model_input_sf <- model_input_all |>
-      filter(!!sym(taxon_col) == !!taxon) |>
-      mutate(
-        lon_jitter = lon,
-        lat_jitter = lat
-      )
-    dup_idx <- duplicated(model_input_sf[, c("lon", "lat")]) | 
-      duplicated(model_input_sf[, c("lon", "lat")], fromLast = TRUE)
-    model_input_sf[dup_idx, c("lon_jitter", "lat_jitter")] <-
-      model_input_sf[dup_idx, c("lon_jitter", "lat_jitter")] +
-      matrix(rnorm(sum(dup_idx) * 2, 0, 1e-5), ncol = 2)
+      filter(!!sym(taxon_col) == !!taxon)
+    dup_idx <- duplicated(dplyr::select(model_input_sf, lon, lat)) |
+      duplicated(dplyr::select(model_input_sf, lon, lat), fromLast = TRUE)
+    
+    model_input_sf$lon_jitter <- model_input_sf$lon
+    model_input_sf$lat_jitter <- model_input_sf$lat
+    
+    if (any(dup_idx)) {
+      base_xy <- as.matrix(model_input_sf[dup_idx, c("lon", "lat")])
+      jit_xy  <- base_xy + matrix(rnorm(sum(dup_idx) * 2, 0, 1e-5), ncol = 2)
+      colnames(jit_xy) <- c("lon_jitter", "lat_jitter")
+      model_input_sf[dup_idx, c("lon_jitter", "lat_jitter")] <- as.data.frame(jit_xy)
+    }
     if (phe_type %in% c("SOS","EOS")) {
       phe_metric <- "doy"
     } else {
@@ -88,7 +91,7 @@ run_mcmc_spatial_exp <- function(model_input_all, r_output_dir, phe_type, city, 
       starting_list, tuning, priors,
       cov.model = "matern", n.samples = n.samples,
       burn.in = burn.in,
-      param_pattern = "temp_",  # 提取的参数匹配模式
+      param_pattern = "temp_",  
       n.report = 2000, verbose = TRUE, use_knots
     ) {
       

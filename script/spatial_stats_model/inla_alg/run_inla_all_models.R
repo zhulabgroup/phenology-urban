@@ -11,9 +11,9 @@ library(INLA)
 ################################## parameter loading ##################################
 
 # Read file paths from environment variables
-# r_input_dir <- Sys.getenv("R_INPUT_DIR")
-# r_output_dir <- Sys.getenv("R_OUTPUT_DIR")
-# city <- Sys.getenv("CITY")
+r_input_dir <- Sys.getenv("R_INPUT_DIR")
+r_output_dir <- Sys.getenv("R_OUTPUT_DIR")
+city <- Sys.getenv("CITY")
 
 # r_input_dir <- "~/phenology-urban/data/"
 # r_output_dir <- "~/phenology-urban/data/proc/model_output/final_models/"
