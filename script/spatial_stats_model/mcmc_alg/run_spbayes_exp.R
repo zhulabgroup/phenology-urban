@@ -258,10 +258,10 @@ run_mcmc_spatial_exp <- function(model_input_all, r_output_dir, phe_type, city, 
       )
       return((bridge_result$logml))
     }
-  
-    res_logml <- calc_marginal_likelihood(chains_recover = res$chains_recover, log_posterior_fun = log_posterior_spLM, 
-                                          y = y, X = X, priors = priors, dist_mat_nm = dist_mat_nm, dist_mat_mm = dist_mat_mm)
-    
+    # 
+    # res_logml <- calc_marginal_likelihood(chains_recover = res$chains_recover, log_posterior_fun = log_posterior_spLM, 
+    #                                       y = y, X = X, priors = priors, dist_mat_nm = dist_mat_nm, dist_mat_mm = dist_mat_mm)
+    # 
     calc_WAIC_spLM <- function(chains_recover, formula, data) {
       message("Calculating WAIC...")
       X <- model.matrix(formula, data)
@@ -295,8 +295,8 @@ run_mcmc_spatial_exp <- function(model_input_all, r_output_dir, phe_type, city, 
     modelMCMCrun <- list(
       samples = res$beta_mcmc_list,
       WAIC = list(WAIC = res_waic),
-      converge = converge$psrf[1],
-      mean_logml = mean(res_logml)
+      converge = converge$psrf[1]
+      # mean_logml = mean(res_logml)
     )
     write_rds(modelMCMCrun, file = model_path, compress = "gz")
   }
