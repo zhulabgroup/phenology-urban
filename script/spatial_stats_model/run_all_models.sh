@@ -4,9 +4,9 @@
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err
 #SBATCH --array=1-5
-#SBATCH --time=16:00:00
+#SBATCH --time=24:00:00
 #SBATCH --partition=standard
-#SBATCH --mem=32G
+#SBATCH --mem=20G
 #SBATCH --cpus-per-task=2
 #SBATCH --mail-user=jializ@umich.edu        # Where to send mail
 #SBATCH --mail-type=BEGIN,END               # Mail notifications at the start and end of the job
