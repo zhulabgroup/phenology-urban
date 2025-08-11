@@ -13,11 +13,11 @@ editor_options:
 
 library(zhulabtools)
 # Check and  load required packages
-check_install_packages(c("dplyr", "here", "sf", "viridis", "leaflet","terra", "patchwork", "data.table", "plotly", "tidyverse"))
+check_install_packages(c("dplyr", "here", "sf", "viridis", "leaflet","terra", "patchwork", "data.table", "plotly", "tidyverse", "rgbif"))
 if (!require(plotbiomes)) {
   devtools::install_github("valentinitnelav/plotbiomes")
 }
-load_packages(c("dplyr", "here", "sf","viridis", "leaflet", "cli", "terra","patchwork", "data.table", "plotly", "readxl", "tidyverse"))
+load_packages(c("dplyr", "here", "sf","viridis", "leaflet", "cli", "terra","patchwork", "data.table", "plotly", "readxl", "tidyverse","rgbif"))
 ```
 
 
@@ -384,16 +384,14 @@ generate_mcmc <- function(dir_path, coef, fixed_sp){
           rename(ParameterOriginal = Parameter) |>
           mutate(Parameter = genus) |>
           mutate(waic = model_data$WAIC$WAIC,
-                 converge = model_data$converge,
-                 milk = model_data$mean_logml)
+                 converge = model_data$converge)
       } else {
         param_data <- ggs(model_data$samples) |>
           filter(str_starts(Parameter, fixed(coef))) |>
           rename(ParameterOriginal = Parameter) |>
           mutate(Parameter = genus)|>
           mutate(waic = model_data$WAIC$WAIC,
-                 converge = model_data$converge,
-                 milk = model_data$mean_logml)
+                 converge = model_data$converge)
       }
 
       return(param_data)
@@ -548,8 +546,7 @@ generate_mcmc_cities <- function(dir_path, cities, taxon_col, coef){
         rename(ParameterOriginal = Parameter) |>
         mutate(Parameter = genus)|>
         mutate(waic = model_data$WAIC$WAIC,
-               converge = model_data$converge,
-               milk = model_data$mean_logml) |>
+               converge = model_data$converge) |>
         group_by(Parameter) |>
         summarise(
           mean_value = mean(value, na.rm = TRUE),
