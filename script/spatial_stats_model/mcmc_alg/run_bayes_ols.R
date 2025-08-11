@@ -145,71 +145,71 @@ run_mcmc_nosp <- function(model_input_all, r_output_dir, phe_type, city, taxon_c
     #   annotate("text", x = beta_mean, y = 0, label = paste0("Mean: ", round(beta_mean, 2)),vjust = -1.5, color = "red", size = 4)
     # 
     
-    
-    
-    log_posterior_nimble <- function(samples_row, data) {
-      constants <- data$constants
-      param_names <- names(samples_row)
-      if (is.null(param_names)) stop("samples_row does not have named parameters")
-      
-      # unpack parameter values
-      beta <- samples_row[grep("^beta\\[", param_names)]
-      tau <- samples_row["tau"]
-      sigma_year <- samples_row["sigma_year"]
-      
-      z_year <- samples_row[grep("^z_year\\[", param_names)]
-  
-      # log-prior
-      log_prior <- sum(
-        dnorm(beta[1], mean = 180, sd = 40, log = TRUE),
-        dnorm(beta[2], 0, 5, log = TRUE),
-        dnorm(beta[3], 0, 1, log = TRUE),
-        dnorm(beta[4], 0, 1, log = TRUE),
-        dexp(sigma_year, rate = 1, log = TRUE),
-        dgamma(tau, shape = 0.001, rate = 0.001, log = TRUE),
-        sum(dnorm(z_year, 0, 1, log = TRUE))
-      )
-  
-      # log-likelihood
-      X <- data$X
-      y <- data$y
-      year <- constants$year
-      N <- constants$N
-  
-      year_effect <- z_year * sigma_year
-  
-      mu <- as.vector(X %*% beta) + year_effect[year]
-      log_lik <- sum(dnorm(y, mean = mu, sd = 1 / sqrt(tau), log = TRUE))
-  
-      return(log_lik + log_prior)
-    }
-    
-    posterior_samples <- as.matrix(modelMCMCrun$samples)
-    param_names <- colnames(posterior_samples)
-    model_bridge <- bridge_sampler(samples = posterior_samples,
-                                   log_posterior = log_posterior_nimble,
-                                   data = list(y = y, X = X, constants = constants),
-                                   lb=setNames(rep(-Inf, length(param_names)), param_names),
-                                   ub=setNames(rep( Inf, length(param_names)), param_names),
-                                   param_types = rep("real", ncol(posterior_samples)),
-                                   repetitions = 10,
-                                   method = "normal",
-                                   cores = 1,
-                                   use_neff = T,
-                                   silent = FALSE,
-                                   verbose = TRUE,
-                                   varlist = ls(),
-                                   envir = environment())
-    mean_logml <- mean(model_bridge$logml)
-    
+    # 
+    # 
+    # log_posterior_nimble <- function(samples_row, data) {
+    #   constants <- data$constants
+    #   param_names <- names(samples_row)
+    #   if (is.null(param_names)) stop("samples_row does not have named parameters")
+    #   
+    #   # unpack parameter values
+    #   beta <- samples_row[grep("^beta\\[", param_names)]
+    #   tau <- samples_row["tau"]
+    #   sigma_year <- samples_row["sigma_year"]
+    #   
+    #   z_year <- samples_row[grep("^z_year\\[", param_names)]
+    # 
+    #   # log-prior
+    #   log_prior <- sum(
+    #     dnorm(beta[1], mean = 180, sd = 40, log = TRUE),
+    #     dnorm(beta[2], 0, 5, log = TRUE),
+    #     dnorm(beta[3], 0, 1, log = TRUE),
+    #     dnorm(beta[4], 0, 1, log = TRUE),
+    #     dexp(sigma_year, rate = 1, log = TRUE),
+    #     dgamma(tau, shape = 0.001, rate = 0.001, log = TRUE),
+    #     sum(dnorm(z_year, 0, 1, log = TRUE))
+    #   )
+    # 
+    #   # log-likelihood
+    #   X <- data$X
+    #   y <- data$y
+    #   year <- constants$year
+    #   N <- constants$N
+    # 
+    #   year_effect <- z_year * sigma_year
+    # 
+    #   mu <- as.vector(X %*% beta) + year_effect[year]
+    #   log_lik <- sum(dnorm(y, mean = mu, sd = 1 / sqrt(tau), log = TRUE))
+    # 
+    #   return(log_lik + log_prior)
+    # }
+    # 
+    # posterior_samples <- as.matrix(modelMCMCrun$samples)
+    # param_names <- colnames(posterior_samples)
+    # model_bridge <- bridge_sampler(samples = posterior_samples,
+    #                                log_posterior = log_posterior_nimble,
+    #                                data = list(y = y, X = X, constants = constants),
+    #                                lb=setNames(rep(-Inf, length(param_names)), param_names),
+    #                                ub=setNames(rep( Inf, length(param_names)), param_names),
+    #                                param_types = rep("real", ncol(posterior_samples)),
+    #                                repetitions = 10,
+    #                                method = "normal",
+    #                                cores = 1,
+    #                                use_neff = T,
+    #                                silent = FALSE,
+    #                                verbose = TRUE,
+    #                                varlist = ls(),
+    #                                envir = environment())
+    # mean_logml <- mean(model_bridge$logml)
+    # 
     
     
     modelMCMCrun <- list(
       samples = modelMCMCrun$samples,
       summary = modelMCMCrun$summary,
       WAIC = modelMCMCrun$WAIC,
-      converge = converge$psrf[1],
-      mean_logml = mean_logml
+      converge = converge$psrf[1]
+      # mean_logml = mean_logml
     )
     
     write_rds(modelMCMCrun, file = model_path, compress = "gz")

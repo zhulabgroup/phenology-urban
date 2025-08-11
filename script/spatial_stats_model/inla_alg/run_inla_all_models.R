@@ -17,7 +17,7 @@ city <- Sys.getenv("CITY")
 
 # r_input_dir <- "~/phenology-urban/data/"
 # r_output_dir <- "~/phenology-urban/data/proc/model_output/final_models/"
-# city = "NY"
+# city = "TP"
 
 r_output_dir <- paste0(r_output_dir, "inla/")
 source(here("script/spatial_stats_model/prepare_data_genus_species.R"))
