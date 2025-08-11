@@ -30,12 +30,7 @@ run_inla_genus = function(model_input_all, r_output_dir, phe_type, city){
       dir.create(folder_path, recursive = TRUE)
     }
     model_path <- paste0(folder_path, genus, "_", phe_type, ".rds")
-    
-    if (file.exists(model_path)) {
-      cat(sprintf("\n File already exists for genus: %s, phe_type: %s, city: %s. Skipping INLA run.\n", 
-                  genus, phe_type, city))
-      next  # Skip the current iteration of the loop
-    } # if the file exists, skip to the next iteration  
+  
     
     cat(sprintf("\n Running INLA for genus: %s, phe_type: %s, city: %s\n", 
                 genus, phe_type, city))
@@ -54,6 +49,15 @@ run_inla_genus = function(model_input_all, r_output_dir, phe_type, city){
     model_input <- model_input_sf %>% 
       st_drop_geometry()
     
+    if (nrow(model_input) < 30) {
+      message(paste("Not enough unique coordinates for taxon:", genus, "with", nrow(model_input), "unique points. Skipping..."))
+      next  # Skip the current iteration of the loop
+    }
+    if (file.exists(model_path)) {
+      cat(sprintf("\n File already exists for genus: %s, phe_type: %s, city: %s. Skipping INLA run.\n", 
+                  genus, phe_type, city))
+      next  # Skip the current iteration of the loop
+    } # if the file exists, skip to the next iteration  
     
     ### Prediction (In-sample)
     prediction <- model_input
@@ -591,12 +595,6 @@ run_inla_species = function(model_input_all, r_output_dir, phe_type, city){
     species_clean <- gsub(" ", "_", species)
     model_path <- paste0(folder_path, species_clean, "_", phe_type, ".rds")
     
-    if (file.exists(model_path)) {
-      cat(sprintf("\n File already exists for species: %s, phe_type: %s, city: %s. Skipping INLA run.\n", 
-                  species, phe_type, city))
-      next  # Skip the current iteration of the loop
-    } # if the file exists, skip to the next iteration  
-    
     cat(sprintf("\n Running INLA for species: %s, phe_type: %s, city: %s\n", 
                 species, phe_type, city))
     if (phe_type %in% c("SOS","EOS")) {
@@ -615,7 +613,15 @@ run_inla_species = function(model_input_all, r_output_dir, phe_type, city){
     model_input <- model_input_sf %>% 
       st_drop_geometry()
     
-    
+    if (nrow(model_input) < 30) {
+      message(paste("Not enough unique coordinates for taxon:", species, "with", nrow(model_input), "unique points. Skipping..."))
+      next  # Skip the current iteration of the loop
+    }
+    if (file.exists(model_path)) {
+      cat(sprintf("\n File already exists for species: %s, phe_type: %s, city: %s. Skipping INLA run.\n", 
+                  species, phe_type, city))
+      next  # Skip the current iteration of the loop
+    } # if the file exists, skip to the next iteration 
     ### Prediction (In-sample)
     prediction <- model_input
     coorp <- cbind(prediction$lon, prediction$lat) 
