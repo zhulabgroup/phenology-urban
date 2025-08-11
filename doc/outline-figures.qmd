@@ -418,7 +418,7 @@ generate_mcmc <- function(dir_path, coef, fixed_sp){
   summary_data <- combined_param_data |>
     group_by(Parameter, phe_type) |>
     summarise(
-      median_value = median(value, na.rm = TRUE),
+      mean_value = mean(value, na.rm = TRUE),
       lower_2_5 = quantile(value, 0.025, na.rm = TRUE),
       upper_97_5 = quantile(value, 0.975, na.rm = TRUE),
       waic = first(waic),
@@ -428,18 +428,18 @@ generate_mcmc <- function(dir_path, coef, fixed_sp){
     ) |>
     mutate(Sig = ifelse(lower_2_5 * upper_97_5 > 0, "*", ""),
            SigAlpha = ifelse(Sig == "*", 1, 0.2),
-           Color = ifelse(median_value >0, "#0D0887FF" , "#FCA636FF")) 
+           Color = ifelse(mean_value >0, "#0D0887FF" , "#FCA636FF")) 
 
   param_levels <- rev(unique(summary_data$Parameter))
 
   # Plot
   
-  p1 <- ggplot(summary_data, aes(x = factor(as.character(Parameter), levels = param_levels), y = median_value,
+  p1 <- ggplot(summary_data, aes(x = factor(as.character(Parameter), levels = param_levels), y = mean_value,
                                  colour = Color)) +
     geom_point(aes(alpha = SigAlpha), size=3) +
     geom_errorbar(aes(ymin = lower_2_5, ymax = upper_97_5, alpha = SigAlpha), width = 0.4) +
     geom_hline(yintercept = 0, linetype = 2) +
-    geom_text(aes(label = round(median_value, 3)),
+    geom_text(aes(label = round(mean_value, 3)),
               vjust = -0.7, size = 3) +
     scale_alpha_identity() +
     scale_color_identity() +
@@ -453,7 +453,7 @@ generate_mcmc <- function(dir_path, coef, fixed_sp){
     ) +
       coord_flip()
   
-  p2 <- ggplot(summary_data, aes(x = median_value)) +
+  p2 <- ggplot(summary_data, aes(x = mean_value)) +
     geom_histogram(binwidth = 0.5, position = "identity", alpha = 0.5) +
     geom_vline(xintercept = 0, linetype = "dashed", color = "red", linewidth = 0.8) +
     # geom_density(alpha = 0.5) +
@@ -552,7 +552,7 @@ generate_mcmc_cities <- function(dir_path, cities, taxon_col, coef){
                milk = model_data$mean_logml) |>
         group_by(Parameter) |>
         summarise(
-          median_value = median(value, na.rm = TRUE),
+          mean_value = mean(value, na.rm = TRUE),
           lower_2_5 = quantile(value, 0.025, na.rm = TRUE),
           upper_97_5 = quantile(value, 0.975, na.rm = TRUE),
           waic = first(waic),
@@ -562,7 +562,7 @@ generate_mcmc_cities <- function(dir_path, cities, taxon_col, coef){
         ) |>
         mutate(Sig = ifelse(lower_2_5 * upper_97_5 > 0, "*", ""),
                SigAlpha = ifelse(Sig == "*", 1, 0.2),
-               Color = ifelse(median_value >0, "#0D0887FF" , "#FCA636FF"),
+               Color = ifelse(mean_value >0, "#0D0887FF" , "#FCA636FF"),
                city = city) 
       return(param_data)
     })
@@ -591,7 +591,7 @@ generate_mcmc_cities <- function(dir_path, cities, taxon_col, coef){
 
   # Plot
   
-  p2 <- ggplot(summary_data, aes(x = median_value)) +
+  p2 <- ggplot(summary_data, aes(x = mean_value)) +
     geom_histogram(binwidth = 0.5, position = "identity", alpha = 0.5) +
     geom_vline(xintercept = 0, linetype = "dashed", color = "red", linewidth = 0.8) +
     # geom_density(alpha = 0.5) +
@@ -663,38 +663,34 @@ plot_coef_cities <- function(dir_path, cities, taxon_col){
     mutate(SigAlpha = ifelse(Sig == "*", 1, 0.2)) %>%
     mutate(Color = ifelse(Estimate >0, "#0D0887FF" , "#FCA636FF"))
   
-  p_coef <-  ggplot(coef_summary, aes(x = factor(Factor, levels = rev(Factor)), 
-                               y = Estimate,
-                               colour = Color)) +
-    geom_point(aes(alpha = SigAlpha), position = position_dodge(w = 0.5), size = 3) +
-    geom_errorbar(aes(ymin = Lower, ymax = Upper, alpha = SigAlpha), 
-                  position = position_dodge(w = 0.5), 
-                  width = 0.2) +
-    geom_hline(yintercept = 0, linetype = 2) +
-    labs(x = NULL, y = "Estimate") +
-    coord_flip() +
-    scale_alpha_identity() +
-    scale_color_identity() +
-    theme(legend.position = "right") +
-    geom_text(aes(label = Sig, y = Upper + 0.05  ), hjust = -0.5, show.legend = FALSE) +
-    geom_text(aes(label = Estimate, y = Estimate  ), vjust = -0.7, show.legend = FALSE, size = 3) +
-    guides(alpha = "none") +
-    # add title
-    ggtitle(bquote(beta[Temp]~"for"~.(phe_type))) +
-    theme_minimal()
+  p_coef <- ggplot(coef_summary, aes(x = Estimate)) +
+    geom_histogram(binwidth = 0.5, position = "identity", alpha = 0.5) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "red", linewidth = 0.8) +
+    # geom_density(alpha = 0.5) +
+    # scale_fill_manual(values = color_palette) + 
+    # labs(x = x_label) +
+    facet_wrap(~ phe_type, scales = "free_x") +  # flip x/y means free_x
+    theme_classic() +
+    theme(axis.text.x = element_text(size = 10),
+          axis.text.y = element_text(size = 10),
+          title = element_text(size = 14),
+          legend.position = "right")
   
   return(list(
-    coef_summary_plot = p_coef,
-    coef_summary = coef_summary
+    coef_hist_plot = p_coef,
+    summary_data = coef_summary
   ))
 }
 
-plot_coef_cities(dir_path = "~/phenology-urban/data/proc/model_output/sp_model/fixed_preseason/inla_alg/spatial_spde/", cities, taxon_col = "genus")
+plot_coef_cities(dir_path = "~/phenology-urban/data/proc/model_output/sp_model/fixed_preseason/inla_alg/spatial_spde/", cities, taxon_col = "genus")$coef_hist_plot
 
 ```
 
 
-
 ## The effects' relastionship with urban variables (climate, urbanization, population, etc.)
 
+MCMC (based `g_plot_obj$summary_data`)
+INLA (based `g_plot_obj$coef_summary`)
+
+Join to city list
 
