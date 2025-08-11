@@ -372,6 +372,67 @@ prepare_genus_data <- function(phe_type, points_in_buffer, all_sites_temp, srad_
   return(model_input)
 }
 
-
-
-
+prepare_only_phe <- function(city, phe_type, taxon_col, summary = TRUE){
+  metadata <- read_csv("~/lab-data/datasets/vegetation/PS/urban/metadata.csv",  show_col_types = FALSE) %>%
+    filter(site == !!city)
+  file_list <- list.files(path = "~/lab-data/datasets/vegetation/PS/urban/doy", pattern = paste0("^doy_",city,"_.*\\.rds$"), full.names = TRUE)
+  data_list <- file_list %>%
+    map(~ readRDS(.x))
+  all_doy <- bind_rows(data_list)
+  tree_location <- metadata %>%
+    mutate(genus = str_extract(taxa, "^[^ ]+")) %>%
+    left_join(all_doy, by = "id") %>%
+    filter(!is.na(doy)) %>%
+    mutate(geometry = paste0("c(", lon, ", ", lat, ")"))
+  if (phe_type == "SOS") {
+    phe_metric <- "doy"
+    direction <- "up"
+    thres <- 0.5
+    model_input <- tree_location %>%
+      filter(direction == !!direction & thres == !!thres) %>%
+      select(id, genus, taxa, lon, lat, year, doy, ends_with("winter")) %>%
+      drop_na()
+  } else if (phe_type == "EOS") {
+    phe_metric <- "doy"
+    direction <- "down"
+    thres <- 0.5
+    model_input <- tree_location %>%
+      filter(direction == !!direction & thres == !!thres) %>%
+      select(id, genus, taxa, lon, lat, year, doy, ends_with("summer")) %>%
+      drop_na()
+  }
+  gbif_taxon_keys <- model_input$taxa %>% # get the first column of the data.frame
+    unique()  %>% # remove duplicates
+    name_backbone_checklist(kingdom = "Plantae", phylum = "Tracheophyta") %>%
+    filter(kingdom == "Plantae", phylum == "Tracheophyta") |>
+    filter(status %in% c("ACCEPTED", "SYNONYM") & rank == "SPECIES") %>% # get only accepted names and remove anything that might have matched to a non-species
+    select(canonicalName, verbatim_name) # check for missing values
+  phe_clean_species <- model_input %>%
+    left_join(gbif_taxon_keys, by = c("taxa" = "verbatim_name")) %>% # join the GBIF taxon keys
+    filter(canonicalName %in% (model_input %>%
+                                 left_join(gbif_taxon_keys, by = c("taxa" = "verbatim_name")) %>%
+                                 drop_na(canonicalName) %>% 
+                                 group_by(canonicalName) %>%
+                                 summarise(n = n(), .groups = "drop") %>%
+                                 filter(n >= 30) %>%
+                                 # arrange(desc(n)) %>%
+                                 # head(10) %>% # get the top 10 species, otherwise all sp
+                                 pull(canonicalName))) |> # filter to the taxa in the original data)
+    rename(canonicalname = canonicalName)
+  
+  if (summary) {
+    phe_clean_species <- phe_clean_species %>%
+      group_by(.data[[taxon_col]], year) %>%
+      summarise(
+        n = n(),
+        median_doy = median(doy, na.rm = TRUE),
+        IQR_d = quantile(doy, 0.75, na.rm = TRUE) - quantile(doy, 0.25, na.rm = TRUE),
+        lower_whisker_d = max(quantile(doy, 0.25, na.rm = TRUE) - 1.5 * IQR_d, min(doy, na.rm = TRUE)),
+        upper_whisker_d = min(quantile(doy, 0.75, na.rm = TRUE) + 1.5 * IQR_d, max(doy, na.rm = TRUE)),
+        whisker_d = (upper_whisker_d - lower_whisker_d),
+        sd = sd(doy, na.rm = TRUE),
+        .groups = "drop"
+      )
+  }
+  return(phe_clean_species)
+}
