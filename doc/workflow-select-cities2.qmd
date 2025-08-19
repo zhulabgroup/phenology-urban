@@ -104,7 +104,7 @@ leaflet(data = city_opentree_cen) |>
 
 ### Combination of both
 
-Then, I combined the two datasets. I use the McCoy et al. dataset as the primary source for tree inventories. Then I add additional cities from Opencity that are not included in the McCoy et al. dataset.
+Then, I combined the two datasets. I use the McCoy et al. dataset as the primary source for tree inventories. Then I add additional cities from OpenTree that are not included in the McCoy et al. dataset.
 
 There are total of 77 cities with tree inventories. The following code will plot the cities on a geographical map as well as a climatic map. The size of the circle represents the number of trees in the city.
 
