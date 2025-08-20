@@ -7,7 +7,7 @@
 #SBATCH --time=24:00:00
 #SBATCH --partition=standard
 #SBATCH --mem=16G
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=7
 #SBATCH --mail-user=jializ@umich.edu        # Where to send mail
 #SBATCH --mail-type=BEGIN,END               # Mail notifications at the start and end of the job
 
@@ -42,7 +42,7 @@ export CITY
 echo "Running model for $CITY"
 
 # Load necessary modules
-module load Rgeospatial/4.2.0-2023-04-25
+module load Rgeospatial/4.4.0-2024-05-11
 
 # Record the start time
 start_time=$(date +%s)

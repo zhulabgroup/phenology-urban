@@ -1,7 +1,7 @@
 ################################## package loading ##################################
 library(zhulabtools)
 
-load_packages(c("here", "rgbif", "dplyr","lubridate", "nimble", "sf","sp", "taxize","bridgesampling",
+load_packages(c("here", "rgbif", "dplyr","lubridate", "sf",
                 "tidyverse", "coda", "terra", "nimble", "spBayes", "fields",
                 "ggplot2", "RANN", "foreach", "doParallel"))
 

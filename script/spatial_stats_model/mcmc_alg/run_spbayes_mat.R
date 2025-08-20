@@ -1,14 +1,32 @@
 # taxon = "Betula nigra"
 
 run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, taxon_col, 
-                                 n_cores = 7) {
+                                 n_cores = 6) {
   taxon_list <- unique(model_input_all[[taxon_col]])
+  boundary <- switch(
+    city,
+    "NY" = st_read("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp"),
+    "DT" = st_read("~/urban-cooling/data/raw/WU/DT/City_of_Detroit_Boundary/City_of_Detroit_Boundary.shp"),
+    "ST" = st_read("~/urban-cooling/data/raw/WU/ST/seattle_boundary/CityUGA.shp") %>%
+      filter(CITY_NM == "Seattle"),
+    "HT" = st_read("~/urban-cooling/data/raw/WU/HT/HGAC_City_Boundaries/HGAC_City_Boundaries.shp") %>%
+      filter(NAME == "Houston"),  # change to some distance
+    "TP" = st_read("~/urban-cooling/data/raw/WU/TP/Municipal_Boundary/Municipal_Boundary.shp") %>%
+      filter(NAME == "Tampa"),
+    "DV" = st_read("~/urban-cooling/data/raw/WU/DV/DRCOG_Municipalities/DRCOG_Municipalities.shp") %>%
+      filter(city == "Denver"),
+    "AT" = st_read("~/urban-cooling/data/raw/WU/AT/TxDOT_City_Boundaries/Cities.shp") %>%
+      filter(CITY_NM == "Austin"),
+    stop("Invalid city abbreviation.")
+  )
   Sys.setenv(OMP_NUM_THREADS = "1", OPENBLAS_NUM_THREADS = "1", MKL_NUM_THREADS = "1",
              VECLIB_MAXIMUM_THREADS = "1", NUMEXPR_NUM_THREADS = "1")
   
   cl <- parallel::makeCluster(n_cores, outfile = "")
   on.exit(parallel::stopCluster(cl), add = TRUE)
   registerDoParallel(cl)
+  parallel::clusterEvalQ(cl, { library(sf); options(sf_use_s2 = FALSE) })
+  parallel::clusterExport(cl, c("boundary"), envir = environment())
   
   `%dopar%` <- foreach::`%dopar%`
   res <- foreach(taxon = taxon_list, .packages = c(
@@ -21,31 +39,15 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
     
     ############################ Set input ############################
     taxon_clean <- gsub(" ", "_", taxon)
-    out_dir <- paste0(r_output_dir, "spatial_mat/",city,"/", taxon_col,"/")
-    if (!dir.exists(out_dir)) {
-      dir.create(out_dir, recursive = TRUE)
-    }
+    out_dir <- paste0(r_output_dir, "/spatial_mat/",city,"/", taxon_col,"/")
+    # if (!dir.exists(out_dir)) {
+    #   dir.create(out_dir, recursive = TRUE)
+    # }
     model_path <- paste0(out_dir, taxon_clean, "_", phe_type, ".rds")
     
     if (file.exists(model_path)) {
       next  # Skip the current iteration of the loop
     }
-    boundary <- switch(
-      city,
-      "NY" = st_read("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp"),
-      "DT" = st_read("~/urban-cooling/data/raw/WU/DT/City_of_Detroit_Boundary/City_of_Detroit_Boundary.shp"),
-      "ST" = st_read("~/urban-cooling/data/raw/WU/ST/seattle_boundary/CityUGA.shp") %>%
-        filter(CITY_NM == "Seattle"),
-      "HT" = st_read("~/urban-cooling/data/raw/WU/HT/HGAC_City_Boundaries/HGAC_City_Boundaries.shp") %>%
-        filter(NAME == "Houston"),  # change to some distance
-      "TP" = st_read("~/urban-cooling/data/raw/WU/TP/Municipal_Boundary/Municipal_Boundary.shp") %>%
-        filter(NAME == "Tampa"),
-      "DV" = st_read("~/urban-cooling/data/raw/WU/DV/DRCOG_Municipalities/DRCOG_Municipalities.shp") %>%
-        filter(city == "Denver"),
-      "AT" = st_read("~/urban-cooling/data/raw/WU/AT/TxDOT_City_Boundaries/Cities.shp") %>%
-        filter(CITY_NM == "Austin"),
-      stop("Invalid city abbreviation.")
-    )
     model_input_sf <- model_input_all |>
       filter(!!sym(taxon_col) == !!taxon) |>
       mutate(
@@ -64,6 +66,20 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
     srad_col <- names(tavg_phe)[grepl("^srad", names(tavg_phe))]
     coords_ori <- st_coordinates(model_input_sf |> st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F) |>
                                    st_transform(crs = st_crs(boundary)))
+    
+    tavg_phe_df <- as.data.frame(tavg_phe)
+    tavg_phe_df$year <- as.factor(tavg_phe_df$year) 
+    
+    sp_formula <- as.formula(paste0(
+      phe_metric, " ~ ", 
+      temp_col, " + ", 
+      prcp_col, " + ", 
+      srad_col, " + factor(year)"
+    ))
+    ols_model <- lm(sp_formula, data = tavg_phe_df)
+    X <- model.matrix(sp_formula, data = tavg_phe_df)
+    y <- tavg_phe_df[[phe_metric]]
+    p <- ncol(X)
     coords <- st_coordinates(tavg_phe)
     # dup_idx <- duplicated(coords_ori)
     # coords <- coords_ori
@@ -120,19 +136,6 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
       dist_mat_nm <- dist_mat
       dist_mat_mm <- dist_mat
     }
-    tavg_phe_df <- as.data.frame(tavg_phe)
-    tavg_phe_df$year <- as.factor(tavg_phe_df$year) 
-    
-    sp_formula <- as.formula(paste0(
-      phe_metric, " ~ ", 
-      temp_col, " + ", 
-      prcp_col, " + ", 
-      srad_col, " + factor(year)"
-    ))
-    ols_model <- lm(sp_formula, data = tavg_phe_df)
-    X <- model.matrix(sp_formula, data = tavg_phe_df)
-    y <- tavg_phe_df[[phe_metric]]
-    p <- ncol(X)
     
     tuning <- list("phi"=0.1, "sigma.sq"=0.1, "tau.sq"=0.1, "nu"=0.1)
     ig_from_mean_cv <- function(m, cv = 1) {
