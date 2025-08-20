@@ -2,8 +2,8 @@
 library(zhulabtools)
 
 load_packages(c("here", "rgbif", "dplyr","lubridate", "nimble", "sf","sp", "taxize","bridgesampling",
-                "readr", "purrr", "stringr", "tidyr", "coda", "terra", "nimble", "spBayes", "fields",
-                "ggplot2", "RANN"))
+                "tidyverse", "coda", "terra", "nimble", "spBayes", "fields",
+                "ggplot2", "RANN", "foreach", "doParallel"))
 
 
 # Read file paths from environment variables
@@ -14,6 +14,7 @@ city <- Sys.getenv("CITY")
 # r_input_dir <- "~/phenology-urban/data/"
 # r_output_dir <- "~/phenology-urban/data/proc/model_output/final_models/"
 # city = "NY"
+# phe_type = "SOS"
 
 select <- dplyr::select
 r_output_dir <- paste0(r_output_dir, "mcmc/")

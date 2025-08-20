@@ -1,11 +1,25 @@
 # taxon = "Betula nigra"
 
-run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, taxon_col) {
+run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, taxon_col, 
+                                 n_cores = 7) {
   taxon_list <- unique(model_input_all[[taxon_col]])
+  Sys.setenv(OMP_NUM_THREADS = "1", OPENBLAS_NUM_THREADS = "1", MKL_NUM_THREADS = "1",
+             VECLIB_MAXIMUM_THREADS = "1", NUMEXPR_NUM_THREADS = "1")
   
-  ############################ Set input ############################
+  cl <- parallel::makeCluster(n_cores, outfile = "")
+  on.exit(parallel::stopCluster(cl), add = TRUE)
+  registerDoParallel(cl)
   
-  for (taxon in taxon_list) {
+  `%dopar%` <- foreach::`%dopar%`
+  res <- foreach(taxon = taxon_list, .packages = c(
+    "spBayes", "dplyr", "data.table","here","lubridate", "sf",
+    "tidyverse", "coda", "terra", "fields", "ggplot2", "RANN"
+  ),
+  .inorder = FALSE, .errorhandling = "pass") %dopar% {
+    cat(sprintf("Worker PID %d running taxon: %s\n", Sys.getpid(), taxon))
+    flush.console()
+    
+    ############################ Set input ############################
     taxon_clean <- gsub(" ", "_", taxon)
     out_dir <- paste0(r_output_dir, "spatial_mat/",city,"/", taxon_col,"/")
     if (!dir.exists(out_dir)) {
@@ -201,13 +215,13 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
     # }
     
     run_spLM_chains <- function(
-      formula, data, coords, knots,
-      starting_list, tuning, priors,
-      cov.model = "matern", n.samples = n.samples,
-      burn.in = burn.in,
-      param_pattern = "temp_",
-      verbose = TRUE, use_knots,
-      pred.coords, pred.covar
+    formula, data, coords, knots,
+    starting_list, tuning, priors,
+    cov.model = "matern", n.samples = n.samples,
+    burn.in = burn.in,
+    param_pattern = "temp_",
+    verbose = TRUE, use_knots,
+    pred.coords, pred.covar
     ) {
       n.chains <- length(starting_list)
       if (is.null(burn.in)) burn.in <- floor(0.5 * n.samples)
@@ -289,7 +303,7 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
     }) |> as.mcmc.list()
     converge <- gelman.diag(beta2_mcmc, confidence = 0.95, transform=FALSE, autoburnin=TRUE,
                             multivariate=TRUE)
-  
+    
     # library(ggmcmc)
     # beta_label <- data.frame(Parameter = "temp_summer", Label = "AvgTemp")
     # param_data <- ggs(res$beta_mcmc_list, par_labels = beta_label) %>%
@@ -301,7 +315,7 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
     #   ggtitle(paste("taxon:", taxon)) +
     #   theme(plot.title = element_text(hjust = 0.5)) +
     #   annotate("text", x = beta_mean, y = 0, label = paste0("Mean: ", round(beta_mean, 2)),vjust = -1.5, color = "red", size = 4)
-
+    
     #   ############################ Calculate marginal log-likelihood ############################  
     # log_posterior_spLM <- function(params, data) {
     #   y <- data$y
@@ -480,7 +494,7 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
       geom_line(color = "blue", size = 1) +
       labs(x = "Distance", y = "Correlation") +
       theme_minimal(base_size = 14)
-
+    
     
     ############################ Plot spatial random effect - w ############################      
     
@@ -515,6 +529,10 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
       # mean_logml = mean(res_logml)
     )
     write_rds(modelMCMCrun, file = model_path, compress = "gz")
+    
+    list(taxon = taxon, ok = TRUE)
   }
+  
+  res
 }
 
