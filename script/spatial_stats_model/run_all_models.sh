@@ -3,10 +3,10 @@
 #SBATCH --account=zhukai0                   # Account name
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err
-#SBATCH --array=1-5
+#SBATCH --array=1
 #SBATCH --time=24:00:00
 #SBATCH --partition=standard
-#SBATCH --mem=20G
+#SBATCH --mem=16G
 #SBATCH --cpus-per-task=2
 #SBATCH --mail-user=jializ@umich.edu        # Where to send mail
 #SBATCH --mail-type=BEGIN,END               # Mail notifications at the start and end of the job
@@ -21,7 +21,7 @@
 
 
 # Define combinations of chains and iterations
-CITIES=("NY" "ST" "TP" "DV" "HT")
+CITIES=("NY") # "ST" "TP" "DV" "HT"
 
 # Get the combination for this array job
 CHAIN_INDEX=$((SLURM_ARRAY_TASK_ID - 1))
