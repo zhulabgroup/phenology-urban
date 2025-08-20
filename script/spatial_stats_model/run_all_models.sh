@@ -49,7 +49,7 @@ start_time=$(date +%s)
 
 # Run the R script
 Rscript $R_SCRIPT_MCMC
-Rscript $R_SCRIPT_INLA
+# Rscript $R_SCRIPT_INLA
 
 # Record the end time and calculate duration
 end_time=$(date +%s)
