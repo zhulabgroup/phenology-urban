@@ -492,12 +492,12 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
       Lower    = ci[2, ],
       Upper    = ci[3, ]
     )
-    plot_cor <- ggplot(CorDF, aes(x = Distance, y = Median)) +
-      geom_ribbon(aes(ymin = Lower, ymax = Upper), fill = "grey", alpha = 0.4) +
-      geom_line(color = "blue", size = 1) +
-      labs(x = "Distance", y = "Correlation") +
-      theme_minimal(base_size = 14)
-    
+    # plot_cor <- ggplot(CorDF, aes(x = Distance, y = Median)) +
+    #   geom_ribbon(aes(ymin = Lower, ymax = Upper), fill = "grey", alpha = 0.4) +
+    #   geom_line(color = "blue", size = 1) +
+    #   labs(x = "Distance", y = "Correlation") +
+    #   theme_minimal(base_size = 14)
+    # 
     
     ############################ Plot spatial random effect - w ############################      
     
@@ -513,12 +513,12 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
     w_mean    <- rowMeans(W_mat)
     
     surf_sf <- st_as_sf(data.frame(w_mean = w_mean), geometry = grid_poly_in)
-    plot_spatial_field <- ggplot(surf_sf) +
-      geom_sf(aes(fill = w_mean), color = NA) +
-      scale_fill_viridis_c() +
-      coord_sf(expand = FALSE) +
-      labs(fill = "E[w|data]") +
-      theme_minimal(base_size = 12)
+    # plot_spatial_field <- ggplot(surf_sf) +
+    #   geom_sf(aes(fill = w_mean), color = NA) +
+    #   scale_fill_viridis_c() +
+    #   coord_sf(expand = FALSE) +
+    #   labs(fill = "E[w|data]") +
+    #   theme_minimal(base_size = 12)
     
     
     ############################ Save results ############################   
@@ -527,8 +527,8 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
       samples = res$beta_mcmc_list,
       WAIC = list(WAIC = res_waic),
       converge = converge$psrf[1],
-      plot_cor = plot_cor,
-      plot_spatial_field = plot_spatial_field
+      CorDF = CorDF,
+      surf_sf = surf_sf
       # mean_logml = mean(res_logml)
     )
     write_rds(modelMCMCrun, file = model_path, compress = "gz")
