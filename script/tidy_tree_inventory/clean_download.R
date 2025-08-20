@@ -17,7 +17,7 @@ save_dir <- "data/raw/CONUS/StreetTrees/cleaned_ps_input/"
 
 ###################################### Clean TRY #################################
 
-check <- read_rds(here(paste0(save_dir, "species_phe_types.rds"))) |>
+check <- read_rds(here(paste0(save_dir, "summary/species_phe_types.rds"))) |>
   filter(!type %in% c("hibernal", "vernal", "aestival")) |>
   group_by(canonicalName) |>
   arrange(desc(num_obs), type, .by_group = TRUE) |>

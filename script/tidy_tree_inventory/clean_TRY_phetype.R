@@ -155,4 +155,4 @@ phe_type_clean_gbif <- phe_type_clean |>
   group_by(canonicalName, type)|>
   summarise(num_obs = n(), .groups = "drop")
 
-write_rds(phe_type_clean_gbif, "~/phenology-urban/data/raw/CONUS/StreetTrees/cleaned_ps_input/species_phe_types.rds")
+write_rds(phe_type_clean_gbif, "~/phenology-urban/data/raw/CONUS/StreetTrees/cleaned_ps_input/summary/species_phe_types.rds")
