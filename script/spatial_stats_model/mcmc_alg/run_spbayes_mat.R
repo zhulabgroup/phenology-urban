@@ -1,6 +1,5 @@
 # taxon = "Betula nigra"
 
-
 run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, taxon_col) {
   taxon_list <- unique(model_input_all[[taxon_col]])
   
@@ -8,7 +7,7 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
   
   for (taxon in taxon_list) {
     taxon_clean <- gsub(" ", "_", taxon)
-    out_dir <- paste0(r_output_dir, city, "/", taxon_col, "/")
+    out_dir <- paste0(r_output_dir, "spatial_mat/",city,"/", taxon_col,"/")
     if (!dir.exists(out_dir)) {
       dir.create(out_dir, recursive = TRUE)
     }
@@ -69,9 +68,36 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
       next  # Skip the current iteration of the loop
     }
     message(paste("Running spatial model for taxon:", taxon, "with", N_unique, "unique points."))
+    bbox_sfc <- tavg_phe |>
+      st_union() |>
+      st_convex_hull()
+    grid_poly_all <- st_make_grid(bbox_sfc, cellsize = 1000, what = "polygons")
+    grid_poly_in <- st_intersection(grid_poly_all, bbox_sfc)
+    grid_pts <- st_centroid(grid_poly_in)
+    
+    pred.coords <- st_coordinates(grid_pts)
+    pred.covar <- matrix(0, nrow = nrow(pred.coords), ncol = p)
+    colnames(pred.covar) <- colnames(X)
+    pred.covar[, "(Intercept)"] <- 1  
+    
+    
     if (50 < N_unique){
       use_knots <- TRUE
-      knots <- kmeans(coords, centers = N_knots)$centers
+      bbox_sfc2 <- tavg_phe |>
+        st_union() |>
+        st_concave_hull(ratio = 0.4)
+      grid_knots <- st_make_grid(bbox_sfc2, n = c(15, 15), what = "centers")
+      grid_knots_in <- st_intersection(grid_knots, bbox_sfc2)
+      knots <- st_coordinates(grid_knots_in)
+      tmp <- RANN::nn2(coords, knots, searchtype = 'radius', k = 100, radius = 20000)
+      np  <- tmp[[1]]
+      np[np > 0] <- 1
+      coverage <- rowSums(np)
+      ntot <- 50
+      idx_nonzero <- which(coverage > 0)
+      wt <- order(coverage[idx_nonzero], decreasing = TRUE)[1:ntot]
+      sel <- idx_nonzero[wt]
+      knots <- knots[sel[!is.na(sel)], ]
       dist_mat_nm <- as.matrix(rdist(coords, knots))
       dist_mat_mm <- as.matrix(rdist(knots, knots))
     } else {
@@ -137,17 +163,7 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
     
     starting_list <- list(chain1 = starting1, chain2 = starting2)
     
-    bbox_sfc <- tavg_phe |>
-      st_union() |>
-      st_convex_hull()
-    grid_poly_all <- st_make_grid(bbox_sfc, cellsize = 1000, what = "polygons")
-    grid_poly_in <- st_intersection(grid_poly_all, bbox_sfc)
-    grid_pts <- st_centroid(grid_poly_in)
     
-    pred.coords <- st_coordinates(grid_pts)
-    pred.covar <- matrix(0, nrow = nrow(pred.coords), ncol = p)
-    colnames(pred.covar) <- colnames(X)
-    pred.covar[, "(Intercept)"] <- 1  
     
     ############################ Run model ############################
     
@@ -191,7 +207,7 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
       burn.in = burn.in,
       param_pattern = "temp_",
       verbose = TRUE, use_knots,
-      pred.coords, pred.covar, n.report
+      pred.coords, pred.covar
     ) {
       n.chains <- length(starting_list)
       if (is.null(burn.in)) burn.in <- floor(0.5 * n.samples)
@@ -208,22 +224,21 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
           tuning = tuning,
           priors = priors,
           cov.model = cov.model,
-          amcmc = list("n.batch" = 5,"batch.length" = 2000),
-          n.report = n.report,
-          verbose = T
+          amcmc = list("n.batch" = 5,"batch.length" = 2000, accept.rate = 0.43),
+          verbose = F
         )
         if (use_knots) args_list$knots <- knots
         if (verbose) message("Running spLM")
         sp_model <- do.call(spLM, args_list)
         # chain_object <- safe_spRecover_beta(sp_model, burn.in = burn.in, n.samples = n.samples)
         if (verbose) message("Recovering samples")
-        chain_object <- spRecover(sp_model, start = burn.in, get.w = T, verbose = T, n.report = n.report)
+        chain_object <- spRecover(sp_model, start = burn.in, get.w = T, verbose = F)
         if (is.null(chain_object)) {
           message("No samples recovered successfully for chain ", i)
           next  # Skip the current iteration of the loop
         }
         if (verbose) message("Predicting spatial random effect")
-        predict_w <- spPredict(sp_model, pred.coords, pred.covar, start = 9000, verbose = T, n.report = n.report)
+        predict_w <- spPredict(sp_model, pred.coords, pred.covar, start = 9000, verbose = F)
         predict_w_list[[i]] <- predict_w
         chain_recover[[i]] <- chain_object
         # param_cols <- grep(param_pattern, colnames(chain_recover[[i]]$p.beta.recover.samples))
@@ -263,8 +278,7 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
       param_pattern = "temp_",
       use_knots = use_knots,
       pred.coords = pred.coords, 
-      pred.covar = pred.covar,
-      n.report = 1000
+      pred.covar = pred.covar
     )
     if (is.null(res)) {
       next  # Skip the current iteration of the loop
@@ -419,7 +433,6 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
         loglik_samples <- matrix(NA, nrow = S, ncol = n)
         for (s in 1:S) {
           mu_s <- X %*% beta_samples[s, ] + w_samples[s, ]
-          
           loglik_samples[s, ] <- dnorm(y, mean = mu_s, sd = sqrt(tau_samples[s]), log = TRUE)
         }
         loglik_samples
@@ -471,14 +484,20 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
     
     ############################ Plot spatial random effect - w ############################      
     
-    w_mat <- do.call(
+    Y_pred <- do.call(
       rbind,
       lapply(res$predict_w, function(chain) chain$p.y.predictive.samples |> t())
     ) |> t()
-    wmu <- rowMeans(w_mat)
-    surf_sf <- st_as_sf(data.frame(wmu = wmu), geometry = grid_poly_in)
+    B_draws <- do.call(rbind, lapply(res$chains_recover, function(ch) {
+      as.matrix(ch$p.beta.recover.samples[4001:5001,])
+    }))  # S_total x p
+    Xbeta <- pred.covar %*% t(B_draws)
+    W_mat <- Y_pred - Xbeta     # n_pred x S
+    w_mean    <- rowMeans(W_mat)
+    
+    surf_sf <- st_as_sf(data.frame(w_mean = w_mean), geometry = grid_poly_in)
     plot_spatial_field <- ggplot(surf_sf) +
-      geom_sf(aes(fill = wmu), color = NA) +
+      geom_sf(aes(fill = w_mean), color = NA) +
       scale_fill_viridis_c() +
       coord_sf(expand = FALSE) +
       labs(fill = "E[w|data]") +
