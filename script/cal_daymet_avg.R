@@ -5,7 +5,7 @@ library(sf)
 library(raster)
 library(ggplot2)
 library(tidyverse)
-
+library(lubridate)
 ################# larege area #################
 
 # if (download_Daymet) {
@@ -114,7 +114,7 @@ library(tidyverse)
 
 ############# city area #############
 
-city_tree_inventory_dir <- "~/phenology-urban/data/raw/CONUS/StreetTrees/cleaned_ps_input/"
+city_tree_inventory_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
 output_dir <- "~/phenology-urban/data/raw/CONUS/Daymet/all_city_trees/"
 
 rds_files <- list.files(city_tree_inventory_dir, pattern = "\\.rds$", full.names = TRUE)
@@ -129,7 +129,7 @@ for (rds_file in rds_files) {
     select(id, lat, lon)
   results <- city_data %>%
     pmap_dfr(~ {
-      if (..1 %% 100 == 0) {
+      if (..1 %% 5 == 0) {
         message(paste0("Processing ID: ", ..1))
       }
       test <- download_daymet(..1,  # id
