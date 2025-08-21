@@ -40,9 +40,9 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
     ############################ Set input ############################
     taxon_clean <- gsub(" ", "_", taxon)
     out_dir <- paste0(r_output_dir, "/spatial_mat/",city,"/", taxon_col,"/")
-    # if (!dir.exists(out_dir)) {
-    #   dir.create(out_dir, recursive = TRUE)
-    # }
+    if (!dir.exists(out_dir)) {
+      dir.create(out_dir, recursive = TRUE)
+    }
     model_path <- paste0(out_dir, taxon_clean, "_", phe_type, ".rds")
     
     if (file.exists(model_path)) {

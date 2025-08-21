@@ -84,6 +84,7 @@ prepare_data <- function(city, source, taxa_col, phe_type) {
       filter(!is.na(doy)) %>%
       mutate(geometry = paste0("c(", lon, ", ", lat, ")"))
     
+    
     points_sf <- st_as_sf(tree_location |> distinct(lon, lat), coords = c("lon", "lat"), crs = 4326, remove = F) |>
       st_transform(crs = 9311)
     hex_size <- 5000
@@ -121,7 +122,8 @@ prepare_data <- function(city, source, taxa_col, phe_type) {
             substr(date, 6, 7) %in% c("12", "01", "02") ~ "winter"
           )) %>%
         mutate(year = as.integer(substr(date, 1, 4)),
-               year = if_else(substr(date, 6, 7) == "12", year + 1, year)) %>%
+               year = if_else(substr(date, 6, 7) == "12", year + 1, year),
+               value = suppressWarnings(as.numeric(value))) %>%
         filter(year < 2019) %>% 
         group_by(id, year, season) %>%
         summarise(
@@ -148,7 +150,8 @@ prepare_data <- function(city, source, taxa_col, phe_type) {
             substr(date, 6, 7) %in% c("12", "01", "02") ~ "winter"
           )) %>%
         mutate(year = as.integer(substr(date, 1, 4)),
-               year = if_else(substr(date, 6, 7) == "12", year + 1, year)) %>%
+               year = if_else(substr(date, 6, 7) == "12", year + 1, year),
+               value = suppressWarnings(as.numeric(value))) %>%
         group_by(id, year, season) %>%
         summarise(
           # Use sum for prcp, and mean for temp and srad
@@ -169,7 +172,7 @@ prepare_data <- function(city, source, taxa_col, phe_type) {
     if (taxa_col == "canonicalname") {
       model_input_all <- prepare_species_data(phe_type, tree_location_hex, all_sites_climate, srad_daily, source = "Grid")
     } else if (taxa_col == "genus") {
-      model_input_all <- prepare_genus_data(phe_type, tree_location_hex, all_sites_climate, srad_daily, source = "Grid")
+      model_input_all <- prepare_genus_data(phe_type, points_in_buffer = tree_location_hex, all_sites_temp = all_sites_climate, srad_daily, source = "Grid")
     } else {
       stop("Invalid taxa_col. Must be 'canonicalname' or 'genus'.")
     }
@@ -221,7 +224,7 @@ prepare_species_data <- function(phe_type, points_in_buffer, all_sites_temp, sra
     thres <- 0.5
     model_input <- points_in_buffer_joined %>%
       filter(direction == !!direction & thres == !!thres) %>%
-      select(id, taxa, lon, lat, year, doy, hex_id, ends_with("winter"), Site) %>%
+      select(id, taxa, lon, lat, year, doy, hex_id, ends_with("winter")) %>%
       drop_na()
   } else if (phe_type == "EOS") {
     phe_metric <- "doy"
@@ -229,7 +232,7 @@ prepare_species_data <- function(phe_type, points_in_buffer, all_sites_temp, sra
     thres <- 0.5
     model_input <- points_in_buffer_joined %>%
       filter(direction == !!direction & thres == !!thres) %>%
-      select(id, taxa, lon, lat, year, doy, hex_id, ends_with("summer"), Site) %>%
+      select(id, taxa, lon, lat, year, doy, hex_id, ends_with("summer")) %>%
       drop_na()
   } else if (phe_type == "GreenUp") {
     phe_metric <- "doy_diff"
@@ -327,7 +330,7 @@ prepare_genus_data <- function(phe_type, points_in_buffer, all_sites_temp, srad_
     thres <- 0.5
     model_input <- points_in_buffer_joined %>%
       filter(direction == !!direction & thres == !!thres) %>%
-      select(id, taxa,genus, lon, lat, year, doy, hex_id,  ends_with("winter"), Site) %>%
+      select(id, taxa,genus, lon, lat, year, doy, hex_id,  ends_with("winter")) %>%
       drop_na()
   } else if (phe_type == "EOS") {
     phe_metric <- "doy"
@@ -335,7 +338,7 @@ prepare_genus_data <- function(phe_type, points_in_buffer, all_sites_temp, srad_
     thres <- 0.5
     model_input <- points_in_buffer_joined %>%
       filter(direction == !!direction & thres == !!thres) %>%
-      select(id, taxa, genus, lon, lat, year, doy, hex_id,  ends_with("summer"), Site) %>%
+      select(id, taxa, genus, lon, lat, year, doy, hex_id,  ends_with("summer")) %>%
       drop_na()
   } else if (phe_type == "GreenUp") {
     phe_metric <- "doy_diff"

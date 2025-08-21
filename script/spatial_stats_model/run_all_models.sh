@@ -6,7 +6,7 @@
 #SBATCH --array=1
 #SBATCH --time=24:00:00
 #SBATCH --partition=standard
-#SBATCH --mem=16G
+#SBATCH --mem=24G
 #SBATCH --cpus-per-task=7
 #SBATCH --mail-user=jializ@umich.edu        # Where to send mail
 #SBATCH --mail-type=BEGIN,END               # Mail notifications at the start and end of the job
@@ -32,7 +32,7 @@ WORKING_DIR=../phenology-urban/
 R_INPUT_DIR=../phenology-urban/data/
 R_SCRIPT_MCMC=../phenology-urban/script/spatial_stats_model/mcmc_alg/run_mcmc_all_models.R
 R_SCRIPT_INLA=../phenology-urban/script/spatial_stats_model/inla_alg/run_inla_all_models.R
-R_OUTPUT_DIR=../phenology-urban/data/proc/model_output/final_models/
+R_OUTPUT_DIR=../phenology-urban/data/proc/model_output/final_models_humid/
 
 # Export variables to be used in the R script
 export R_INPUT_DIR
