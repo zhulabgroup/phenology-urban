@@ -13,11 +13,11 @@ editor_options:
 
 library(zhulabtools)
 # Check and  load required packages
-check_install_packages(c("dplyr", "here", "sf", "viridis", "leaflet","terra", "patchwork", "data.table", "plotly", "tidyverse", "rgbif"))
+check_install_packages(c("dplyr", "here", "sf", "viridis", "leaflet","terra", "patchwork", "data.table", "plotly", "tidyverse", "rgbif", "ggmcmc", "INLA"))
 if (!require(plotbiomes)) {
   devtools::install_github("valentinitnelav/plotbiomes")
 }
-load_packages(c("dplyr", "here", "sf","viridis", "leaflet", "cli", "terra","patchwork", "data.table", "plotly", "readxl", "tidyverse","rgbif"))
+load_packages(c("dplyr", "here", "sf","viridis", "leaflet", "cli", "terra","patchwork", "data.table", "plotly", "readxl", "tidyverse","rgbif", "ggmcmc", "INLA"))
 ```
 
 
@@ -29,61 +29,36 @@ This document outlines the figures that will be generated in the urban phenology
 
 The geometry location of selected cities. The size of the circle represents the number of trees in the city/number of species.
 
-```{r}
+```{r fig-spatial}
+#| warning: false
+#| fig-cap: "Spatial distribution of cities with tree inventories."
 
+inventory_centroids <- readRDS(("~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/summary/inventory_centroids.rds"))
+
+leaflet(data = inventory_centroids) |>
+  addProviderTiles(providers$OpenStreetMap, options = providerTileOptions(opacity = 0.9)) |>
+  addCircleMarkers(
+    popup = ~ paste0(
+      "<strong>", site, "</strong><br>",
+      "Num trees: ", num_tree, "<br>"
+    ),
+    radius = ~ sqrt(num_tree) / 20,
+    stroke = FALSE, fillOpacity = 0.7,
+    color = "blue"
+  )
 ```
+
 
 The PCA location of selected cities. Or some separate figures to show the distribution of characteristics.
 
-```{r fig-pca-add}
+```{r fig-pca}
 #| warning: false
-#| fig-cap: "PCA of city climate and population variables, with cities in the current list highlighted in blue."
-#| fig-width: 10
-#| fig-height: 7
+#| include: true
+#| fig-cap: "PCA of city climate and population variables for all 2,585 cities."
+#| fig-width: 5
+#| fig-height: 5
+city_feature <- readRDS("~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/summary/city_feature.rds")
 
-GUTI_list <- read_excel("~/urban-niche/data/raw/CONUS/climate-niche/guti/GUTI_v1.0.xlsx", 
-    sheet = "Appendix 3.1", skip = 3) |>
-  separate(Country, into = c("country", "state"), sep = " \\(|\\)", remove = FALSE) |>
-  filter(country == "USA" & Continent == "North America" & `Source type` == "Tree inventory") |>
-  st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326) |>
-  st_join(st_read(here("data/raw/CONUS/boundary/USCities/tl_2024_us_uac20.shp"), quiet = T) |> 
-            st_transform(4326) |>
-            dplyr::select(NAME20), join = st_nearest_feature) |>
-  # select(City, state, NAME20)|>
-  mutate(
-    city_words = str_split(City, "\\s+") |> 
-      map(~ .x[nchar(.x) > 3]),  # remove "SAN" "EI", "port"
-    matched = ifelse(City == "Port Chester", FALSE, map2_lgl(city_words, NAME20, ~ any(str_detect(.y, fixed(.x, ignore_case = TRUE)))))
-  ) |>
-  filter(matched == TRUE) |>
-  pull(NAME20)
-
-list_city <- st_read(here("data/proc/urban/City_list/list_city.shp"), quiet = T) |>
-  st_transform(3857) |>         # project to planar coordinates
-  st_centroid() |>              # compute centroid
-  st_transform(4326) |>
-  st_join(st_read(here("data/raw/CONUS/boundary/USCities/tl_2024_us_uac20.shp"), quiet = T) |> 
-            st_transform(4326) |>
-            dplyr::select(NAME20), join = st_nearest_feature) |>
-  mutate(
-    NAME20_nospace = str_replace_all(NAME20, "\\s+", ""), 
-    matched = ifelse(city == "WashingtonDC", TRUE, str_detect(NAME20_nospace, fixed(city, ignore_case = TRUE)))
-  ) |>
-  filter(matched == TRUE) |>
-  pull(NAME20)
-
-potential_city_sf <- st_read(here("data/raw/CONUS/boundary/USCities/tl_2024_us_uac20.shp"), quiet = TRUE) |>
-  st_transform(4326) |>
-  dplyr::select(NAME20) |>
-  filter(NAME20 %in% c(GUTI_list, list_city)) |>
-  mutate(
-    source = case_when(
-      NAME20 %in% list_city ~ "City in current list",
-      NAME20 %in% GUTI_list & !(NAME20 %in% list_city) ~ "City with GUTI-recorded inventory",
-      TRUE ~ NA_character_
-    )
-  ) |>
-  st_centroid()
 all_city <- readRDS("~/phenology-urban/data/proc/urban/City_list/all_city.rds") |>
   na.omit()
 scaled_matrix <- scale(all_city |>
@@ -106,59 +81,75 @@ arrow_scale <- 4
 pca_loadings <- pca_loadings |>
   mutate(PC1 = PC1 * arrow_scale,
          PC2 = PC2 * arrow_scale)
-# 
-# ggplot(pca_scores, aes(x = PC1, y = PC2, text = NAME20)) +
-#   geom_point(data = pca_scores,
-#              color = "grey60", alpha = 0.3, size = 0.5) +
-#   geom_segment(data = pca_loadings,
-#                aes(x = 0, y = 0, xend = PC1, yend = PC2),
-#                arrow = arrow(length = unit(0.5, "cm")),
-#                color = "red", size = 0.4, inherit.aes = FALSE) +
-#   geom_text(data = pca_loadings,
-#             aes(x = PC1, y = PC2, label = variable),
-#             color = "red", size = 3, hjust = -0.2, vjust = 0.5, inherit.aes = FALSE) +
-#   labs(x = "PC1", y = "PC2") +
-#   theme_classic()
+
+ggplot(pca_scores, aes(x = PC1, y = PC2, text = NAME20)) +
+  geom_point(data = pca_scores,
+             color = "grey60", alpha = 0.3, size = 0.5) +
+  geom_segment(data = pca_loadings,
+               aes(x = 0, y = 0, xend = PC1, yend = PC2),
+               arrow = arrow(length = unit(0.5, "cm")),
+               color = "red", size = 0.4, inherit.aes = FALSE) +
+  geom_text(data = pca_loadings,
+            aes(x = PC1, y = PC2, label = variable),
+            color = "red", size = 3, hjust = -0.2, vjust = 0.5, inherit.aes = FALSE) +
+  labs(x = "PC1", y = "PC2") +
+  theme_classic()
+```
+
+### Distribution of selected cities in PCA space
+
+I then projected cities with tree inventories onto the PCA space. The PCA scores of these cities are highlighted in red in the PCA plot (@fig-pca-add). These selected cities plus additional citiesare relatively evenly distributed across the PCA space, with no extreme clustering. However, there are still some gaps in the PCA space, particularly in the upper left quadrant, which is characterized by high temperature, low precipitation, low building and low population. 
+
+```{r fig-pca-add}
+#| warning: false
+#| fig-cap: "PCA of city climate and population variables, with cities in the current list highlighted in blue."
+#| fig-width: 10
+#| fig-height: 7
+
+list_city <- city_feature |>
+  st_join(st_read(("~/lab-data/datasets/boundary/USAdministrative/USCities/tl_2024_us_uac20.shp"), quiet = T) |> 
+            st_transform(4326) |>
+            dplyr::select(NAME20), join = st_nearest_feature) |>
+  pull(NAME20)
 
 pca_scores <- pca_scores |>
   mutate(
     selected = NAME20 %in% list_city,
-    GUTI_list = NAME20 %in% GUTI_list,
     hover_text = paste("City:", NAME20),
     group = case_when(
-      selected ~ "City in current list",
-      GUTI_list & !selected ~ "City with GUTI-recorded inventory",
+      selected ~ "City with inventory",
       TRUE ~ "Other cities"
     )
   )
 
-p <- ggplot(pca_scores, aes(x = PC1, y = PC2, text = NAME20)) +
-  geom_point(data = filter(pca_scores, !(selected | GUTI_list)),
+ggplot(pca_scores, aes(x = PC1, y = PC2, text = NAME20)) +
+  geom_segment(data = pca_loadings,
+               aes(x = 0, y = 0, xend = PC1, yend = PC2),
+               arrow = arrow(length = unit(0.5, "cm")),
+               color = "red", size = 0.4, inherit.aes = FALSE) +
+  geom_text(data = pca_loadings,
+            aes(x = PC1, y = PC2, label = variable),
+            color = "red", size = 3, hjust = -0.2, vjust = 0.5, inherit.aes = FALSE) +
+  geom_point(data = filter(pca_scores, !(selected)),
              aes(color = "Other cities"), alpha = 0.3, size = 0.5) +
   geom_point(data = filter(pca_scores, selected),
              aes(color = "City in current list"), size = 1) +
   # geom_text(data = filter(pca_scores, selected),
   #           aes(label = NAME20), size = 2, vjust = -1) +
-  geom_point(data = filter(pca_scores, !selected & GUTI_list),
-             aes(color = "City with GUTI-recorded inventory"), size = 1) +
   # geom_text(data = filter(pca_scores,  !selected & GUTI_list),
   #           aes(label = NAME20), size = 2, vjust = -1) +
   scale_color_manual(
     name = "City Category",
     values = c(
-      "Other cities" = "grey60",
-      "City in current list" = "darkblue",
-      "City with GUTI-recorded inventory" = "cornflowerblue"
+      "City with inventory" = "grey60",
+      "City in current list" = "darkblue"
     )
   ) +
   labs(title = "PCA of City Climate and Population Variables",
        x = "PC1", y = "PC2") +
   theme_classic()
-p
-# ggplotly(p, tooltip = "text")
+
 ```
-
-
 
 ## Remote sensing data processing
 
@@ -175,7 +166,7 @@ cities = c("NY", "TP", "ST", "HT", "DV")
 plot_phe_cities <- function(cities, taxon_col, stats = "sd"){
   pairs <- lapply(c("SOS", "EOS"), function(phe_type) {
     all_city_input <- lapply(cities, function(city) {
-      message(paste0("Reading data in ", city))
+      # message(paste0("Reading data in ", city))
       prepare_only_phe(city = city, phe_type = phe_type, taxon_col= taxon_col, summary = TRUE) |>
         mutate(city = city)
     })|> 
@@ -301,7 +292,7 @@ cities = c("NY", "TP", "ST", "HT", "DV")
 plot_phe_temp_cities <- function(cities, taxon_col){
   plots <- lapply(c("SOS", "EOS"), function(phe_type) {
     all_city_input <- lapply(cities, function(city) {
-      message(paste0("Reading data in ", city))
+      # message(paste0("Reading data in ", city))
       prepare_data(city = city, source = "WU", taxa_col= taxon_col, phe_type = phe_type) |>
         mutate(city = city)
     })|> 
@@ -349,9 +340,10 @@ plot_phe_temp_cities <- function(cities, taxon_col){
   return(plot)
 }
 
-p <- (plot_phe_temp_cities(cities, "genus") / plot_phe_temp_cities(cities, "canonicalname")) +
+(plot_phe_temp_cities(cities, "genus") / plot_phe_temp_cities(cities, "canonicalname")) +
   plot_annotation(title = paste0("Phenology variation across species in ", city)) +
   plot_layout(guides = "collect") & theme(legend.position = "right")
+
 ```
 
 
@@ -421,7 +413,7 @@ generate_mcmc <- function(dir_path, coef, fixed_sp){
       upper_97_5 = quantile(value, 0.975, na.rm = TRUE),
       waic = first(waic),
       converge = first(converge),
-      milk = first(milk),
+      # milk = first(milk),
       .groups = "drop"
     ) |>
     mutate(Sig = ifelse(lower_2_5 * upper_97_5 > 0, "*", ""),
@@ -506,6 +498,7 @@ source("~/phenology-urban/script/spatial_stats_model/inla_alg/run_sp_inla.R")
 r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/sp_model/fixed_preseason/inla_alg/spatial_spde/NY/genus/")
 plots_coef <- list()
 assess_genus <- data.frame()
+phe_types <- c("SOS", "EOS")
 
 for (phe_type in phe_types) {
   p1 <- plot_coef_genus_city(r_output_dir, phe_type)
@@ -554,7 +547,7 @@ generate_mcmc_cities <- function(dir_path, cities, taxon_col, coef){
           upper_97_5 = quantile(value, 0.975, na.rm = TRUE),
           waic = first(waic),
           converge = first(converge),
-          milk = first(milk),
+          # milk = first(milk),
           .groups = "drop"
         ) |>
         mutate(Sig = ifelse(lower_2_5 * upper_97_5 > 0, "*", ""),
