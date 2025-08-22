@@ -13,11 +13,11 @@ editor_options:
 
 library(zhulabtools)
 # Check and  load required packages
-check_install_packages(c("dplyr", "here", "sf", "viridis", "leaflet","terra", "patchwork", "data.table", "plotly", "tidyverse", "rgbif", "ggmcmc", "INLA"))
+check_install_packages(c("dplyr", "here", "sf", "viridis", "leaflet","terra", "patchwork", "data.table", "plotly", "tidyverse", "rgbif", "ggmcmc", "INLA", "ks", "ggnewscale"))
 if (!require(plotbiomes)) {
   devtools::install_github("valentinitnelav/plotbiomes")
 }
-load_packages(c("dplyr", "here", "sf","viridis", "leaflet", "cli", "terra","patchwork", "data.table", "plotly", "readxl", "tidyverse","rgbif", "ggmcmc", "INLA"))
+load_packages(c("dplyr", "here", "sf","viridis", "leaflet", "cli", "terra","patchwork", "data.table", "plotly", "readxl", "tidyverse","rgbif", "ggmcmc", "INLA","scales", "ks", "ggnewscale"))
 ```
 
 
@@ -27,36 +27,40 @@ This document outlines the figures that will be generated in the urban phenology
 
 ## Study area map
 
-The geometry location of selected cities. The size of the circle represents the number of trees in the city/number of species.
+Distribution of city samples. The geometry location of selected cities. The size of the circle represents the number of trees in the city/number of species. The PCA location of selected cities. Or some separate figures to show the distribution of characteristics.
 
 ```{r fig-spatial}
 #| warning: false
-#| fig-cap: "Spatial distribution of cities with tree inventories."
 
 inventory_centroids <- readRDS(("~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/summary/inventory_centroids.rds"))
+boundary_us <- st_read(("~/lab-data/datasets/boundary/USAdministrative/US/us_boundarydissolve.shp"), quiet = T) |> 
+  st_transform(4326)
 
-leaflet(data = inventory_centroids) |>
-  addProviderTiles(providers$OpenStreetMap, options = providerTileOptions(opacity = 0.9)) |>
-  addCircleMarkers(
-    popup = ~ paste0(
-      "<strong>", site, "</strong><br>",
-      "Num trees: ", num_tree, "<br>"
-    ),
-    radius = ~ sqrt(num_tree) / 20,
-    stroke = FALSE, fillOpacity = 0.7,
-    color = "blue"
+p_geo <- ggplot() +
+  geom_sf(data = boundary_us, fill = "lightgrey", color = "white") +
+  geom_sf(data = inventory_centroids, aes(size = num_tree), color = "darkblue", alpha = 0.6) +
+  coord_sf(expand = FALSE) +
+  scale_size_continuous(name = "Number of Trees", range = c(1, 8),labels = label_comma()) +
+  theme_minimal() +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        panel.grid.major = element_line(color = "transparent")) +
+  theme(
+    axis.text.x  = element_text(size = 8),
+    axis.text.y  = element_text(size = 8),
+    axis.ticks   = element_line(linewidth = 0.2),
+    panel.grid.major = element_line(color = "grey85", linetype = "solid", linewidth = 0.2),
+    panel.grid.minor = element_line(color = "grey90", linetype = "solid", linewidth = 0.15)
   )
 ```
-
-
-The PCA location of selected cities. Or some separate figures to show the distribution of characteristics.
 
 ```{r fig-pca}
 #| warning: false
 #| include: true
-#| fig-cap: "PCA of city climate and population variables for all 2,585 cities."
-#| fig-width: 5
-#| fig-height: 5
+#| fig-cap: "Distribution of cities with tree inventories."
+#| fig-width: 15
+#| fig-height: 7
 city_feature <- readRDS("~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/summary/city_feature.rds")
 
 all_city <- readRDS("~/phenology-urban/data/proc/urban/City_list/all_city.rds") |>
@@ -77,34 +81,15 @@ pca_scores$NAME20 <- all_city_scaled$NAME20
 pca_loadings <- as.data.frame(pca_res$rotation[, 1:2])
 pca_loadings$variable <- rownames(pca_loadings)
 
-arrow_scale <- 4
+arrow_scale <- 5.5
 pca_loadings <- pca_loadings |>
   mutate(PC1 = PC1 * arrow_scale,
-         PC2 = PC2 * arrow_scale)
-
-ggplot(pca_scores, aes(x = PC1, y = PC2, text = NAME20)) +
-  geom_point(data = pca_scores,
-             color = "grey60", alpha = 0.3, size = 0.5) +
-  geom_segment(data = pca_loadings,
-               aes(x = 0, y = 0, xend = PC1, yend = PC2),
-               arrow = arrow(length = unit(0.5, "cm")),
-               color = "red", size = 0.4, inherit.aes = FALSE) +
-  geom_text(data = pca_loadings,
-            aes(x = PC1, y = PC2, label = variable),
-            color = "red", size = 3, hjust = -0.2, vjust = 0.5, inherit.aes = FALSE) +
-  labs(x = "PC1", y = "PC2") +
-  theme_classic()
-```
-
-### Distribution of selected cities in PCA space
-
-I then projected cities with tree inventories onto the PCA space. The PCA scores of these cities are highlighted in red in the PCA plot (@fig-pca-add). These selected cities plus additional citiesare relatively evenly distributed across the PCA space, with no extreme clustering. However, there are still some gaps in the PCA space, particularly in the upper left quadrant, which is characterized by high temperature, low precipitation, low building and low population. 
-
-```{r fig-pca-add}
-#| warning: false
-#| fig-cap: "PCA of city climate and population variables, with cities in the current list highlighted in blue."
-#| fig-width: 10
-#| fig-height: 7
+         PC2 = PC2 * arrow_scale,
+         variable = case_when(
+    variable == "building_height_sd"     ~ "height_sd",
+    variable == "building_height_median" ~ "height_median",
+    TRUE ~ variable 
+  ))
 
 list_city <- city_feature |>
   st_join(st_read(("~/lab-data/datasets/boundary/USAdministrative/USCities/tl_2024_us_uac20.shp"), quiet = T) |> 
@@ -117,23 +102,78 @@ pca_scores <- pca_scores |>
     selected = NAME20 %in% list_city,
     hover_text = paste("City:", NAME20),
     group = case_when(
-      selected ~ "City with inventory",
+      selected ~ "Selected cities",
       TRUE ~ "Other cities"
     )
   )
 
-ggplot(pca_scores, aes(x = PC1, y = PC2, text = NAME20)) +
+full_data <- pca_scores |> select(PC1, PC2)
+subset_data <- pca_scores |> filter(selected) |> select(PC1, PC2)
+
+density = 0.0001
+num_grids = 100
+x_breaks <- seq(min(pca_scores$PC1), max(pca_scores$PC1), length.out = num_grids +1)
+y_breaks <- seq(min(pca_scores$PC2), max(pca_scores$PC2), length.out = num_grids +1)
+
+df <- pca_scores |>
+    mutate(
+      x_bin = cut(PC1, breaks = x_breaks, include.lowest = TRUE, labels = FALSE),
+      y_bin = cut(PC2, breaks = y_breaks, include.lowest = TRUE, labels = FALSE),
+      grid_id = paste(x_bin, y_bin, sep = "_")
+    )
+  
+grid_full <- expand.grid(
+  x_bin = 1:(length(x_breaks) - 1),
+  y_bin = 1:(length(y_breaks) - 1)
+) |>
+  mutate(
+    grid_id = paste(x_bin, y_bin, sep = "_"),
+    PC1 = (x_breaks[x_bin] + x_breaks[x_bin + 1]) / 2,
+    PC2 = (y_breaks[y_bin] + y_breaks[y_bin + 1]) / 2
+  ) |>
+  left_join(
+    df |>
+      group_by(x_bin, y_bin) |>
+      summarise(count = n(),
+                subset = sum(selected),
+                .groups = "drop"),
+    by = c("x_bin", "y_bin")
+  )
+
+kde_full <- kde(x = full_data, eval.points = grid_full |> select(PC1, PC2))
+kde_subset <- kde(x = subset_data, eval.points = grid_full|> select(PC1, PC2))
+
+dens_full <- kde_full$estimate / sum(kde_full$estimate)
+dens_subset <- kde_subset$estimate / sum(kde_subset$estimate)
+
+grid_df <- cbind(grid_full,
+                 full_density = dens_full,
+                 subset_density = dens_subset)
+
+contour_df <- grid_df %>%
+  select(PC1, PC2, full_density, subset_density) %>%
+  tidyr::pivot_longer(
+    cols = c(full_density, subset_density),
+    names_to = "group", values_to = "density"
+  ) %>%
+  mutate(group = case_when(
+    group == "full_density"   ~ "All cities",
+    group == "subset_density" ~ "Selected cities",
+    TRUE ~ group
+  ))
+  
+p_pca <- ggplot(pca_scores, aes(x = PC1, y = PC2)) +
   geom_segment(data = pca_loadings,
                aes(x = 0, y = 0, xend = PC1, yend = PC2),
                arrow = arrow(length = unit(0.5, "cm")),
                color = "red", size = 0.4, inherit.aes = FALSE) +
   geom_text(data = pca_loadings,
             aes(x = PC1, y = PC2, label = variable),
-            color = "red", size = 3, hjust = -0.2, vjust = 0.5, inherit.aes = FALSE) +
+            color = "red", size = 2.5, hjust = -0.2, vjust = 0.5, inherit.aes = FALSE) +
   geom_point(data = filter(pca_scores, !(selected)),
              aes(color = "Other cities"), alpha = 0.3, size = 0.5) +
   geom_point(data = filter(pca_scores, selected),
-             aes(color = "City in current list"), size = 1) +
+             aes(color = "Selected cities"), size = 1) +
   # geom_text(data = filter(pca_scores, selected),
   #           aes(label = NAME20), size = 2, vjust = -1) +
   # geom_text(data = filter(pca_scores,  !selected & GUTI_list),
@@ -141,14 +181,26 @@ ggplot(pca_scores, aes(x = PC1, y = PC2, text = NAME20)) +
   scale_color_manual(
     name = "City Category",
     values = c(
-      "City with inventory" = "grey60",
-      "City in current list" = "darkblue"
+      "Other cities" = "grey60",
+      "Selected cities" = "darkblue"
     )
   ) +
-  labs(title = "PCA of City Climate and Population Variables",
-       x = "PC1", y = "PC2") +
-  theme_classic()
+  new_scale_color() +
+    geom_contour(data = contour_df,
+                 aes(x = PC1, y = PC2, z = density, color = group),
+                 breaks = c(density)) +
+    scale_color_manual(
+      name = "Density Contour",
+      values = c("All cities" = "grey50", "Selected cities" = "cornflowerblue")
+    ) +
+    theme_classic() +
+  labs(x = "PC1", y = "PC2")+
+  theme(aspect.ratio = 0.8)
 
+p_geo + p_pca +
+  plot_layout(ncol = 2, 
+              guides = "collect",
+              widths = c(2, 1))
 ```
 
 ## Remote sensing data processing
@@ -157,8 +209,9 @@ ggplot(pca_scores, aes(x = PC1, y = PC2, text = NAME20)) +
 
 ## Variation of phenology across cities
 
-1. Just phenology variation
+### Just phenology variation
 
+Distribution of phenology variation measured by Tukey’s whisker range, with each sample corresponding to a City–Species–Year combination.
 ```{r}
 source(here("script/spatial_stats_model/prepare_data_genus_species.R"))
 cities = c("NY", "TP", "ST", "HT", "DV")
@@ -227,10 +280,9 @@ whisker_sp <- plot_phe_cities(cities, "canonicalname", stats = "whisker_d")
 whisker_sp$city_density / whisker_sp$cities_histogram +
   plot_annotation(title = "Phenology variation across species in cities")
 ```
-Distribution of phenology variation measured by Tukey’s whisker range, with each sample corresponding to a City–Species–Year combination.
 
 
-2. Phenology variation plus temperature variation (one city)
+### Phenology variation and temperature variation (one city)
 
 ```{r}
 source(here("script/spatial_stats_model/prepare_data_genus_species.R"))
@@ -283,7 +335,7 @@ p <- plot_phe_temp_city(city, "genus") / plot_phe_temp_city(city, "canonicalname
   plot_annotation(title = paste0("Phenology variation across species in ",city))
 ```
 
-3. Phenology variation plus temperature variation (across cities)
+### Phenology variation plus temperature variation (across cities)
 
 ```{r}
 source(here("script/spatial_stats_model/prepare_data_genus_species.R"))
@@ -350,7 +402,7 @@ plot_phe_temp_cities <- function(cities, taxon_col){
 ## The respones of phenology to temperature variation
 
 
-1. One city
+### One city example
 
 (MCMC)
 
@@ -523,7 +575,7 @@ ny_sp = wrap_plots(plots_coef, ncol = 2)
 ny_genus/ny_sp
 ```
 
-2. The distriution of effects
+### The distriution of effects
 
 (MCMC)
 

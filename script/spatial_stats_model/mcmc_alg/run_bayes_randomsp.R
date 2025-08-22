@@ -1,10 +1,26 @@
-run_mcmc_randomsp <- function(model_input_all, r_output_dir, phe_type, city, taxon_col) {
-  
-  # Get unique taxa for the specified taxon_col
-
+run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, taxon_col, 
+                                 n_cores = 6) {
   taxon_list <- unique(model_input_all[[taxon_col]])
   
-  for (taxon in taxon_list) {
+  Sys.setenv(OMP_NUM_THREADS = "1", OPENBLAS_NUM_THREADS = "1", MKL_NUM_THREADS = "1",
+             VECLIB_MAXIMUM_THREADS = "1", NUMEXPR_NUM_THREADS = "1")
+  
+  cl <- parallel::makeCluster(n_cores, outfile = "")
+  on.exit(parallel::stopCluster(cl), add = TRUE)
+  registerDoParallel(cl)
+  parallel::clusterEvalQ(cl, { library(sf); options(sf_use_s2 = FALSE) })
+  parallel::clusterExport(cl, c("boundary"), envir = environment())
+  
+  `%dopar%` <- foreach::`%dopar%`
+  res <- foreach(taxon = taxon_list, .packages = c(
+    "nimble", "dplyr", "data.table","here","lubridate", "sf",
+    "tidyverse", "coda", "terra", "fields"
+  ),
+  .inorder = FALSE, .errorhandling = "pass") %dopar% {
+    cat(sprintf("Worker PID %d running taxon: %s\n", Sys.getpid(), taxon))
+    flush.console()
+    
+    
     taxon_clean <- gsub(" ", "_", taxon)
     out_dir <- paste0(r_output_dir, "random_group_sp/",city,"/", taxon_col,"/")
     if (!dir.exists(out_dir)) {
@@ -213,6 +229,8 @@ run_mcmc_randomsp <- function(model_input_all, r_output_dir, phe_type, city, tax
       # mean_logml = mean_logml
     )
     write_rds(modelMCMCrun, file = model_path, compress = "gz")
+    list(taxon = taxon, ok = TRUE)
   }
+  
+  res
 }
-
