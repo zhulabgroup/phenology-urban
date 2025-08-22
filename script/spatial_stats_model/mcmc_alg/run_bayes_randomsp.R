@@ -1,4 +1,4 @@
-run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, taxon_col, 
+run_mcmc_randomsp <- function(model_input_all, r_output_dir, phe_type, city, taxon_col, 
                                  n_cores = 6) {
   taxon_list <- unique(model_input_all[[taxon_col]])
   
