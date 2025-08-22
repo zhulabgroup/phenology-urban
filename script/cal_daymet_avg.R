@@ -118,7 +118,7 @@ city_tree_inventory_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_p
 output_dir <- "~/phenology-urban/data/raw/CONUS/Daymet/all_city_trees/"
 
 rds_files <- list.files(city_tree_inventory_dir, pattern = "\\.rds$", full.names = TRUE)
-for (rds_file in rds_files) {
+for (rds_file in rds_files[7:69]) {
   city <- tools::file_path_sans_ext(basename(rds_file))
   message(paste0("Downloading Daymet data for ", city))
   data_dir <- paste0(output_dir, city,"/")
@@ -129,7 +129,7 @@ for (rds_file in rds_files) {
     select(id, lat, lon)
   results <- city_data %>%
     pmap_dfr(~ {
-      if (..1 %% 5 == 0) {
+      if (..1 %% 100 == 0) {
         message(paste0("Processing ID: ", ..1))
       }
       test <- download_daymet(..1,  # id
