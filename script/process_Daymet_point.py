@@ -85,7 +85,7 @@ requested_years = ",".join(DAYMET_YEARS)
 var_str   = f"&measuredParams={requested_vars}" if requested_vars else ""
 years_str = f"&year={requested_years}" if requested_years else ""
 
-for doy_file in doy_files[10:11]:
+for doy_file in doy_files:
     data_list = pyreadr.read_r(doy_file)[None]
     city = os.path.splitext(os.path.basename(doy_file))[0]
     print(f"Processing city: {city}")
@@ -105,7 +105,7 @@ for doy_file in doy_files[10:11]:
     num_loc_requested = len(lats)
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
-        futures = {ex.submit(fetch_one, i): i for i in range(0, 1000)}
+        futures = {ex.submit(fetch_one, i): i for i in range(num_loc_requested)}
         for n, fut in enumerate(as_completed(futures), 1):
             i = futures[fut]
             if i % 100 == 0:
