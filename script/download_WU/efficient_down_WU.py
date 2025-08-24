@@ -4,6 +4,7 @@
 # In[1]:
 
 
+from concurrent.futures import ThreadPoolExecutor
 import requests
 import csv
 import lxml.html as lh
@@ -150,20 +151,23 @@ def scrap_station(weather_station_url, city):
 # In[ ]:
 
 
+
 def main():
     ADDRESS_DIR = Path(expanduser('~/phenology-urban/script/download_WU/address'))
     txt_files = sorted(ADDRESS_DIR.glob("*.txt"))
-    for txt_file in txt_files[2:]:
-        city = txt_file.stem
-        print(f"=== Processing city: {city} ===")
-        with open(txt_file, 'r', encoding='utf-8') as stations_file:
-            for url in stations_file:
-                url = url.strip()
-                if not url:
-                    continue
-                print(url)
-                scrap_station(url, city)
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS_PER_STATION) as ex:
+        futures = []
+        for txt_file in txt_files[4:]:
+            city = txt_file.stem
+            print(f"=== Processing city: {city} ===")
+            with open(txt_file, 'r', encoding='utf-8') as stations_file:
+                for url in stations_file:
+                    url = url.strip()
+                    if url:
+                        futures.append(ex.submit(scrap_station, url, city))
+
+        for fut in as_completed(futures):
+            fut.result()
 
 if __name__ == "__main__":
     main()
-
