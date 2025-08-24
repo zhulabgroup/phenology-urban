@@ -961,6 +961,8 @@ if(Escondido){
     mutate(genus = str_extract(taxa, "^[^ ]+"))
   
   clean_Escondido |>
+    st_drop_geometry() |>
+    select(-geometry) |>
     group_split(site) |>  
     purrr::walk(function(df) {
       site_name <- gsub("\\.", "_", unique(df$site))
@@ -2344,7 +2346,7 @@ if(Mesa){
 # Utah
 UT <- FALSE
 if(UT){
-  raw_UT <- st_read(("~/Downloads/Tree_Inventory_UT/UrbanTreeInventory.shp")) |>
+  raw_UT <- st_read(("data/raw/CONUS/StreetTrees/raw/Tree_Inventory_UT/UrbanTreeInventory.shp")) |>
     st_transform(4326) |>
     mutate(lon = st_coordinates(geometry)[, 1],
            lat = st_coordinates(geometry)[, 2],
@@ -2452,3 +2454,379 @@ if(UT){
       write_rds(df, here(paste0(save_dir, site_name, ".rds")), compress = "gz")
     })
 }
+
+# Newburgh
+Newburgh <- FALSE
+if(Newburgh){
+  raw_Newburgh <- read_csv(("data/raw/CONUS/StreetTrees/raw/Tree_Inventory_Newburgh.csv")) |>
+    mutate(lon = Longitude,
+           lat = Latitude,
+           site = "Newburgh",
+           Species = str_extract(Species, "\\(([^)]+)\\)") |> 
+             str_replace_all("[()]", "")) |>
+    filter(!(is.na(Species) | Species=="stump")) |>
+    select(Species, site, lon, lat) |>
+    distinct()
+  
+  gbif_taxon_keys <- raw_Newburgh$Species|> # get the first column of the data.frame
+    unique() |> # remove duplicates
+    name_backbone_checklist(kingdom = "Plantae", phylum = "Tracheophyta")|>
+    filter(kingdom == "Plantae", phylum == "Tracheophyta") |>
+    # filter(status %in% c("ACCEPTED", "SYNONYM") & rank == "SPECIES")|> # get only accepted names and remove anything that might have matched to a non-species
+    mutate(canonicalName = if_else(status %in% c("ACCEPTED", "SYNONYM") & rank == "SPECIES", species, NA_character_)) |>
+    select(canonicalName, verbatim_name) # check for missing values
+  
+  set.seed(123) # for reproducibility
+  
+  clean_Newburgh <- raw_Newburgh|>
+    left_join(gbif_taxon_keys, by = c("Species" = "verbatim_name"))|> 
+    drop_na(canonicalName)|> 
+    rename(canonicalname = canonicalName) |>
+    group_by(canonicalname, site) |>
+    filter(n() >= 30) |>
+    group_modify(~ {
+      if (nrow(.x) > 2000) {
+        .x |> slice_sample(n = 2000)
+      } else {
+        .x                          
+      }
+    }) |>
+    ungroup() |>
+    left_join(check, by = c("canonicalname" = "canonicalName")) |>
+    filter(str_detect(single_type, "deciduous")) |>
+    select(-Species, -types_with_counts, -types, -single_type) |>
+    rename(taxa = canonicalname) |>
+    mutate(genus = str_extract(taxa, "^[^ ]+"))
+  
+  clean_Newburgh |>
+    group_split(site) |>  
+    purrr::walk(function(df) {
+      site_name <- gsub("\\.", "_", unique(df$site))
+      df <- df |>
+        mutate(id = row_number())
+      write_rds(df, here(paste0(save_dir, site_name, ".rds")), compress = "gz")
+    })
+}
+
+# Reading
+Reading <- FALSE
+if(Reading){
+  raw_Reading <- read_csv(("data/raw/CONUS/StreetTrees/raw/Tree_Inventory_Reading.csv")) |>
+    mutate(lon = Longitude,
+           lat = Latitude,
+           site = "Reading",
+           Species = str_extract(Species, "\\(([^)]+)\\)") |> 
+             str_replace_all("[()]", "")) |>
+    filter(!(is.na(Species) | Species=="stump")) |>
+    filter(`Tree Present` != "No") |>
+    select(Species, site, lon, lat) |>
+    distinct()
+  
+  gbif_taxon_keys <- raw_Reading$Species|> # get the first column of the data.frame
+    unique() |> # remove duplicates
+    name_backbone_checklist(kingdom = "Plantae", phylum = "Tracheophyta")|>
+    filter(kingdom == "Plantae", phylum == "Tracheophyta") |>
+    # filter(status %in% c("ACCEPTED", "SYNONYM") & rank == "SPECIES")|> # get only accepted names and remove anything that might have matched to a non-species
+    mutate(canonicalName = if_else(status %in% c("ACCEPTED", "SYNONYM") & rank == "SPECIES", species, NA_character_)) |>
+    select(canonicalName, verbatim_name) # check for missing values
+  
+  set.seed(123) # for reproducibility
+  
+  clean_Reading <- raw_Reading|>
+    left_join(gbif_taxon_keys, by = c("Species" = "verbatim_name"))|> 
+    drop_na(canonicalName)|> 
+    rename(canonicalname = canonicalName) |>
+    group_by(canonicalname, site) |>
+    filter(n() >= 30) |>
+    group_modify(~ {
+      if (nrow(.x) > 2000) {
+        .x |> slice_sample(n = 2000)
+      } else {
+        .x                          
+      }
+    }) |>
+    ungroup() |>
+    left_join(check, by = c("canonicalname" = "canonicalName")) |>
+    filter(str_detect(single_type, "deciduous")) |>
+    select(-Species, -types_with_counts, -types, -single_type) |>
+    rename(taxa = canonicalname) |>
+    mutate(genus = str_extract(taxa, "^[^ ]+"))
+  
+  clean_Reading |>
+    group_split(site) |>  
+    purrr::walk(function(df) {
+      site_name <- gsub("\\.", "_", unique(df$site))
+      df <- df |>
+        mutate(id = row_number())
+      write_rds(df, here(paste0(save_dir, site_name, ".rds")), compress = "gz")
+    })
+}
+
+# Erie
+Erie <- FALSE
+if(Erie){
+  raw_Erie <- read_csv(("data/raw/CONUS/StreetTrees/raw/Tree_Inventory_Erie.csv")) |>
+    mutate(lon = Longitude,
+           lat = Latitude,
+           site = "Erie",
+           Species = str_extract(Species, "\\(([^)]+)\\)") |> 
+             str_replace_all("[()]", "")) |>
+    filter(!(is.na(Species) | Species=="Unknown Tree")) |>
+    filter(`Tree Present` != "No") |>
+    select(Species, site, lon, lat) |>
+    distinct()
+  
+  gbif_taxon_keys <- raw_Erie$Species|> # get the first column of the data.frame
+    unique() |> # remove duplicates
+    name_backbone_checklist(kingdom = "Plantae", phylum = "Tracheophyta")|>
+    filter(kingdom == "Plantae", phylum == "Tracheophyta") |>
+    # filter(status %in% c("ACCEPTED", "SYNONYM") & rank == "SPECIES")|> # get only accepted names and remove anything that might have matched to a non-species
+    mutate(canonicalName = if_else(status %in% c("ACCEPTED", "SYNONYM") & rank == "SPECIES", species, NA_character_)) |>
+    select(canonicalName, verbatim_name) # check for missing values
+  
+  set.seed(123) # for reproducibility
+  
+  clean_Erie <- raw_Erie|>
+    left_join(gbif_taxon_keys, by = c("Species" = "verbatim_name"))|> 
+    drop_na(canonicalName)|> 
+    rename(canonicalname = canonicalName) |>
+    group_by(canonicalname, site) |>
+    filter(n() >= 30) |>
+    group_modify(~ {
+      if (nrow(.x) > 2000) {
+        .x |> slice_sample(n = 2000)
+      } else {
+        .x                          
+      }
+    }) |>
+    ungroup() |>
+    left_join(check, by = c("canonicalname" = "canonicalName")) |>
+    filter(str_detect(single_type, "deciduous")) |>
+    select(-Species, -types_with_counts, -types, -single_type) |>
+    rename(taxa = canonicalname) |>
+    mutate(genus = str_extract(taxa, "^[^ ]+"))
+  
+  clean_Erie |>
+    group_split(site) |>  
+    purrr::walk(function(df) {
+      site_name <- gsub("\\.", "_", unique(df$site))
+      df <- df |>
+        mutate(id = row_number())
+      write_rds(df, here(paste0(save_dir, site_name, ".rds")), compress = "gz")
+    })
+}
+
+# Lancaster
+Lancaster <- FALSE
+if(Lancaster){
+  raw_Lancaster <- read_csv(("data/raw/CONUS/StreetTrees/raw/Tree_Inventory_Lancaster.csv")) |>
+    mutate(lon = Longitude,
+           lat = Latitude,
+           site = "Lancaster",
+           Species = str_extract(Species, "\\(([^)]+)\\)") |> 
+             str_replace_all("[()]", "")) |>
+    filter(!(is.na(Species) | Species=="Unknown Tree")) |>
+    filter(`Tree Present` != "No") |>
+    select(Species, site, lon, lat) |>
+    distinct()
+  
+  gbif_taxon_keys <- raw_Lancaster$Species|> # get the first column of the data.frame
+    unique() |> # remove duplicates
+    name_backbone_checklist(kingdom = "Plantae", phylum = "Tracheophyta")|>
+    filter(kingdom == "Plantae", phylum == "Tracheophyta") |>
+    # filter(status %in% c("ACCEPTED", "SYNONYM") & rank == "SPECIES")|> # get only accepted names and remove anything that might have matched to a non-species
+    mutate(canonicalName = if_else(status %in% c("ACCEPTED", "SYNONYM") & rank == "SPECIES", species, NA_character_)) |>
+    select(canonicalName, verbatim_name) # check for missing values
+  
+  set.seed(123) # for reproducibility
+  
+  clean_Lancaster <- raw_Lancaster|>
+    left_join(gbif_taxon_keys, by = c("Species" = "verbatim_name"))|> 
+    drop_na(canonicalName)|> 
+    rename(canonicalname = canonicalName) |>
+    group_by(canonicalname, site) |>
+    filter(n() >= 30) |>
+    group_modify(~ {
+      if (nrow(.x) > 2000) {
+        .x |> slice_sample(n = 2000)
+      } else {
+        .x                          
+      }
+    }) |>
+    ungroup() |>
+    left_join(check, by = c("canonicalname" = "canonicalName")) |>
+    filter(str_detect(single_type, "deciduous")) |>
+    select(-Species, -types_with_counts, -types, -single_type) |>
+    rename(taxa = canonicalname) |>
+    mutate(genus = str_extract(taxa, "^[^ ]+"))
+  
+  clean_Lancaster |>
+    group_split(site) |>  
+    purrr::walk(function(df) {
+      site_name <- gsub("\\.", "_", unique(df$site))
+      df <- df |>
+        mutate(id = row_number())
+      write_rds(df, here(paste0(save_dir, site_name, ".rds")), compress = "gz")
+    })
+}
+
+# Harrisburg
+Harrisburg <- FALSE
+if(Harrisburg){
+  raw_Harrisburg <- read_csv(("data/raw/CONUS/StreetTrees/raw/Tree_Inventory_Harrisburg.csv")) |>
+    mutate(lon = Longitude,
+           lat = Latitude,
+           site = "Harrisburg",
+           Species = str_extract(Species, "\\(([^)]+)\\)") |> 
+             str_replace_all("[()]", "")) |>
+    filter(!(is.na(Species) | Species=="Unknown Tree")) |>
+    filter(`Tree Present` != "No") |>
+    select(Species, site, lon, lat) |>
+    distinct()
+  
+  gbif_taxon_keys <- raw_Harrisburg$Species|> # get the first column of the data.frame
+    unique() |> # remove duplicates
+    name_backbone_checklist(kingdom = "Plantae", phylum = "Tracheophyta")|>
+    filter(kingdom == "Plantae", phylum == "Tracheophyta") |>
+    # filter(status %in% c("ACCEPTED", "SYNONYM") & rank == "SPECIES")|> # get only accepted names and remove anything that might have matched to a non-species
+    mutate(canonicalName = if_else(status %in% c("ACCEPTED", "SYNONYM") & rank == "SPECIES", species, NA_character_)) |>
+    select(canonicalName, verbatim_name) # check for missing values
+  
+  set.seed(123) # for reproducibility
+  
+  clean_Harrisburg <- raw_Harrisburg|>
+    left_join(gbif_taxon_keys, by = c("Species" = "verbatim_name"))|> 
+    drop_na(canonicalName)|> 
+    rename(canonicalname = canonicalName) |>
+    group_by(canonicalname, site) |>
+    filter(n() >= 30) |>
+    group_modify(~ {
+      if (nrow(.x) > 2000) {
+        .x |> slice_sample(n = 2000)
+      } else {
+        .x                          
+      }
+    }) |>
+    ungroup() |>
+    left_join(check, by = c("canonicalname" = "canonicalName")) |>
+    filter(str_detect(single_type, "deciduous")) |>
+    select(-Species, -types_with_counts, -types, -single_type) |>
+    rename(taxa = canonicalname) |>
+    mutate(genus = str_extract(taxa, "^[^ ]+"))
+  
+  clean_Harrisburg |>
+    group_split(site) |>  
+    purrr::walk(function(df) {
+      site_name <- gsub("\\.", "_", unique(df$site))
+      df <- df |>
+        mutate(id = row_number())
+      write_rds(df, here(paste0(save_dir, site_name, ".rds")), compress = "gz")
+    })
+}
+
+# FortCollins
+FortCollins <- FALSE
+if(FortCollins){
+  raw_FortCollins <- read_csv(("data/raw/CONUS/StreetTrees/raw/Tree_Inventory_FortCollins.csv")) |>
+    mutate(lon = Longitude,
+           lat = Latitude,
+           site = "FortCollins",
+           Species = str_extract(Species, "\\(([^)]+)\\)") |> 
+             str_replace_all("[()]", "")) |>
+    filter(!(is.na(Species) | Species=="Vacant Site")) |>
+    select(Species, site, lon, lat) |>
+    distinct()
+  
+  gbif_taxon_keys <- raw_FortCollins$Species|> # get the first column of the data.frame
+    unique() |> # remove duplicates
+    name_backbone_checklist(kingdom = "Plantae", phylum = "Tracheophyta")|>
+    filter(kingdom == "Plantae", phylum == "Tracheophyta") |>
+    # filter(status %in% c("ACCEPTED", "SYNONYM") & rank == "SPECIES")|> # get only accepted names and remove anything that might have matched to a non-species
+    mutate(canonicalName = if_else(status %in% c("ACCEPTED", "SYNONYM") & rank == "SPECIES", species, NA_character_)) |>
+    select(canonicalName, verbatim_name) # check for missing values
+  
+  set.seed(123) # for reproducibility
+  
+  clean_FortCollins <- raw_FortCollins|>
+    left_join(gbif_taxon_keys, by = c("Species" = "verbatim_name"))|> 
+    drop_na(canonicalName)|> 
+    rename(canonicalname = canonicalName) |>
+    group_by(canonicalname, site) |>
+    filter(n() >= 30) |>
+    group_modify(~ {
+      if (nrow(.x) > 2000) {
+        .x |> slice_sample(n = 2000)
+      } else {
+        .x                          
+      }
+    }) |>
+    ungroup() |>
+    left_join(check, by = c("canonicalname" = "canonicalName")) |>
+    filter(str_detect(single_type, "deciduous")) |>
+    select(-Species, -types_with_counts, -types, -single_type) |>
+    rename(taxa = canonicalname) |>
+    mutate(genus = str_extract(taxa, "^[^ ]+"))
+  
+  clean_FortCollins |>
+    group_split(site) |>  
+    purrr::walk(function(df) {
+      site_name <- gsub("\\.", "_", unique(df$site))
+      df <- df |>
+        mutate(id = row_number())
+      write_rds(df, here(paste0(save_dir, site_name, ".rds")), compress = "gz")
+    })
+}
+
+# Binghamton
+Binghamton <- FALSE
+if(Binghamton){
+  raw_Binghamton <- read_csv(("data/raw/CONUS/StreetTrees/raw/Tree_Inventory_Binghamton.csv")) |>
+    mutate(lon = Longitude,
+           lat = Latitude,
+           site = "Binghamton",
+           Species = str_extract(Species, "\\(([^)]+)\\)") |> 
+             str_replace_all("[()]", "")) |>
+    filter(!(is.na(Species) | Species=="vacant site small")) |>
+    select(Species, site, lon, lat) |>
+    distinct()
+  
+  gbif_taxon_keys <- raw_Binghamton$Species|> # get the first column of the data.frame
+    unique() |> # remove duplicates
+    name_backbone_checklist(kingdom = "Plantae", phylum = "Tracheophyta")|>
+    filter(kingdom == "Plantae", phylum == "Tracheophyta") |>
+    # filter(status %in% c("ACCEPTED", "SYNONYM") & rank == "SPECIES")|> # get only accepted names and remove anything that might have matched to a non-species
+    mutate(canonicalName = if_else(status %in% c("ACCEPTED", "SYNONYM") & rank == "SPECIES", species, NA_character_)) |>
+    select(canonicalName, verbatim_name) # check for missing values
+  
+  set.seed(123) # for reproducibility
+  
+  clean_Binghamton <- raw_Binghamton|>
+    left_join(gbif_taxon_keys, by = c("Species" = "verbatim_name"))|> 
+    drop_na(canonicalName)|> 
+    rename(canonicalname = canonicalName) |>
+    group_by(canonicalname, site) |>
+    filter(n() >= 30) |>
+    group_modify(~ {
+      if (nrow(.x) > 2000) {
+        .x |> slice_sample(n = 2000)
+      } else {
+        .x                          
+      }
+    }) |>
+    ungroup() |>
+    left_join(check, by = c("canonicalname" = "canonicalName")) |>
+    filter(str_detect(single_type, "deciduous")) |>
+    select(-Species, -types_with_counts, -types, -single_type) |>
+    rename(taxa = canonicalname) |>
+    mutate(genus = str_extract(taxa, "^[^ ]+"))
+  
+  clean_Binghamton |>
+    group_split(site) |>  
+    purrr::walk(function(df) {
+      site_name <- gsub("\\.", "_", unique(df$site))
+      df <- df |>
+        mutate(id = row_number())
+      write_rds(df, here(paste0(save_dir, site_name, ".rds")), compress = "gz")
+    })
+}
+
