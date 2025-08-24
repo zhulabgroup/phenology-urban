@@ -6,7 +6,7 @@
 #SBATCH --array=1
 #SBATCH --time=24:00:00
 #SBATCH --partition=standard
-#SBATCH --mem=20G
+#SBATCH --mem=10G
 #SBATCH --cpus-per-task=2
 #SBATCH --mail-user=jializ@umich.edu        # Where to send mail
 #SBATCH --mail-type=BEGIN,END               # Mail notifications at the start and end of the job
@@ -21,17 +21,17 @@
 
 # Define the R script and input/output files
 WORKING_DIR=../phenology-urban/
-R_SCRIPT=../phenology-urban/script/cal_daymet_avg.R
+SCRIPT=../phenology-urban/script/process_Daymet_point.py
 
 # Load necessary modules
-module load Rgeospatial/4.2.0-2023-04-25
+module load python3.9-anaconda/2021.11
+source ../LilyPythonTest/bin/activate
 
 # Record the start time
 start_time=$(date +%s)
 
-# Run the R script
-Rscript $R_SCRIPT
-# Rscript $R_SCRIPT_INLA
+# Run the script
+python $SCRIPT
 
 # Record the end time and calculate duration
 end_time=$(date +%s)
@@ -59,8 +59,4 @@ echo "Start Time: $(date -d @$start_time '+%Y-%m-%d %H:%M:%S')" >> $job_info
 echo "End Time: $(date -d @$end_time '+%Y-%m-%d %H:%M:%S')" >> $job_info
 echo "Duration: $formatted_duration" >> $job_info
 
-# Move Slurm output and error files to the output directory
-# Move Slurm output and error files to the output directory
-mv slurm_job${SLURM_JOB_ID}_task${SLURM_ARRAY_TASK_ID}.out $R_OUTPUT_DIR/
-mv slurm_job${SLURM_JOB_ID}_task${SLURM_ARRAY_TASK_ID}.err $R_OUTPUT_DIR/
 
