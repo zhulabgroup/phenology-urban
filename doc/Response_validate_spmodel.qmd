@@ -178,10 +178,11 @@ mcmc_semi_matern <- function(r_output_dir, phe_type) {
 #| eval: true
 
 g_dir_path <- "~/phenology-urban/data/proc/model_output/final_models/mcmc/spatial_mat/NY/genus/"
-s_dir_path <- "~/phenology-urban/data/proc/model_output/final_models/mcmc/spatial_mat/NY/canonicalname/"
+s_dir_path <- "~/phenology-urban/data/proc/model_output/final_models_humid/mcmc/spatial_mat/NY/canonicalname/"
 
 g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "temp", fixed_sp = F)
-s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "temp", fixed_sp = F)
+s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
+s_plot_obj2 <- generate_mcmc_plot(s_dir_path,  coef = "temp", fixed_sp = F)
 
 (g_plot_obj$coef_summary_plot + ggtitle("Genus")) + (g_plot_obj$coef_density_plot + ggtitle("Genus")) + 
   (s_plot_obj$coef_summary_plot +  ggtitle("Species")) + (s_plot_obj$coef_density_plot +  ggtitle("Species")) +

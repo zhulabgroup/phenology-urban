@@ -37,7 +37,7 @@ boundary_us <- st_read(("~/lab-data/datasets/boundary/USAdministrative/US/us_bou
   st_transform(4326)
 
 p_geo <- ggplot() +
-  geom_sf(data = boundary_us, fill = "lightgrey", color = "white") +
+  geom_sf(data = boundary_us, fill = "grey85", color = "white") +
   geom_sf(data = inventory_centroids, aes(size = num_tree), color = "darkblue", alpha = 0.6) +
   coord_sf(expand = FALSE) +
   scale_size_continuous(name = "Number of Trees", range = c(1, 8),labels = label_comma()) +
@@ -50,7 +50,7 @@ p_geo <- ggplot() +
     axis.text.x  = element_text(size = 8),
     axis.text.y  = element_text(size = 8),
     axis.ticks   = element_line(linewidth = 0.2),
-    panel.grid.major = element_line(color = "grey85", linetype = "solid", linewidth = 0.2),
+    panel.grid.major = element_line(color = "grey90", linetype = "solid", linewidth = 0.2),
     panel.grid.minor = element_line(color = "grey90", linetype = "solid", linewidth = 0.15)
   )
 ```
