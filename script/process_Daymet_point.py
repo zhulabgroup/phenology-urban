@@ -46,11 +46,11 @@ def parse_params(line, param_list):
     return ",".join(requested_params)
 
 
-# In[ ]:
+# In[5]:
 
 
 session = requests.Session()
-MAX_WORKERS = 8
+MAX_WORKERS = 10
 
 def daymet_url(lat, lon):
     return DAYMET_URL_STR.format(lat, lon) + var_str + years_str
@@ -68,7 +68,6 @@ def parse_and_aggregate(text_str, id_value):
     df["season"] = season
     df.loc[m == 12, "year"] += 1
     df["id"] = id_value
-    # 聚合
     out = (df.groupby(["id","year","season"], as_index=False)
              .agg(Avg_srad=("srad","mean"),
                   srad_count=("srad", lambda s: s.notna().sum())))
@@ -93,7 +92,7 @@ for doy_file in doy_files[10:11]:
 
     out_dir  = Path.home() / "phenology-urban/data/raw/CONUS/Daymet/all_city_trees" / city
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_file = out_dir / "srad_monthly_2016_2024.parquet"
+    out_file = out_dir / "srad_monthly_2016_2024.csv"
     if out_file.exists():
         print("File exists, skip:", out_file)
         continue
@@ -106,10 +105,10 @@ for doy_file in doy_files[10:11]:
     num_loc_requested = len(lats)
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
-        futures = {ex.submit(fetch_one, i): i for i in range(num_loc_requested)}
+        futures = {ex.submit(fetch_one, i): i for i in range(0, 1000)}
         for n, fut in enumerate(as_completed(futures), 1):
             i = futures[fut]
-            if i % 50 == 0:
+            if i % 100 == 0:
                 print("Processing:", names[i])
             try:
                 out = fut.result()
