@@ -31,7 +31,6 @@ ADDRESS_DIR = Path(expanduser('~/phenology-urban/script/download_WU/address'))
 station_files = ADDRESS_DIR.glob("*.txt")
 MAX_WORKERS_PER_STATION = 10       
 GLOBAL_MAX_CONNECTIONS = 64
-city = Path(STATIONS_FILE).stem
 
 
 # In[2]:
@@ -153,8 +152,8 @@ def scrap_station(weather_station_url, city):
 
 def main():
     ADDRESS_DIR = Path(expanduser('~/phenology-urban/script/download_WU/address'))
-    txt_files = ADDRESS_DIR.glob("*.txt")
-    for txt_file in txt_files[1:]:
+    txt_files = sorted(ADDRESS_DIR.glob("*.txt"))
+    for txt_file in txt_files[2:]:
         city = txt_file.stem
         print(f"=== Processing city: {city} ===")
         with open(txt_file, 'r', encoding='utf-8') as stations_file:

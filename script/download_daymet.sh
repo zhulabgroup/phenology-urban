@@ -31,7 +31,7 @@ source ../LilyPythonTest/bin/activate
 start_time=$(date +%s)
 
 # Run the script
-python $SCRIPT
+python -u $SCRIPT
 
 # Record the end time and calculate duration
 end_time=$(date +%s)

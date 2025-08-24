@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=download_daymet
+#SBATCH --job-name=download_WU
 #SBATCH --account=zhukai0                   # Account name
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err
@@ -20,18 +20,18 @@
 #    The `-si` option in `ln` will prompt for confirmation before replacing any existing link or file.
 
 # Define the R script and input/output files
-WORKING_DIR=../phenology-urban/script/download_WU/
-SCRIPT=../phenology-urban/script/download_WU/efficient_down_WU.py
+WORKING_DIR=$HOME/phenology-urban/script/download_WU
+SCRIPT=$WORKING_DIR/efficient_down_WU.py
 
 # Load necessary modules
 module load python3.9-anaconda/2021.11
-source ../LilyPythonTest/bin/activate
+source $HOME/LilyPythonTest/bin/activate
 
 # Record the start time
 start_time=$(date +%s)
 
 # Run the script
-python $SCRIPT
+python -u $SCRIPT
 
 # Record the end time and calculate duration
 end_time=$(date +%s)
