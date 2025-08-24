@@ -153,7 +153,8 @@ def scrap_station(weather_station_url, city):
 
 def main():
     ADDRESS_DIR = Path(expanduser('~/phenology-urban/script/download_WU/address'))
-    for txt_file in ADDRESS_DIR.glob("*.txt"):
+    txt_files = ADDRESS_DIR.glob("*.txt")
+    for txt_file in txt_files[1:]:
         city = txt_file.stem
         print(f"=== Processing city: {city} ===")
         with open(txt_file, 'r', encoding='utf-8') as stations_file:
