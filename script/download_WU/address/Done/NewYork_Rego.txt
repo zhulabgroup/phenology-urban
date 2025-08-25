@@ -1,4 +1,4 @@
-KNYREGOP1
-KNYREGOP2
-KNYREGOP3
-KNYREGOP4
+https://www.wunderground.com/dashboard/pws/KNYREGOP1
+https://www.wunderground.com/dashboard/pws/KNYREGOP2
+https://www.wunderground.com/dashboard/pws/KNYREGOP3
+https://www.wunderground.com/dashboard/pws/KNYREGOP4
