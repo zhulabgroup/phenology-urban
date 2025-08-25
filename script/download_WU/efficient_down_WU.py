@@ -157,7 +157,7 @@ def main():
     txt_files = sorted(ADDRESS_DIR.glob("*.txt"))
     with ThreadPoolExecutor(max_workers=MAX_WORKERS_PER_STATION) as ex:
         futures = []
-        for txt_file in txt_files:
+        for txt_file in txt_files[11:]:
             city = txt_file.stem
             print(f"=== Processing city: {city} ===")
             with open(txt_file, 'r', encoding='utf-8') as stations_file:
