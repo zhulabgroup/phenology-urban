@@ -28,7 +28,7 @@ END_DATE = config.END_DATE
 UNIT_SYSTEM = config.UNIT_SYSTEM
 FIND_FIRST_DATE = config.FIND_FIRST_DATE
 
-ADDRESS_DIR = Path(expanduser('~/phenology-urban/script/download_WU/address'))
+ADDRESS_DIR = Path(expanduser('~/phenology-urban/script/download_WU/address/Done'))
 station_files = ADDRESS_DIR.glob("*.txt")
 MAX_WORKERS_PER_STATION = 10       
 GLOBAL_MAX_CONNECTIONS = 64
@@ -153,7 +153,7 @@ def scrap_station(weather_station_url, city):
 
 
 def main():
-    ADDRESS_DIR = Path(expanduser('~/phenology-urban/script/download_WU/address'))
+    ADDRESS_DIR = Path(expanduser('~/phenology-urban/script/download_WU/address/Done'))
     txt_files = sorted(ADDRESS_DIR.glob("*.txt"))
     with ThreadPoolExecutor(max_workers=MAX_WORKERS_PER_STATION) as ex:
         futures = []
