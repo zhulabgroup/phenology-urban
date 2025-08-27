@@ -35,16 +35,13 @@ read_clean_WU <- function(city, run_checks = TRUE) {
   if (length(files) == 0) stop("No station CSVs found for city: ", city)
   message(paste0("Clean ", length(files), " station files for city: ", city))
   save_path <- paste0("~/phenology-urban/data/raw/CONUS/WU_clean/", city, "_wu.rds")
-  all_data <- vroom(files,
-                    id = "src",                                 
-                    col_types = readr::cols(.default = readr::col_character()),
-                    .name_repair = "unique",
-                    show_col_types = FALSE,
-                    progress = FALSE
-  ) %>%
-    mutate(name = tools::file_path_sans_ext(basename(src))) %>%
-    dplyr::select(-src) %>% 
-    dplyr::select(name, Date, HighTemp, AvgTemp, LowTemp, Sum_mm)
+  
+  all_data <- map_dfr(files, ~ {
+    read_csv(.x, col_types = cols(.default = "c")) %>%
+      mutate(name = tools::file_path_sans_ext(basename(.x)))
+  }, .id = "src") %>%
+    select(-src) %>%
+    select(name, Date, HighTemp, AvgTemp, LowTemp, Sum_mm)
   
   all_temp <- all_data %>%
     mutate(
@@ -65,10 +62,11 @@ read_clean_WU <- function(city, run_checks = TRUE) {
     
     ### 1. Identical Value Sequences ###
     message("Starting identical value sequence check...")
-    all_data_iden <- all_num %>%
+    all_data_iden <- all_temp %>%
       arrange(name, Date) %>%
       group_by(name) %>%
       mutate(
+        Date = as.Date(Date, format = "%m/%d/%Y"),
         HighTemp_Identical = flag_identical_runs(HighTemp),
         AvgTemp_Identical  = flag_identical_runs(AvgTemp),
         LowTemp_Identical  = flag_identical_runs(LowTemp),
@@ -246,8 +244,18 @@ read_clean_WU <- function(city, run_checks = TRUE) {
   }
 }
 
+file_path <- "~/phenology-urban/data/raw/CONUS/WU"
+
+# expand ~ to full path
+file_path <- path.expand(file_path)
+
+# list only subdirectories
+sub_folders <- list.dirs(file_path, recursive = FALSE, full.names = FALSE)
+
 # example of running the function
-read_clean_WU(city = "Albuquerque", run_checks = TRUE)
+for (city in sub_folders){
+  read_clean_WU(city = city, run_checks = TRUE)
+}
 
 # nyboundary <- st_read("~/urban-cooling/data/raw/NYC/boundary/nybb_dissolved.shp") %>%
 #   st_transform(4326)
