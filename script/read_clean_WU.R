@@ -33,7 +33,7 @@ read_clean_WU <- function(city, run_checks = TRUE) {
   files     <- list.files(dir_path, pattern = "\\.csv$", full.names = TRUE)
   files     <- files[basename(files) != "location.csv"]
   if (length(files) == 0) stop("No station CSVs found for city: ", city)
-  print(paste0("Clean ", length(files), " station files for city: ", city))
+  message(paste0("Clean ", length(files), " station files for city: ", city))
   all_data <- vroom(files,
                     id = "src",                                 
                     col_types = readr::cols(.default = readr::col_character()),
@@ -45,7 +45,7 @@ read_clean_WU <- function(city, run_checks = TRUE) {
     dplyr::select(-src) %>% 
     dplyr::select(name, Date, HighTemp, AvgTemp, LowTemp, Sum_mm)
   
-  all_num <- all_data %>%
+  all_temp <- all_data %>%
     mutate(
       Sum_mm  = parse_mm(Sum_mm),
       HighTemp= parse_C(HighTemp),
@@ -63,7 +63,7 @@ read_clean_WU <- function(city, run_checks = TRUE) {
     ################### Clean the data (identify outliers) ###################
     
     ### 1. Identical Value Sequences ###
-    print("Starting identical value sequence check...")
+    message("Starting identical value sequence check...")
     all_data_iden <- all_num %>%
       arrange(name, Date) %>%
       group_by(name) %>%
@@ -76,7 +76,7 @@ read_clean_WU <- function(city, run_checks = TRUE) {
       ungroup()
     
     ### 2. Extreme Precipitation ###
-    print("Starting extreme precipitation check...")
+    message("Starting extreme precipitation check...")
     all_data_iden_ext <- all_data_iden %>%
       mutate(M = month(Date)) %>%
       group_by(name, M) %>%
@@ -89,7 +89,7 @@ read_clean_WU <- function(city, run_checks = TRUE) {
       select(-.tot_month, -.oth_month, -M)
     
     ### 3. Extreme Temperature ###
-    print("Starting extreme temperature check...")
+    message("Starting extreme temperature check...")
     rollsum_circ <- function(x, k = 31L) {
       stopifnot(length(x) > 0, k %% 2 == 1)
       n <- length(x); h <- (k - 1L) / 2L
@@ -181,7 +181,7 @@ read_clean_WU <- function(city, run_checks = TRUE) {
     #   select(-c(month_day, start_day, end_day))
     # 
     ### 4. Time Consistancy ###
-    print("Starting time consistency check...")
+    message("Starting time consistency check...")
     all_data_iden_ext_tcon <- all_data_iden_ext_tp %>%
       arrange(name, Date) %>%
       group_by(name) %>%
@@ -193,7 +193,7 @@ read_clean_WU <- function(city, run_checks = TRUE) {
       ungroup()
     
     ### 5. Spatial Consistancy ###
-    print("Starting spatial consistency check...")
+    message("Starting spatial consistency check...")
     all_data_iden_ext_con <- all_data_iden_ext_tcon %>%
       group_by(Date) %>%
       mutate(
