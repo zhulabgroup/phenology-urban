@@ -1,6 +1,7 @@
 library(zhulabtools)
 load_packages(c("tidyverse","lubridate", "ggplot2", "sf", "vroom"))
 
+
 ################### Combine all the weather data from different stations ###################
 parse_mm <- function(x) {
   case_when(
@@ -64,11 +65,10 @@ read_clean_WU <- function(city, run_checks = TRUE) {
     
     ### 1. Identical Value Sequences ###
     message("Starting identical value sequence check...")
-    all_data_iden <- all_temp %>%
+    all_data_iden <- all_num %>%
       arrange(name, Date) %>%
       group_by(name) %>%
       mutate(
-        Date = as.Date(Date, format = "%m/%d/%Y"),
         HighTemp_Identical = flag_identical_runs(HighTemp),
         AvgTemp_Identical  = flag_identical_runs(AvgTemp),
         LowTemp_Identical  = flag_identical_runs(LowTemp),
@@ -212,9 +212,9 @@ read_clean_WU <- function(city, run_checks = TRUE) {
         )
       ) %>%
       ungroup() %>%
-      select(-c(HighTemp_Mean_Others, LowTemp_Mean_Others,
-                AvgTemp_Mean_Others, Precip_Mean_Others))
-    
+     select(-c(HighTemp_Mean_Others, LowTemp_Mean_Others,
+               AvgTemp_Mean_Others, Precip_Mean_Others))
+  
     ### 6. Summary ###
     
     final <- all_data_iden_ext_con %>%
