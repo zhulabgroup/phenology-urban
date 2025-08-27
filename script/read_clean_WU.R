@@ -1,157 +1,199 @@
 library(zhulabtools)
-load_packages(c("dplyr","lubridate", "ggplot2", "sf", "readr", "purrr", "stringr", "tidyr"))
+load_packages(c("tidyverse","lubridate", "ggplot2", "sf", "vroom"))
 
 
 ################### Combine all the weather data from different stations ###################
+parse_mm <- function(x) {
+  case_when(
+    str_detect(x, "in$") ~ parse_number(x) * 25.4,
+    str_detect(x, "mm$") ~ parse_number(x),
+    !str_detect(x, "[A-Za-z]$") ~ suppressWarnings(as.numeric(x)),
+    TRUE ~ NA_real_
+  )
+}
+parse_C <- function(x) {
+  case_when(
+    str_detect(x, "F$") ~ (parse_number(x) - 32) * 5/9,
+    str_detect(x, "C$") ~ parse_number(x),
+    !str_detect(x, "[A-Za-z]$") ~ suppressWarnings(as.numeric(x)),
+    TRUE ~ NA_real_
+  )
+}
+
+flag_identical_runs <- function(x, min_len = 20L, require_positive = FALSE) {
+  r <- rle(x)
+  keep <- r$lengths >= min_len
+  if (require_positive) keep <- keep & (r$values > 0 & !is.na(r$values))
+  rep(keep, r$lengths)
+}
 
 read_clean_WU <- function(city, run_checks = TRUE) {
-  file_path <- paste0("~/urban-cooling/data/raw/WU/", city, "/data")
-  file_list <- list.files(path = file_path, pattern = "*.csv", full.names = TRUE)
-  all_data <- data.frame()
+  file_path <- "~/phenology-urban/data/raw/CONUS/WU"
+  dir_path  <- file.path(file_path, city)
+  files     <- list.files(dir_path, pattern = "\\.csv$", full.names = TRUE)
+  files     <- files[basename(files) != "location.csv"]
+  if (length(files) == 0) stop("No station CSVs found for city: ", city)
+  print(paste0("Clean ", length(files), " station files for city: ", city))
+  all_data <- vroom(files,
+                    id = "src",                                 
+                    col_types = readr::cols(.default = readr::col_character()),
+                    .name_repair = "unique",
+                    show_col_types = FALSE,
+                    progress = FALSE
+  ) %>%
+    mutate(name = tools::file_path_sans_ext(basename(src))) %>%
+    dplyr::select(-src) %>% 
+    dplyr::select(name, Date, HighTemp, AvgTemp, LowTemp, Sum_mm)
   
-  for (file in file_list) {
-    temp_data <- read.csv(file)
-    temp_data$name <- tools::file_path_sans_ext(basename(file))
-    all_data <- bind_rows(all_data, temp_data)
-  }
-  
-  all_data <- all_data %>%
+  all_num <- all_data %>%
     mutate(
-      Date = ifelse(
-        grepl("/\\d{2}$", Date),  #
-        sub("/(\\d{2})$", "/20\\1", Date),  #
-        Date
-      ),
-      Date = as.Date(Date, format = "%m/%d/%Y") 
-    )
+      Sum_mm  = parse_mm(Sum_mm),
+      HighTemp= parse_C(HighTemp),
+      AvgTemp = parse_C(AvgTemp),
+      LowTemp = parse_C(LowTemp)
+    ) %>%
+    filter(!is.na(Date))
   
-  
-  all_temp <- all_data %>% select(Date, HighTemp, AvgTemp, LowTemp, Sum_mm, name)
-  
-  columns_to_clean <- c("Sum_mm", "HighTemp", "AvgTemp", "LowTemp")
-  
-  for (col in columns_to_clean) {
-    if (col %in% names(all_temp)) {
-      if (col == "Sum_mm") {
-        all_temp[[col]] <- ifelse(
-          grepl("in$", all_temp[[col]]),                      
-          as.numeric(sub(" in", "", all_temp[[col]])) * 25.4, 
-          NA
-        )
-      } else {
-        all_temp[[col]] <- ifelse(
-          grepl("F$", all_temp[[col]]),  
-          (as.numeric(sub(" F", "", all_temp[[col]])) - 32) * 5 / 9, 
-          NA
-        )
-      }
-    }
+  if (!run_checks) {
+    saveRDS(all_temp, paste0("~/phenology-urban/data/raw/CONUS/WU_clean/", city, "_wu.rds"))
+    return(all_temp)
   }
-  all_temp <- all_temp %>% 
-    filter(!is.na(Sum_mm)) %>%
-    filter(!is.na(HighTemp)) %>%
-    filter(!is.na(AvgTemp)) %>%
-    filter(!is.na(LowTemp))
   
   if (run_checks) {
     ################### Clean the data (identify outliers) ###################
     
     ### 1. Identical Value Sequences ###
-    
-    check_identical <- function(col, is_precip = FALSE) {
-      rle_result <- rle(col)
-      if (is_precip) {
-        indices <- which(rle_result$lengths >= 20 & rle_result$values > 0)
-      } else {
-        indices <- which(rle_result$lengths >= 20)
-      }
-      rle_result$values <- rep(FALSE, length(rle_result$values))
-      if (length(indices) > 0) {
-        rle_result$values[indices] <- TRUE
-      }
-      flag <- inverse.rle(rle_result)
-      return(flag)
-    }
-    
-    all_data_iden <- all_temp %>%
+    print("Starting identical value sequence check...")
+    all_data_iden <- all_num %>%
+      arrange(name, Date) %>%
       group_by(name) %>%
-      arrange(Date) %>%
       mutate(
-        HighTemp_Identical = check_identical(HighTemp),
-        AvgTemp_Identical = check_identical(AvgTemp),
-        LowTemp_Identical = check_identical(LowTemp),
-        Precip_Identical = check_identical(Sum_mm, is_precip = TRUE)
+        HighTemp_Identical = flag_identical_runs(HighTemp),
+        AvgTemp_Identical  = flag_identical_runs(AvgTemp),
+        LowTemp_Identical  = flag_identical_runs(LowTemp),
+        Precip_Identical   = flag_identical_runs(Sum_mm, require_positive = TRUE)
       ) %>%
       ungroup()
     
     ### 2. Extreme Precipitation ###
-    
-    check_extreme_prcp <- function(data, station_name, targetDate, row_index) {
-      if (row_index %% 1000 == 0) {
-        message(glue::glue("Processing row {row_index}"))
-      }
-      data %>%
-        filter(name == station_name) %>%
-        mutate(
-          month = month(Date)
-        ) %>%
-        filter(
-          (month == month(targetDate))
-        ) %>%
-        mutate(
-          Sum_mm_Extreme = (Sum_mm >= sum(Sum_mm[Date != targetDate], na.rm = TRUE) + 300)) %>%
-        filter(Date == targetDate)
-    }
-    
+    print("Starting extreme precipitation check...")
     all_data_iden_ext <- all_data_iden %>%
-      select(Date, name) %>%
-      mutate(row_index = row_number()) %>%
-      pmap_dfr(~ check_extreme_prcp(all_data_iden, ..2, ..1, ..3))
-      
-    ### 3. Extreme Temperature ###
+      mutate(M = month(Date)) %>%
+      group_by(name, M) %>%
+      mutate(
+        .tot_month = sum(Sum_mm, na.rm = TRUE),
+        .oth_month = pmax(.tot_month - Sum_mm, 0),
+        Sum_mm_Extreme = Sum_mm >= (.oth_month + 300)
+      ) %>%
+      ungroup() %>%
+      select(-.tot_month, -.oth_month, -M)
     
-    check_extreme_temp <- function(data, station_name, targetDate, row_index) {
-      if (row_index %% 1000 == 0) {
-        message(glue::glue("Processing row {row_index}"))
-      }
-      data %>%
-        filter(name == station_name) %>%
-        mutate(
-          month_day = format(Date, "%m-%d"),
-          start_day = format(targetDate - 15, "%m-%d"),
-          end_day = format(targetDate + 15, "%m-%d")
-        ) %>%
-        filter(
-          (start_day > end_day & (month_day >= start_day | month_day <= end_day)) |
-            (start_day <= end_day & month_day >= start_day & month_day <= end_day)
-        ) %>%
-        mutate(
-          HighTemp_Extreme = abs((HighTemp - mean(HighTemp)) / sd(HighTemp)) >= 6,
-          AvgTemp_Extreme = abs((AvgTemp - mean(AvgTemp)) / sd(AvgTemp)) >= 6,
-          LowTemp_Extreme = abs((LowTemp - mean(LowTemp)) / sd(LowTemp)) >= 6
-          ) %>%
-        filter(Date == targetDate)
+    ### 3. Extreme Temperature ###
+    print("Starting extreme temperature check...")
+    rollsum_circ <- function(x, k = 31L) {
+      stopifnot(length(x) > 0, k %% 2 == 1)
+      n <- length(x); h <- (k - 1L) / 2L
+      xx <- c(x, x, x)
+      cs <- c(0, cumsum(xx))
+      starts <- (n + 1L - h):(n + n - h)
+      ends   <- (n + 1L + h):(n + n + h)
+      cs[ends + 1L] - cs[starts]
     }
+    
+    build_mu_sd <- function(df, col) {
+      df %>%
+        mutate(doy = yday(Date)) %>%
+        group_by(name, doy) %>%
+        summarise(
+          s   = sum(.data[[col]], na.rm = TRUE),
+          ss  = sum((.data[[col]])^2, na.rm = TRUE),
+          nn  = sum(!is.na(.data[[col]])),
+          .groups = "drop"
+        ) %>%
+        group_by(name) %>%
+        tidyr::complete(doy = 1:366, fill = list(s = 0, ss = 0, nn = 0)) %>%
+        arrange(doy, .by_group = TRUE) %>%
+        mutate(
+          s_w   = rollsum_circ(s, 31L),
+          ss_w  = rollsum_circ(ss, 31L),
+          n_w   = rollsum_circ(nn, 31L),
+          mu    = ifelse(n_w > 0, s_w / n_w, NA_real_),
+          sd    = ifelse(n_w > 1, sqrt(pmax(ss_w / n_w - mu^2, 0)), NA_real_)
+        ) %>%
+        select(name, doy, mu, sd) %>%
+        ungroup()
+    }
+    
+    mu_sd_high <- build_mu_sd(all_data_iden_ext, "HighTemp") %>% rename(mu_H = mu, sd_H = sd)
+    mu_sd_avg  <- build_mu_sd(all_data_iden_ext, "AvgTemp")  %>% rename(mu_A = mu, sd_A = sd)
+    mu_sd_low  <- build_mu_sd(all_data_iden_ext, "LowTemp")  %>% rename(mu_L = mu, sd_L = sd)
     
     all_data_iden_ext_tp <- all_data_iden_ext %>%
-      select(Date, name) %>%
-      mutate(row_index = row_number()) %>%
-      pmap_dfr(~ check_extreme_temp(all_data_iden_ext, ..2, ..1, ..3))%>%
-      select(-c(month_day, start_day, end_day))
+      mutate(doy = yday(Date)) %>%
+      left_join(mu_sd_high, by = c("name", "doy")) %>%
+      left_join(mu_sd_avg,  by = c("name", "doy")) %>%
+      left_join(mu_sd_low,  by = c("name", "doy")) %>%
+      mutate(
+        HighTemp_Extreme = if_else(!is.na(sd_H) & sd_H > 0, abs((HighTemp - mu_H) / sd_H) >= 6, FALSE),
+        AvgTemp_Extreme  = if_else(!is.na(sd_A) & sd_A > 0, abs((AvgTemp  - mu_A) / sd_A) >= 6, FALSE),
+        LowTemp_Extreme  = if_else(!is.na(sd_L) & sd_L > 0, abs((LowTemp  - mu_L) / sd_L) >= 6, FALSE)
+      ) %>%
+      select(-doy, -mu_H, -sd_H, -mu_A, -sd_A, -mu_L, -sd_L)
     
+    
+    # check_extreme_temp <- function(data, station_name, targetDate, row_index) {
+    #   if (row_index %% 1000 == 0) message(glue::glue("Processing row {row_index}"))
+    #   targetDate <- as.Date(
+    #     targetDate,
+    #     tryFormats = c("%m/%d/%Y", "%m/%d/%y")
+    #   )
+    #   data %>%
+    #     filter(name == station_name) %>%
+    #     mutate(
+    #       Date = as.Date(Date),
+    #       month_day = format(Date, format = "%m-%d"),
+    #       start_day = format(targetDate - 15, format = "%m-%d"),
+    #       end_day   = format(targetDate + 15, format = "%m-%d")
+    #     ) %>%
+    #     filter(
+    #       (start_day > end_day & (month_day >= start_day | month_day <= end_day)) |
+    #         (start_day <= end_day & month_day >= start_day & month_day <= end_day)
+    #     ) %>%
+    #     {
+    #       muH <- mean(.$HighTemp, na.rm = TRUE); sdH <- sd(.$HighTemp, na.rm = TRUE)
+    #       muA <- mean(.$AvgTemp , na.rm = TRUE); sdA <- sd(.$AvgTemp , na.rm = TRUE)
+    #       muL <- mean(.$LowTemp , na.rm = TRUE); sdL <- sd(.$LowTemp , na.rm = TRUE)
+    #       mutate(.,
+    #              HighTemp_Extreme = sdH > 0 & abs((HighTemp - muH)/sdH) >= 6,
+    #              AvgTemp_Extreme  = sdA > 0 & abs((AvgTemp  - muA)/sdA) >= 6,
+    #              LowTemp_Extreme  = sdL > 0 & abs((LowTemp  - muL)/sdL) >= 6
+    #       )
+    #     } %>%
+    #     filter(Date == targetDate) %>%
+    #     select(-month_day, -start_day, -end_day)
+    # }
+    # 
+    # all_data_iden_ext_tp <- all_data_iden_ext %>%
+    #   select(Date, name) %>%
+    #   mutate(row_index = row_number(),
+    #          Date = as.Date(Date, tryFormats = c("%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y"))) %>%
+    #   pmap_dfr(~ check_extreme_temp(all_data_iden_ext, ..2, ..1, ..3))%>%
+    #   select(-c(month_day, start_day, end_day))
+    # 
     ### 4. Time Consistancy ###
-    
+    print("Starting time consistency check...")
     all_data_iden_ext_tcon <- all_data_iden_ext_tp %>%
+      arrange(name, Date) %>%
       group_by(name) %>%
-      arrange(Date) %>%
       mutate(
         HighTemp_SpikeDip = abs(HighTemp - lag(HighTemp)) >= 25 & abs(HighTemp - lead(HighTemp)) >= 25,
-        AvgTemp_SpikeDip = abs(AvgTemp - lag(AvgTemp)) >= 25 & abs(AvgTemp - lead(AvgTemp)) >= 25,
-        LowTemp_SpikeDip = abs(LowTemp - lag(LowTemp)) >= 25 & abs(LowTemp - lead(LowTemp)) >= 25
-        )
+        AvgTemp_SpikeDip  = abs(AvgTemp  - lag(AvgTemp))  >= 25 & abs(AvgTemp  - lead(AvgTemp))  >= 25,
+        LowTemp_SpikeDip  = abs(LowTemp  - lag(LowTemp))  >= 25 & abs(LowTemp  - lead(LowTemp))  >= 25
+      ) %>%
+      ungroup()
     
     ### 5. Spatial Consistancy ###
-    
+    print("Starting spatial consistency check...")
     all_data_iden_ext_con <- all_data_iden_ext_tcon %>%
       group_by(Date) %>%
       mutate(
@@ -170,9 +212,8 @@ read_clean_WU <- function(city, run_checks = TRUE) {
       ) %>%
       ungroup() %>%
      select(-c(HighTemp_Mean_Others, LowTemp_Mean_Others,
-               AvgTemp_Mean_Others, Precip_Mean_Others, month))
-      
-    
+               AvgTemp_Mean_Others, Precip_Mean_Others))
+  
     ### 6. Summary ###
     
     final <- all_data_iden_ext_con %>%
@@ -200,13 +241,14 @@ read_clean_WU <- function(city, run_checks = TRUE) {
         Sum_mm = case_when(Prcp_Flag ~ NA_real_, TRUE ~ Sum_mm)
       )
     
-    saveRDS(final, paste0("~/urban-cooling/data/raw/WU/",city,"/",city,"_wu.rds"))
-    return(final)
+    saveRDS(final, paste0("~/phenology-urban/data/raw/CONUS/WU_clean/",city,"_wu.rds"))
+    all_temp = final
   }
   return(all_temp)
 }
 
-
+# example of running the function
+read_clean_WU(city = "Albuquerque", run_checks = TRUE)
 
 # nyboundary <- st_read("~/urban-cooling/data/raw/NYC/boundary/nybb_dissolved.shp") %>%
 #   st_transform(4326)
