@@ -1,7 +1,6 @@
 library(zhulabtools)
 load_packages(c("tidyverse","lubridate", "ggplot2", "sf", "vroom"))
 
-
 ################### Combine all the weather data from different stations ###################
 parse_mm <- function(x) {
   case_when(
@@ -34,6 +33,7 @@ read_clean_WU <- function(city, run_checks = TRUE) {
   files     <- files[basename(files) != "location.csv"]
   if (length(files) == 0) stop("No station CSVs found for city: ", city)
   message(paste0("Clean ", length(files), " station files for city: ", city))
+  save_path <- paste0("~/phenology-urban/data/raw/CONUS/WU_clean/", city, "_wu.rds")
   all_data <- vroom(files,
                     id = "src",                                 
                     col_types = readr::cols(.default = readr::col_character()),
@@ -64,10 +64,11 @@ read_clean_WU <- function(city, run_checks = TRUE) {
     
     ### 1. Identical Value Sequences ###
     message("Starting identical value sequence check...")
-    all_data_iden <- all_num %>%
+    all_data_iden <- all_temp %>%
       arrange(name, Date) %>%
       group_by(name) %>%
       mutate(
+        Date = as.Date(Date, format = "%m/%d/%Y"),
         HighTemp_Identical = flag_identical_runs(HighTemp),
         AvgTemp_Identical  = flag_identical_runs(AvgTemp),
         LowTemp_Identical  = flag_identical_runs(LowTemp),
@@ -211,9 +212,9 @@ read_clean_WU <- function(city, run_checks = TRUE) {
         )
       ) %>%
       ungroup() %>%
-     select(-c(HighTemp_Mean_Others, LowTemp_Mean_Others,
-               AvgTemp_Mean_Others, Precip_Mean_Others))
-  
+      select(-c(HighTemp_Mean_Others, LowTemp_Mean_Others,
+                AvgTemp_Mean_Others, Precip_Mean_Others))
+    
     ### 6. Summary ###
     
     final <- all_data_iden_ext_con %>%
@@ -241,10 +242,8 @@ read_clean_WU <- function(city, run_checks = TRUE) {
         Sum_mm = case_when(Prcp_Flag ~ NA_real_, TRUE ~ Sum_mm)
       )
     
-    saveRDS(final, paste0("~/phenology-urban/data/raw/CONUS/WU_clean/",city,"_wu.rds"))
-    all_temp = final
+    write_rds(final, save_path, compress = "gz")
   }
-  return(all_temp)
 }
 
 # example of running the function
