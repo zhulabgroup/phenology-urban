@@ -1,5 +1,5 @@
 library(zhulabtools)
-load_packages(c("tidyverse", "ggplot2", "sf", "spBayes", "INLA"))
+load_packages(c("tidyverse", "ggplot2", "sf", "spBayes", "INLA", "lubridate"))
 select <- dplyr::select
 
 
@@ -64,7 +64,7 @@ prepare_tree_WU_climate <- function(city, type, buffer_dist = NULL){
   
   if (type == "WU_buffer"){
     out_path <- paste0("~/phenology-urban/data/proc/tree_climate/WU_buffer/", city, "_", buffer_dist, ".rds")
-    tree_dir <- paste0("~/phenology-urban/data/raw/CONUS/StreetTrees/cleaned_ps_input/", city, ".rds")
+    tree_dir <- paste0("~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/", city, ".rds")
     
     tree_location <- read_rds(tree_dir) |>
       st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F)
@@ -138,9 +138,16 @@ prepare_tree_WU_climate <- function(city, type, buffer_dist = NULL){
 ##################################################################
 # Run for WU_buffer
 file_path <- path.expand("~/phenology-urban/data/raw/CONUS/WU")
-sub_folders <- list.dirs(file_path, recursive = FALSE, full.names = FALSE)
+sub_folders <- list.dirs(file_path, recursive = FALSE, full.names = FALSE) 
 # example of running the function
 for (city in sub_folders){
-  prepare_tree_WU_climate(city = "Albuquerque", type = "WU_buffer", buffer_dist = 500)
+  tryCatch(
+    {
+      prepare_tree_WU_climate(city, type = "WU_buffer", buffer_dist = 500)
+    },
+    error = function(e) {
+      message("Skipping ", city, ": ", e$message)
+    }
+  )
 }
   
