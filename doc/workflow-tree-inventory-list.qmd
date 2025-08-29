@@ -298,6 +298,8 @@ I then projected cities with tree inventories onto the PCA space. The PCA scores
 #| fig-width: 10
 #| fig-height: 7
 
+city_feature <- readRDS(here("data/raw/CONUS/StreetTrees/cleaned_ps_input/summary/city_feature.rds"))
+
 cities <- st_read(("~/Downloads/USCities/tl_2024_us_uac20.shp"), quiet = T) |>
   mutate(area = as.numeric(st_area(geometry) / 1e6)) |>
   select(NAME20, area) |>
@@ -313,6 +315,7 @@ list_city <- city_feature |>
   st_join(st_read(("~/Downloads/USCities/tl_2024_us_uac20.shp"), quiet = T) |> 
             st_transform(4326) |>
             dplyr::select(NAME20), join = st_nearest_feature) |>
+  select(site, NAME20) |>
   pull(NAME20)
 
 pca_scores <- pca_scores |>
@@ -347,6 +350,22 @@ p <- ggplot(pca_scores, aes(x = PC1, y = PC2, text = NAME20)) +
 
 ggplotly(p, tooltip = "text")
 ```
+
+```{r}
+#| include: false
+matching_npn <- npn_points |>
+  distinct(site, NAME20) |>
+  left_join(list_city, by = "NAME20")
+matching_npn <- matching_npn |>
+  st_drop_geometry()|>
+  filter(!is.na(site.y)) |>
+  group_by(site.x) |>
+  summarise(city = first(site.y)) |>
+  ungroup()
+write_rds(matching_npn, here("data/raw/CONUS/NPN/NPN1624/matching_npn.rds"))
+```
+
+
 
 To quantitatively assess how well the selected cities represent the full cities, I overlaid kernel density–based 2D contours on the PCA plot. This approach allows me to estimate the cities covered by the current sample and the proportion of the full city population it represents.
 

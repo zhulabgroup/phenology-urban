@@ -419,7 +419,11 @@ Generally, the trend suggests a consistency between PS-derived SOS and NPN-deriv
 #| fig-height: 6
 #| fig-width: 10
 #| warning: false
-npn_points <- readRDS(here("data/raw/CONUS/NPN/NPN1624/npn_points.rds"))
+npn_points <- readRDS(here("data/raw/CONUS/NPN/NPN1624/npn_points.rds")) |>
+  left_join(
+    us_city |> select(NAME20, UACE20),
+    by = c("site" = "UACE20")
+  )
 
 # read in all PS_doy_data.rds in the folder
 ps_doy_data <- lapply(list.files(here("data/raw/CONUS/NPN/NPN1624/doy"),
