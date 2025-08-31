@@ -80,7 +80,7 @@ for (site in site_list){
   for (j in length(year_splits)){
     message(paste0("Downloading Part ", j," data for city: ", site))
     download_planetscope_imagery_batch(dir = dir_data,  v_site = site, v_year = year_splits[[j]], setting = setting, num_cores = 12, overwrite = F)
-    retrieve_planetscope_time_series_batch(dir = dir_data, df_coordinates = tree_df, v_site = site, num_cores = 13)
+    retrieve_planetscope_time_series_batch(dir = dir_data, df_coordinates = tree_df, v_site = site, num_cores = 2)
     message("Retrieval done. Cleaning Part ", j," raw imagery...")
     raw_dir <- file.path(dir_data, "raw", site)
     items <- list.files(raw_dir, full.names = TRUE)
@@ -113,6 +113,14 @@ for (site in site_list){
                                        extend_to_next_year = 90, num_cores = 12)
   # check_seasonality?
 }
+
+# > ?retrieve_planetscope_time_series_batch
+# Warning messages:
+#   1: In browseURL(paste0("http://127.0.0.1:", port, "/library/", pkgname,  :
+#                            closing unused connection 16 (<-localhost:11679)
+#                          2: In browseURL(paste0("http://127.0.0.1:", port, "/library/", pkgname,  :
+#                                                   closing unused connection 15 (<-localhost:11679)
+
 # 
 # 
 # clean_28117_allGroup <- clean_28117_allGroup |>
