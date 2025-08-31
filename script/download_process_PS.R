@@ -52,7 +52,7 @@ library(batchplanet)
 
 tree_dir <- "~/lab-data/datasets/vegetation/PS/CONUS_urban/Tree_point/"
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
-tree_df <- rds_files[5] |>
+tree_df <- rds_files[c(4, 6:10)] |>
   map_dfr(read_rds) |>
   dplyr::select(site, id, lon, lat, group = genus)
 
@@ -74,18 +74,19 @@ site_list <- tree_df |>
   distinct(site) |>
   pull()
 
-n_split = 2
+n_split = 3
 year_splits <- split(2016:2024, cut(seq_along(2016:2024), n_split, labels = FALSE))
 for (site in site_list){
   for (j in length(year_splits)){
     message(paste0("Downloading Part ", j," data for city: ", site))
-    # download_planetscope_imagery_batch(dir = dir_data,  v_site = site, v_year = year_splits[[j]], setting = setting, num_cores = 12, overwrite = F)
+    download_planetscope_imagery_batch(dir = dir_data,  v_site = site, v_year = year_splits[[j]], setting = setting, num_cores = 12, overwrite = F)
     retrieve_planetscope_time_series_batch(dir = dir_data, df_coordinates = tree_df, v_site = site, num_cores = 13)
     message("Retrieval done. Cleaning Part ", j," raw imagery...")
     raw_dir <- file.path(dir_data, "raw", site)
     items <- list.files(raw_dir, full.names = TRUE)
     items_to_delete <- items[basename(items) != "orders"]
     unlink(items_to_delete, recursive = TRUE, force = TRUE)
+    
     ts_dir <- file.path(dir_data, "ts")
     files <- list.files(ts_dir, pattern = paste0("^ts_", site, "_.*\\.rds$"), full.names = TRUE)
     new_files <- file.path(dirname(files),paste0("part_", j, "_", basename(files)))
