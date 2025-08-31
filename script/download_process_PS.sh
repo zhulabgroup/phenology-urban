@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=download_process_PS
+#SBATCH --job-name=download_process_PS_6_10
 #SBATCH --account=zhukai0                   # Account name
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err
 #SBATCH --array=1
 #SBATCH --time=24:00:00
 #SBATCH --partition=standard
-#SBATCH --mem=10G
+#SBATCH --mem=20G
 #SBATCH --cpus-per-task=13
 #SBATCH --mail-user=jializ@umich.edu        # Where to send mail
 #SBATCH --mail-type=BEGIN,END               # Mail notifications at the start and end of the job
@@ -21,7 +21,7 @@
 
 # Define the R script and input/output files
 WORKING_DIR=../phenology-urban/
-R_SCRIPT=../phenology-urban/script/download_process_PS.py
+R_SCRIPT=../phenology-urban/script/download_process_PS.R
 
 # Load necessary modules
 module load Rgeospatial/4.2.0-2023-04-25

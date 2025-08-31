@@ -52,7 +52,7 @@ library(batchplanet)
 
 tree_dir <- "~/lab-data/datasets/vegetation/PS/CONUS_urban/Tree_point/"
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
-tree_df <- rds_files[1] |>
+tree_df <- rds_files[5] |>
   map_dfr(read_rds) |>
   dplyr::select(site, id, lon, lat, group = genus)
 
@@ -68,28 +68,39 @@ setting <- set_planetscope_parameters(
 
 # order_planetscope_imagery_batch(dir = dir_data, df_coordinates = tree_df, v_year = 2016:2024, setting = setting)
 # Then wait until all orders success
+# Arlington left 2 genus (5)
 
 site_list <- tree_df |>
   distinct(site) |>
   pull()
 
 for (site in site_list){
-  message(paste0("Downloading data for city:", site))
-  download_planetscope_imagery_batch(dir = dir_data,  v_site = site, v_year = 2016:2024, setting = setting, num_cores = 12, overwrite = F)
-  retrieve_planetscope_time_series_batch(dir = dir_data, df_coordinates = tree_df, v_site = site, num_cores = 12)
+  message(paste0("Downloading Part 1 data for city:", site))
+  suppressMessages(download_planetscope_imagery_batch(dir = dir_data,  v_site = site, v_year = 2016:2020, setting = setting, num_cores = 12, overwrite = F))
+  suppressMessages(retrieve_planetscope_time_series_batch(dir = dir_data, df_coordinates = tree_df, v_site = site, num_cores = 12))
+
+  message("Retrieval done. Cleaning Part 1 raw imagery...")
+  raw_dir <- file.path(dir_data, "raw", site)
+  items <- list.files(raw_dir, full.names = TRUE)
+  items_to_delete <- items[basename(items) != "orders"]
+  unlink(items_to_delete, recursive = TRUE, force = TRUE)
   
-  # message("Retrieval done. Cleaning raw imagery...")
-  # raw_dir <- file.path(dir_data, "raw", site)
-  # items <- list.files(raw_dir, full.names = TRUE)
-  # items_to_delete <- items[basename(items) != "orders"]
-  # unlink(items_to_delete, recursive = TRUE, force = TRUE)
+  message(paste0("Downloading Part 2 data for city:", site))
+  suppressMessages(download_planetscope_imagery_batch(dir = dir_data,  v_site = site, v_year = 2016:2020, setting = setting, num_cores = 12, overwrite = F))
+  suppressMessages(retrieve_planetscope_time_series_batch(dir = dir_data, df_coordinates = tree_df, v_site = site, num_cores = 12))
+  
+  message("Retrieval done. Cleaning Part 2 raw imagery...")
+  raw_dir <- file.path(dir_data, "raw", site)
+  items <- list.files(raw_dir, full.names = TRUE)
+  items_to_delete <- items[basename(items) != "orders"]
+  unlink(items_to_delete, recursive = TRUE, force = TRUE)
   
   message("Cleaning done. Processing time series...")
-  clean_planetscope_time_series_batch(dir = dir_data, v_site = site, num_cores = 12, calculate_evi = T)
+  suppressMessages(clean_planetscope_time_series_batch(dir = dir_data, v_site = site, num_cores = 12, calculate_evi = T))
   df_thres <- set_thresholds(thres_up = 0.5, thres_down = 0.5)
-  calculate_phenological_metrics_batch(dir = dir_data, v_site = site, df_thres = df_thres, var_index = "evi", 
-                                       min_days = 80, check_seasonality = T, extend_to_previous_year = 275, 
-                                       extend_to_next_year = 90, num_cores = 12)
+  suppressMessages(calculate_phenological_metrics_batch(dir = dir_data, v_year = 2017:2024, v_site = site, v_group = "Quercus",  df_thres = df_thres, var_index = "evi",
+                                       min_days = 80, check_seasonality = T, extend_to_previous_year = 275,
+                                       extend_to_next_year = 90, num_cores = 12))
   # check_seasonality?
 }
 # 
