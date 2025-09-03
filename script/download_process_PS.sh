@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=download_process_PS_6_10
+#SBATCH --job-name=download_process_PS_Anaheim
 #SBATCH --account=zhukai0                   # Account name
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err
