@@ -52,10 +52,16 @@ library(batchplanet)
 
 tree_dir <- "~/lab-data/datasets/vegetation/PS/CONUS_urban/Tree_point/"
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
-tree_df <- rds_files[4] |>
+tree_df <- rds_files[7] |>
   map_dfr(read_rds) |>
-  mutate(taxa = if_else(genus == "Validation", "Validation", gsub(" ", "", taxa))) |>
-  dplyr::select(site, id, lon, lat, group = taxa)
+  mutate(taxa = if_else(genus == "Validation", "Validation", gsub(" ", "", taxa))) 
+big_genera <- names(which(table(tree_df$genus) > 2000))
+tree_df2 <- tree_df |>
+  mutate(group = if_else(genus %in% big_genera & !is.na(taxa) & nzchar(taxa),
+                         taxa, 
+                         genus
+  )) |>
+  dplyr::select(site, id, lon, lat, group)
 
 dir_data <- "/scratch/zhukai_root/zhukai0/jializ/PS/CONUS_urban/"
 setting <- set_planetscope_parameters(
@@ -74,10 +80,10 @@ site_list <- tree_df |>
   distinct(site) |>
   pull()
 
-n_split = 8
+n_split = 4
 year_splits <- split(2016:2024, cut(seq_along(2016:2024), n_split, labels = FALSE))
 for (site in site_list){
-  for (j in 7:length(year_splits)){
+  for (j in 1:length(year_splits)){
     message(paste0("Downloading Part ", j," data for city: ", site))
     download_planetscope_imagery_batch(dir = dir_data,  v_site = site, v_year = year_splits[[j]], setting = setting, num_cores = 12, overwrite = F)
     retrieve_planetscope_time_series_batch(dir = dir_data, df_coordinates = tree_df, v_site = site, num_cores = 12)
