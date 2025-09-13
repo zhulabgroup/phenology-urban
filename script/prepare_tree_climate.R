@@ -1,5 +1,5 @@
 library(zhulabtools)
-load_packages(c("tidyverse", "ggplot2", "sf", "spBayes", "INLA", "lubridate"))
+load_packages(c("tidyverse", "ggplot2", "sf", "spBayes", "INLA", "lubridate", "terra"))
 select <- dplyr::select
 
 
@@ -254,38 +254,71 @@ prepare_tree_WU_climate_exist <- function(city){
   message("Calculating seasonal climate...")
   
   ###### Daymet shortwave radiation #######
-  files <- c("srad_monthly_all_tree.rds")
-  processed_daymet_list <- lapply(files, function(file_name) {
+  files <- c("srad_monthly_all_tree.rds", "tmin_monthly_all_tree.rds", "tmax_monthly_all_tree.rds")
+  processed_daymet_list_mean <- lapply(files, function(file_name) {
     # Read the file
     var_name <- sub("_monthly_all_tree.rds", "", file_name)
-    data <- readRDS(paste0("~/phenology-urban/data/raw/Example_city/", city, "/Daymet/monthly2016-2024/", file_name)) %>%
-      select(id, value, date) %>%
+    data <- readRDS(paste0("~/phenology-urban/data/raw/Example_city/", city, "/Daymet/monthly2016-2024/", file_name)) |>
+      select(id, value, date) |>
       mutate(
         season = case_when(
           substr(date, 6, 7) %in% c("03", "04", "05") ~ "spring",
           substr(date, 6, 7) %in% c("06", "07", "08") ~ "summer",
           substr(date, 6, 7) %in% c("09", "10", "11") ~ "fall",
           substr(date, 6, 7) %in% c("12", "01", "02") ~ "winter"
-        )) %>%
+        )) |>
       mutate(year = as.integer(substr(date, 1, 4)),
              year = if_else(substr(date, 6, 7) == "12", year + 1, year),
-             value = suppressWarnings(as.numeric(value))) %>%
-      group_by(id, year, season) %>%
+             value = suppressWarnings(as.numeric(value))) |>
+      group_by(id, year, season) |>
       summarise(
-        # Use sum for prcp, and mean for temp and srad
-        Avg_value = sum(as.numeric(value), na.rm = TRUE),
+        # Use mean for temp and srad
+        Avg_value = mean(as.numeric(value), na.rm = TRUE),
         .groups = "drop"
-      ) %>%
+      ) |>
       # Rename the Avg_value column to the variable name (e.g., tmax, tmin, prcp)
       rename(!!var_name := Avg_value)
     
     return(data)
   })
-  daymet_climate <- processed_daymet_list[[1]] |>
-    rename(Avg_srad = srad) |>
-    filter(Avg_srad > 0)  # remove negative srad values
+  
+  files <- c("prcp_monthly_all_tree.rds")
+  processed_daymet_list_sum <- lapply(files, function(file_name) {
+    # Read the file
+    var_name <- sub("_monthly_all_tree.rds", "", file_name)
+    data <- readRDS(paste0("~/phenology-urban/data/raw/Example_city/", city, "/Daymet/monthly2016-2024/", file_name)) |>
+      select(id, value, date) |>
+      mutate(
+        season = case_when(
+          substr(date, 6, 7) %in% c("03", "04", "05") ~ "spring",
+          substr(date, 6, 7) %in% c("06", "07", "08") ~ "summer",
+          substr(date, 6, 7) %in% c("09", "10", "11") ~ "fall",
+          substr(date, 6, 7) %in% c("12", "01", "02") ~ "winter"
+        )) |>
+      mutate(year = as.integer(substr(date, 1, 4)),
+             year = if_else(substr(date, 6, 7) == "12", year + 1, year),
+             value = suppressWarnings(as.numeric(value))) |>
+      group_by(id, year, season) |>
+      summarise(
+        # Use sum for prcp
+        Avg_value = sum(as.numeric(value), na.rm = TRUE),
+        .groups = "drop"
+      ) |>
+      # Rename the Avg_value column to the variable name (e.g., tmax, tmin, prcp)
+      rename(!!var_name := Avg_value)
+    
+    return(data)
+  })
+  
+  daymet_climate <- processed_daymet_list_mean[[1]] |>
+    left_join(processed_daymet_list_mean[[2]], by = c("id", "season", "year")) |>
+    left_join(processed_daymet_list_mean[[3]], by = c("id", "season", "year")) |>
+    left_join(processed_daymet_list_sum[[1]], by = c("id", "season", "year")) |>
+    mutate(Avg_temp = (tmax + tmin) / 2) |>
+    select(id, year, season, Avg_AvgTemp = Avg_temp, Sum_Sum_mm = prcp, Avg_srad = srad)
   
   ###### WU temperature + precipitation #######
+  
   WU_loc_dir <- paste0("~/urban-cooling/data/raw/WU/", city, "/location.csv")
   WU_location <- read_csv(WU_loc_dir, show_col_types = FALSE) |>
     select(lon = Lon, lat = Lat, station= Site) |>
@@ -327,107 +360,151 @@ prepare_tree_WU_climate_exist <- function(city){
       .groups = "drop"
     )
   
-  metadata <- read_csv("~/lab-data/datasets/vegetation/PS/urban/metadata.csv") %>%
+  metadata <- read_csv("~/lab-data/datasets/vegetation/PS/urban/metadata.csv") |>
     filter(site == !!city)
-  tree_location <- metadata %>%
+  tree_location <- metadata |>
     select(id, taxa, lon, lat, site) |>
     st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F)
   
-  ################## Attribute climate to tree ##################
+  ################## Attribute WU climate to tree ##################
+  
   message("Attributing climate to trees...")
-    out_path <- paste0("~/phenology-urban/data/proc/urban/", city, "/WU_surface/", city, ".rds")
+  out_path <- paste0("~/phenology-urban/data/proc/urban/", city, "/WU_surface/", city, ".rds")
+  seasons  <- c("summer","winter")
+  var_map  <- c(Avg_AvgTemp = "temp", Sum_Sum_mm = "prcp")  
+  proj_crs <- 5070                                           # NAD83 / Conus Albers
+  log_prcp <- TRUE 
+  
+  clim_sf <- WU_climate |>
+    inner_join(
+      WU_location |> group_by(new_id) |>
+        summarise(lon = median(lon, na.rm = TRUE), lat = median(lat, na.rm = TRUE), .groups = "drop"),
+      by = "new_id"
+    ) |>
+    filter(year < 2025 & year >= 2017) |>
+    st_as_sf(coords = c("lon","lat"), crs = 4326) |>
+    st_transform(proj_crs)
+  
+  trees_sf <- st_transform(tree_location, proj_crs)
+  
+  spde_predict_one <- function(obs_sf, pred_sf, y_col,
+                               max_edge = c(5000, 20000), cutoff = 1000) {
+    mesh <- inla.mesh.2d(
+      loc     = rbind(st_coordinates(obs_sf), st_coordinates(pred_sf)),
+      max.edge = max_edge, cutoff = cutoff
+    )
+    spde <- inla.spde2.matern(mesh, alpha = 2)
+    Aobs  <- inla.spde.make.A(mesh, st_coordinates(obs_sf))
+    Apred <- inla.spde.make.A(mesh, st_coordinates(pred_sf))
+    Afix_obs  <- Diagonal(nrow(obs_sf), 1)
+    Afix_pred <- Diagonal(nrow(pred_sf), 1)
+    sidx <- inla.spde.make.index("spatial", spde$n.spde)
+    stk_obs <- inla.stack(
+      data    = list(y = obs_sf[[y_col]]),
+      A       = list(Aobs, Afix_obs),
+      effects = list(sidx, data.frame(Intercept = rep(1, nrow(obs_sf)))),
+      tag     = "obs"
+    )
+    stk_prd <- inla.stack(
+      data    = list(y = NA),
+      A       = list(Apred, Afix_pred),
+      effects = list(sidx, data.frame(Intercept = rep(1, nrow(pred_sf)))),
+      tag     = "pred"
+    )
+    stk_all <- inla.stack(stk_obs, stk_prd)
     
-    seasons  <- c("summer","winter")
-    var_map  <- c(Avg_AvgTemp = "temp", Sum_Sum_mm = "prcp")  
-    proj_crs <- 5070                                           # NAD83 / Conus Albers
-    log_prcp <- TRUE 
+    fit <- inla(y ~ -1 + Intercept + f(spatial, model = spde),
+                family = "gaussian",
+                data   = inla.stack.data(stk_all, spde = spde),
+                control.predictor = list(A = inla.stack.A(stk_all), compute = TRUE),
+                control.compute   = list(dic = FALSE, waic = FALSE, cpo = FALSE),
+                control.inla = list(int.strategy = "eb"),
+                verbose = FALSE)
     
-    clim_sf <- WU_climate |>
-      inner_join(
-        WU_location |> group_by(new_id) |>
-          summarise(lon = median(lon, na.rm = TRUE), lat = median(lat, na.rm = TRUE), .groups = "drop"),
-        by = "new_id"
-      ) |>
-      filter(year < 2025 & year >= 2017) |>
-      st_as_sf(coords = c("lon","lat"), crs = 4326) |>
-      st_transform(proj_crs)
-    
-    trees_sf <- st_transform(tree_location, proj_crs)
-    
-    spde_predict_one <- function(obs_sf, pred_sf, y_col,
-                                 max_edge = c(5000, 20000), cutoff = 1000) {
-      mesh <- inla.mesh.2d(
-        loc     = rbind(st_coordinates(obs_sf), st_coordinates(pred_sf)),
-        max.edge = max_edge, cutoff = cutoff
-      )
-      spde <- inla.spde2.matern(mesh, alpha = 2)
-      Aobs  <- inla.spde.make.A(mesh, st_coordinates(obs_sf))
-      Apred <- inla.spde.make.A(mesh, st_coordinates(pred_sf))
-      Afix_obs  <- Diagonal(nrow(obs_sf), 1)
-      Afix_pred <- Diagonal(nrow(pred_sf), 1)
-      sidx <- inla.spde.make.index("spatial", spde$n.spde)
-      stk_obs <- inla.stack(
-        data    = list(y = obs_sf[[y_col]]),
-        A       = list(Aobs, Afix_obs),
-        effects = list(sidx, data.frame(Intercept = rep(1, nrow(obs_sf)))),
-        tag     = "obs"
-      )
-      stk_prd <- inla.stack(
-        data    = list(y = NA),
-        A       = list(Apred, Afix_pred),
-        effects = list(sidx, data.frame(Intercept = rep(1, nrow(pred_sf)))),
-        tag     = "pred"
-      )
-      stk_all <- inla.stack(stk_obs, stk_prd)
-      
-      fit <- inla(y ~ -1 + Intercept + f(spatial, model = spde),
-                  family = "gaussian",
-                  data   = inla.stack.data(stk_all, spde = spde),
-                  control.predictor = list(A = inla.stack.A(stk_all), compute = TRUE),
-                  control.compute   = list(dic = FALSE, waic = FALSE, cpo = FALSE),
-                  control.inla = list(int.strategy = "eb"),
-                  verbose = FALSE)
-      
-      ipred <- inla.stack.index(stk_all, "pred")$data
-      tibble(id = pred_sf$id,
-             mean = fit$summary.fitted.values[ipred, "mean"],
-             sd   = fit$summary.fitted.values[ipred, "sd"])
-    }
-    
-    interpo_WU_climate <- expand_grid(year = sort(unique(clim_sf$year)), season = seasons, vcol = names(var_map)) |>
-      mutate(
-        out = pmap(
-          list(year, season, vcol),
-          function(yy, ssn, vc) {
-            message(paste(yy, ssn, vc))
-            obs <- clim_sf |> filter(year == yy, season == ssn)
-            if (vc == "Sum_Sum_mm" && log_prcp) {
-              obs[[vc]] <- log1p(obs[[vc]])
-              spde_predict_one(obs_sf = obs, pred_sf = trees_sf, y_col = vc) |>
-                mutate(value = pmax(expm1(mean), 0))
-            } else {
-              spde_predict_one(obs_sf = obs, pred_sf = trees_sf, y_col = vc) |>
-                mutate(value = mean)
-            }
+    ipred <- inla.stack.index(stk_all, "pred")$data
+    tibble(id = pred_sf$id,
+           mean = fit$summary.fitted.values[ipred, "mean"],
+           sd   = fit$summary.fitted.values[ipred, "sd"])
+  }
+  
+  interpo_WU_climate <- expand_grid(year = sort(unique(clim_sf$year)), season = seasons, vcol = names(var_map)) |>
+    mutate(
+      out = pmap(
+        list(year, season, vcol),
+        function(yy, ssn, vc) {
+          message(paste(yy, ssn, vc))
+          obs <- clim_sf |> filter(year == yy, season == ssn)
+          if (vc == "Sum_Sum_mm" && log_prcp) {
+            obs[[vc]] <- log1p(obs[[vc]])
+            spde_predict_one(obs_sf = obs, pred_sf = trees_sf, y_col = vc) |>
+              mutate(value = pmax(expm1(mean), 0))
+          } else {
+            spde_predict_one(obs_sf = obs, pred_sf = trees_sf, y_col = vc) |>
+              mutate(value = mean)
           }
-        )
-      ) |>
-      select(year, season, vcol, out) |>
-      unnest(out) |>
-      transmute(id, year,
-                col = paste0(unname(var_map[vcol]), "_", season),  # e.g., temp_fall
-                val = value) |>
-      pivot_wider(names_from = col, values_from = val) |>
-      arrange(id, year)
+        }
+      )
+    ) |>
+    select(year, season, vcol, out) |>
+    unnest(out) |>
+    transmute(id, year,
+              col = paste0(unname(var_map[vcol]), "_", season),  # e.g., temp_fall
+              val = value) |>
+    pivot_wider(names_from = col, values_from = val) |>
+    arrange(id, year)
+    
+    
+    ###### UHAT temperature #######
+    
+    uhat_files <- list.files(
+      path = "~/lab-data/datasets/climate/UHAT/clean/",
+      pattern = paste0("^", city, ".*\\.tif$"), 
+      full.names = TRUE
+    )
+    missing_files <- uhat_files[!file.exists(uhat_files)]
+    if (length(missing_files) > 0) {
+      stop("The following CHELSA TIF file(s) do not exist: {str_c(missing_files, collapse = ', ')}")
+    }
+    uhat_climate <- map(uhat_files, function(file) {
+      r <- rast(file)
+      vals <- terra::extract(r, tree_location, ID = FALSE)
+      
+      fname <- basename(file)
+      fname <- str_remove(fname, "\\.tif$")
+      season <- str_extract(fname, "summer|winter")
+      year   <- str_extract(fname, "\\d{4}")
+      colnames(vals) <- "value"
+      vals <- bind_cols(
+        tibble(id = tree_location$id, year = year, season = season),
+        vals
+      )
+      vals
+    }) |> 
+      bind_rows() |>
+      pivot_wider(
+        names_from  = season,
+        values_from = value,
+        names_glue  = "UHAT_temp_{season}"
+      )
     
     points_surface <- tree_location |>
       left_join(daymet_climate |>
                   select(id, year, season, Avg_srad) |>
-                  pivot_wider(names_from = season, values_from = Avg_srad, names_prefix = "srad_"), 
+                  pivot_wider(names_from = season, values_from = Avg_srad, names_prefix = "Daymet_srad_"),
                 by = c("id")) |>
+      left_join(daymet_climate |>
+                  select(id, year, season, Avg_AvgTemp) |>
+                  pivot_wider(names_from = season, values_from = Avg_AvgTemp, names_prefix = "Daymet_temp_"),
+                by = c("id", "year")) |>
+      left_join(daymet_climate |>
+                  select(id, year, season, Sum_Sum_mm) |>
+                  pivot_wider(names_from = season, values_from = Sum_Sum_mm, names_prefix = "Daymet_prcp_"),
+                by = c("id", "year")) |>
       left_join(interpo_WU_climate, by = c("id", "year")) |>
-      filter(!(is.na(temp_summer) | is.na(prcp_summer) | is.na(srad_summer) ) |
-               !(is.na(temp_winter) | is.na(prcp_winter) | is.na(srad_winter) ))
+      left_join(uhat_climate |>
+                  mutate(year = as.double(year)), by = c("id", "year"))
+      # filter(!(is.na(temp_summer) | is.na(prcp_summer) | is.na(srad_summer) ) |
+      #          !(is.na(temp_winter) | is.na(prcp_winter) | is.na(srad_winter) ))
     
     write_rds(points_surface, out_path, compress = "gz")
 }

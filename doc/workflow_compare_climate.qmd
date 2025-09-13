@@ -6,16 +6,6 @@ editor_options:
   chunk_output_type: console
 ---
 
-## Introduction
-
-The goal of this project is to understand how temperature heterogeneity within the city influences phenological events, such as the start of season (SOS) and end of season (EOS), for various tree genera and species in urban environments. To achieve this, I apply spatial statistical models as described below:
-
-$$y(\mathbf{s}_i, \mathbf{t}) = \mathbf{x}_{\mathbf{s}_i,\mathbf{t}} \boldsymbol{\beta} + w(\mathbf{s}_i) + u(\mathbf{t}) + \epsilon(\mathbf{s}_i, \mathbf{t})$$
-
-where $y(\mathbf{s}_i, \mathbf{t})$ represents the phenological event (e.g., SOS or EOS) at location $\mathbf{s}_i$ and time $\mathbf{t}$.$\mathbf{x}_{\mathbf{s}_i,\mathbf{t}} = [1, \text{AvgTemp}_{\mathbf{s}_i,\mathbf{t}}, \text{Precp}_{\mathbf{s}_i,\mathbf{t}}, \text{srad}_{\mathbf{s}_i,\mathbf{t}}]$ is the vector of predictors. $\boldsymbol{\beta} = (\beta_0, \beta_1, \beta_2, \beta_3)^\top$ are the regression coefficients for the intercept and covariates. $\beta_1$ is the coefficient for the average temperature (winter for SOS and summer for EOS, respectively), which is the main interest in this study. The spatial random effect $w(\mathbf{s}_i)$ accounts for spatial autocorrelation among locations, while the temporal random effect $u(\mathbf{t})$ captures random year effect. Finally, $\epsilon(\mathbf{s}_i, \mathbf{t})$ represents the residual error term.
-
-This document adopts the same workflow for analyzing urban phenology data, with the key modification of **climate data source**. The aim is to provide a basis for discussion regarding the advantages and limitations of using different datasets (WU, Daymet and HUMID) in urban phenology studies. New York City is selected as the case-study area for comparison. Phenological observations of individual trees derived from remote sensing are available for 2017–2024.
-
 ```{r}
 #| label: load-packages
 #| include: false
@@ -23,20 +13,54 @@ This document adopts the same workflow for analyzing urban phenology data, with 
 
 # Install and load 'zhulabtools' package
 library(zhulabtools)
-
-# Manage packages: check, install, and load specific packages
-check_install_packages(c("dplyr","lubridate", "ggplot2", "sf","sp", "readr", "purrr", "stringr","glue", "tidyr", "broom","lme4", "broom.mixed", "ppcor", "spdep", "spatialreg", "lmtest","car", "spBayes", "coda", "patchwork", "performance", "terra", "ggpmisc", "gstat", "ggmcmc", "taxize", "stats", "viridis"))
-if (!require(plotbiomes)) {
-  devtools::install_github("valentinitnelav/plotbiomes")
-}
-load_packages(c("rgbif", "dplyr","lubridate", "ggplot2", "sf","sp", "readr", "purrr", "stringr","glue", "tidyr", "broom","lme4", "broom.mixed", "ppcor", "spdep", "spatialreg", "lmtest","car", "spBayes", "coda", "patchwork", "performance", "terra", "ggpmisc", "gstat", "ggmcmc", "taxize", "stats", "viridis","INLA"))
-
-select <- dplyr::select # Avoid masking by base R's select function
-city <- "NY" # Set the city for analysis
-phe_types <- c("SOS", "EOS")
-
+# Check and  load required packages
+load_packages(c("dplyr", "here", "sf","viridis", "leaflet", "cli", "terra","patchwork", "data.table", "plotly", "readxl", "tidyverse", "ks", "ggnewscale", "plotbiomes"))
 source("~/phenology-urban/script/spatial_stats_model/inla_alg/run_sp_inla.R")
+city = "NY"
 ```
+
+## Introduction
+
+The goal of this project is to understand how temperature heterogeneity within the city influences phenological events, such as the start of season (SOS) and end of season (EOS), of individual trees from various genera and species. To achieve this, I apply spatial statistical models as described below:
+
+$$y(\mathbf{s}_i, \mathbf{t}) = \mathbf{x}_{\mathbf{s}_i,\mathbf{t}} \boldsymbol{\beta} + w(\mathbf{s}_i) + u(\mathbf{t}) + \epsilon(\mathbf{s}_i, \mathbf{t})$$
+
+where $y(\mathbf{s}_i, \mathbf{t})$ represents the phenological event (e.g., SOS or EOS) at location $\mathbf{s}_i$ and time $\mathbf{t}$.
+
+$\mathbf{x}_{\mathbf{s}_i,\mathbf{t}} = [1, \text{AvgTemp}_{\mathbf{s}_i,\mathbf{t}}, \text{AvgPrecp}_{\mathbf{s}_i,\mathbf{t}}, \text{AvgSrad}_{\mathbf{s}_i,\mathbf{t}}]$ is the vector of predictors, where each variable represents the preseason average (winter for SOS and summer for EOS, respectively).
+
+$\boldsymbol{\beta} = (\beta_0, \beta_1, \beta_2, \beta_3)^\top$ are the regression coefficients for the intercept and covariates. 
+
+$\beta_1$ is the coefficient for the average temperature, which is the main interest in this study. 
+
+$w(\mathbf{s}_i)$ is the spatial random effect which accounts for spatial autocorrelation among locations
+
+$u(\mathbf{t})$ is the temporal random effect which captures random year effect. 
+
+$\epsilon(\mathbf{s}_i, \mathbf{t})$ represents the residual error term.
+
+I selected 76 cities across the contiguous U.S., based on the availability of existing tree data, their diversity in urbanization patterns (building height and population), and their geographic variation in mean annual temperature and precipitation. [@fig-spatial] shows the spatial distribution of cities selected. The size of the blue circles represents the relative number of trees in each city's inventory. The full list of cities can be found [here](https://docs.google.com/spreadsheets/d/1pD9wdsTO6YLL5HfZ0Yi3Mn0VL-1iOW5Ek08Ydoko0b4/edit?usp=sharing).
+
+```{r fig-spatial}
+#| warning: false
+#| fig-cap: "Spatial distribution of cities with tree inventories."
+
+inventory_centroids <- readRDS(here("data/raw/CONUS/StreetTrees/cleaned_ps_input/summary/inventory_centroids.rds"))
+
+leaflet(data = inventory_centroids) |>
+  addProviderTiles(providers$OpenStreetMap, options = providerTileOptions(opacity = 0.9)) |>
+  addCircleMarkers(
+    popup = ~ paste0(
+      "<strong>", site, "</strong><br>",
+      "Num trees: ", num_tree, "<br>"
+    ),
+    radius = ~ sqrt(num_tree) / 20,
+    stroke = FALSE, fillOpacity = 0.7,
+    color = "blue"
+  )
+```
+
+This document adopts the same workflow for analyzing urban phenology data, with the key modification of **climate data source**. The aim is to provide a basis for discussion regarding the advantages and limitations of using different datasets (WU, Daymet and HUMID) in urban phenology studies. New York City is selected as the case-study area for comparison. Phenological observations of individual trees derived from remote sensing are available for 2017–2024.
 
 ```{r}
 #| include: false
@@ -92,12 +116,86 @@ valid_HUMID_Daymet <- readRDS("~/phenology-urban/data/raw/NY/HUMID/temp_monthly_
 ) |>
   filter(year > 2016 & year < 2019)
 
-saveRDS(valid_HUMID_Daymet, "~/phenology-urban/data/proc/urban/NY/valid_HUMID_Daymet.rds")
+saveRDS(valid_HUMID_Daymet, "~/phenology-urban/data/proc/urban/Example_city/NY/valid_HUMID_Daymet.rds")
 ```
 
 ## Data source comparison
 
-Weather Underground (WU) data were obtained from the [Weather Underground program](https://www.wunderground.com/), drawing on multiple personal weather stations located within New York City. These data include daily measurements of temperature and precipitation. For the analysis using WU, **trees located within a 500 m buffer around the WU stations** were selected.
+Weather Underground (WU) data were obtained from the [Weather Underground program](https://www.wunderground.com/), drawing on multiple personal weather stations located within New York City. These data include daily measurements of temperature and precipitation. 
+
+Because the Weather Underground stations are unevenly distributed and are not located exactly with individual tree locations, trees within a 500-meter buffer of each station were selected to share that station's meteorological data. This approach results in spatial clustering of the selected tree points around station locations (see @fig-predictors).
+
+```{r}
+#| label: fig-predictors
+#| include: true
+#| fig-width: 15
+#| fig-height: 6
+#| fig-cap: "Spatial distribution of Weather Underground sites and shortwave radiation data in New York City."
+#| warning: false
+
+points_in_buffer <- read_csv(paste0("~/phenology-urban/data/proc/urban/",city,"/tree_WU_500_buffer_PS.csv"), show_col_types = FALSE)
+
+points_sf <- st_as_sf(points_in_buffer, coords = c("lon", "lat"), crs = 4326, remove = F) |>
+  st_transform(crs = 9311)
+hex_size <- 5000
+bbox <- st_bbox(points_sf)
+hex_grid_geom <- st_make_grid(bbox, cellsize = hex_size, square = FALSE)
+hex_grid <- st_sf(geometry = hex_grid_geom) |>
+  mutate(hex_id = row_number()) |>
+  mutate(centroid = st_centroid(geometry)) |>
+  mutate(
+    hex_lon = st_coordinates(centroid)[, 1],
+    hex_lat = st_coordinates(centroid)[, 2]
+  )
+# Assign each point to a hexagon
+points_in_buffer <- st_join(points_sf, hex_grid, join = st_within) |>
+  mutate(hex_id = as.factor(hex_id)) |>
+  filter(thres == 0.5 & year == 2020 & taxa == "Acer platanoides") |>
+  st_transform(crs = 4326)
+
+boundary <- read_sf("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp", quiet = T) |>
+  st_transform(crs = 4326)
+
+wu_location <- read_csv(paste0("~/urban-cooling/data/raw/WU/", city, "/location.csv"), show_col_types = FALSE) |>
+  st_as_sf(coords = c("Lon", "Lat"), crs = 4326)
+  
+tempprep = ggplot() +
+  geom_sf(data = boundary, fill = "grey90") +
+  geom_sf(data = wu_location, color = "blue", size = 0.5) +
+  geom_point(data = points_in_buffer, aes(x = lon, y = lat), color = "red",size = 0.1, alpha = 0.5) +
+  theme_minimal()+
+  theme(axis.text.x = element_text(size = 10, angle = 45, hjust = 1))
+
+tempprep_large = ggplot() +
+  geom_sf(data = boundary, fill = "grey90", color = NA) +
+  geom_sf(data = wu_location |> st_buffer(dist = 500),
+          aes(fill = "500 m buffer"), alpha = 0.2, color = NA) +
+  geom_sf(data = wu_location,
+          aes(color = "WU Station"), size = 2) +
+  geom_point(data = points_in_buffer,
+             aes(x = lon, y = lat, color = "Selected Trees"),
+             size = 0.5, alpha = 0.5) +
+  scale_color_manual(
+    name = "Legend",
+    values = c("WU Station" = "blue", "Selected Trees" = "red")
+  ) +
+  scale_fill_manual(
+    name = "Legend",
+    values = c("500 m buffer" = "red")
+  ) +
+  coord_sf(
+    xlim = c(-73.88, -73.84),
+    ylim = c(40.85, 40.87),
+    expand = FALSE
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 10, angle = 45, hjust = 1),
+    legend.position = "right"
+  )
+
+tempprep + tempprep_large  
+```
 
 Daymet data were accessed via the [Daymet](https://daymet.ornl.gov/), which provides gridded daily weather data at a spatial resolution of 1 km². For this comparison, I extracted daily maximum and minimum temperature as well as precipitation data for the same period (2016–2023).
 

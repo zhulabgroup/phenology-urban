@@ -59,8 +59,16 @@ generate_mcmc_plot <- function(dir_path, coef, fixed_sp){
   EOS_files <- list.files(dir_path, pattern = "EOS\\.rds$", full.names = TRUE)
 
   # Process each type
+  if (length(SOS_files) == 0) {
+    sos_data <- NULL
+  } else {
   sos_data <- process_files(SOS_files, "SOS")
-  eos_data <- process_files(EOS_files, "EOS")
+  }
+  if (length(EOS_files) == 0) {
+    eos_data <- NULL
+  } else {
+    eos_data <- process_files(EOS_files, "EOS")
+  }
 
   combined_param_data <- bind_rows(sos_data, eos_data)
   combined_param_data$phe_type <- factor(combined_param_data$phe_type, levels = c("SOS", "EOS"))
@@ -179,13 +187,17 @@ mcmc_semi_matern <- function(r_output_dir, phe_type) {
 
 g_dir_path <- "~/phenology-urban/data/proc/model_output/final_models/mcmc/spatial_mat/NY/genus/"
 s_dir_path <- "~/phenology-urban/data/proc/model_output/final_models_humid/mcmc/spatial_mat/NY/canonicalname/"
+s_dir_path <- "~/phenology-urban/data/proc/model_output/final_models_WUsurface/mcmc/spatial_mat/NY/canonicalname/"
+
+
 
 g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "temp", fixed_sp = F)
 s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
-s_plot_obj2 <- generate_mcmc_plot(s_dir_path,  coef = "temp", fixed_sp = F)
+s_plot_obj_humid <- generate_mcmc_plot(s_dir_path,  coef = "temp", fixed_sp = F)
+s_plot_obj_wusurface <- generate_mcmc_plot(s_dir_path,  coef = "temp", fixed_sp = F)
 
 (g_plot_obj$coef_summary_plot + ggtitle("Genus")) + (g_plot_obj$coef_density_plot + ggtitle("Genus")) + 
-  (s_plot_obj$coef_summary_plot +  ggtitle("Species")) + (s_plot_obj$coef_density_plot +  ggtitle("Species")) +
+  (s_plot_obj_wusurface$coef_summary_plot +  ggtitle("Species")) + (s_plot_obj_wusurface$coef_density_plot +  ggtitle("Species")) +
   plot_layout(ncol = 2, nrow = 2)
 ```
 
