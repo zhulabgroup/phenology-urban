@@ -6,7 +6,7 @@
 #SBATCH --array=1
 #SBATCH --time=24:00:00
 #SBATCH --partition=standard
-#SBATCH --mem=20G
+#SBATCH --mem=13G
 #SBATCH --cpus-per-task=13
 #SBATCH --mail-user=jializ@umich.edu        # Where to send mail
 #SBATCH --mail-type=BEGIN,END               # Mail notifications at the start and end of the job
