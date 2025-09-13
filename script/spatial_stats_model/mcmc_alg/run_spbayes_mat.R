@@ -169,8 +169,8 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
       "nu.Unif" = c(0.5, 2.5)
     )
     
-    n.samples = 10000
-    burn.in = 5000
+    n.samples = 6000
+    burn.in = 3000
     starting1 <- list("beta" = as.numeric(ols_model$coefficients), 
                       "sigma.sq" = summary(ols_model)$sigma^2, "tau.sq" = 0.1*summary(ols_model)$sigma^2, 
                       "phi" = 3/(0.1*max.d), "nu" = 1.5)
@@ -241,7 +241,7 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
           tuning = tuning,
           priors = priors,
           cov.model = cov.model,
-          amcmc = list("n.batch" = 5,"batch.length" = 2000, accept.rate = 0.43),
+          amcmc = list("n.batch" = 3,"batch.length" = 2000, accept.rate = 0.43),
           verbose = F
         )
         if (use_knots) args_list$knots <- knots
@@ -255,7 +255,7 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
           next  # Skip the current iteration of the loop
         }
         if (verbose) message("Predicting spatial random effect")
-        predict_w <- spPredict(sp_model, pred.coords, pred.covar, start = 9000, verbose = F)
+        predict_w <- spPredict(sp_model, pred.coords, pred.covar, start = 3000, verbose = F)
         predict_w_list[[i]] <- predict_w
         chain_recover[[i]] <- chain_object
         # param_cols <- grep(param_pattern, colnames(chain_recover[[i]]$p.beta.recover.samples))
@@ -506,7 +506,7 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
       lapply(res$predict_w, function(chain) chain$p.y.predictive.samples |> t())
     ) |> t()
     B_draws <- do.call(rbind, lapply(res$chains_recover, function(ch) {
-      as.matrix(ch$p.beta.recover.samples[4001:5001,])
+      as.matrix(ch$p.beta.recover.samples[2001:3001,])
     }))  # S_total x p
     Xbeta <- pred.covar %*% t(B_draws)
     W_mat <- Y_pred - Xbeta     # n_pred x S

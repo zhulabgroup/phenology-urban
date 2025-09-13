@@ -52,16 +52,9 @@ library(batchplanet)
 
 tree_dir <- "~/lab-data/datasets/vegetation/PS/CONUS_urban/Tree_point/"
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
-tree_df <- rds_files[7] |>
+tree_df <- rds_files[28:30] |>
   map_dfr(read_rds) |>
   mutate(taxa = if_else(genus == "Validation", "Validation", gsub(" ", "", taxa))) 
-big_genera <- names(which(table(tree_df$genus) > 2000))
-tree_df2 <- tree_df |>
-  mutate(group = if_else(genus %in% big_genera & !is.na(taxa) & nzchar(taxa),
-                         taxa, 
-                         genus
-  )) |>
-  dplyr::select(site, id, lon, lat, group)
 
 dir_data <- "/scratch/zhukai_root/zhukai0/jializ/PS/CONUS_urban/"
 setting <- set_planetscope_parameters(
@@ -83,17 +76,26 @@ site_list <- tree_df |>
 n_split = 4
 year_splits <- split(2016:2024, cut(seq_along(2016:2024), n_split, labels = FALSE))
 for (site in site_list){
+  tree_df_site <- tree_df |> filter(site == !!site)
+  big_genera <- names(which(table(tree_df_site$genus) > 2000))
+  tree_df2 <- tree_df_site |>
+    mutate(group = if_else(genus %in% big_genera & !is.na(taxa) & nzchar(taxa),
+                           taxa, 
+                           genus
+    )) |>
+    dplyr::select(site, id, lon, lat, group)
+  update_group <- unique(tree_df2$group)
   for (j in 1:length(year_splits)){
     message(paste0("Downloading Part ", j," data for city: ", site))
     download_planetscope_imagery_batch(dir = dir_data,  v_site = site, v_year = year_splits[[j]], setting = setting, num_cores = 12, overwrite = F)
-    retrieve_planetscope_time_series_batch(dir = dir_data, df_coordinates = tree_df, v_site = site, num_cores = 12)
-    
+    retrieve_planetscope_time_series_batch(dir = dir_data, df_coordinates = tree_df2, v_site = site, num_cores = 12)
+
     message("Retrieval done. Cleaning Part ", j," raw imagery...")
     raw_dir <- file.path(dir_data, "raw", site)
     items <- list.files(raw_dir, full.names = TRUE)
     items_to_delete <- items[basename(items) != "orders"]
     unlink(items_to_delete, recursive = TRUE, force = TRUE)
-    
+
     ts_dir <- paste0(dir_data, "ts/")
     files <- list.files(ts_dir, pattern = paste0("^ts_", site, "_.*\\.rds$"), full.names = TRUE)
     new_files <- file.path(dirname(files),paste0("part_", j, "_", basename(files)))
@@ -112,12 +114,12 @@ for (site in site_list){
     write_rds(merged, out_file, compress = "gz")
     file.remove(file_list)
   }
-  message("Processing time series...")
-  clean_planetscope_time_series_batch(dir = dir_data, v_site = site, num_cores = 12, calculate_evi = T)
-  df_thres <- set_thresholds(thres_up = 0.5, thres_down = 0.5)
-  calculate_phenological_metrics_batch(dir = dir_data, v_year = 2017:2023, v_site = site, df_thres = df_thres, var_index = "evi",
-                                       min_days = 0, check_seasonality = T, extend_to_previous_year = 275,
-                                       extend_to_next_year = 90, num_cores = 12)
+  # message("Processing time series...")
+  # clean_planetscope_time_series_batch(dir = dir_data, v_site = site, num_cores = 1, calculate_evi = T) #
+  # df_thres <- set_thresholds(thres_up = 0.5, thres_down = 0.5)
+  # calculate_phenological_metrics_batch(dir = dir_data, v_year = 2017:2023, v_group = "Acercampestre", v_site = site, df_thres = df_thres, var_index = "evi",
+  #                                      min_days = 1, check_seasonality = T, extend_to_previous_year = 275,
+  #                                      extend_to_next_year = 90, num_cores = 1)
   # check_seasonality?
 }
 
