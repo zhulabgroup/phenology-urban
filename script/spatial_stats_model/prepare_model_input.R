@@ -9,21 +9,35 @@ prepare_data <- function(city, source, taxa_col, phe_type) {
       path = "~/phenology-urban/data/proc/tree_climate/WU_buffer/",
       pattern = paste0("^", city, "_.*\\.rds$"),
       full.names = TRUE)
+    tree_climate <- read_rds(input_dir) |>
+      st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F) |>
+      st_transform(crs = 9311)
     } else if (source == "WU_surface") {
       input_dir <- list.files(
         # path = "~/phenology-urban/data/proc/tree_climate/WU_surface/",
         path = paste0("~/phenology-urban/data/proc/urban/", city, "/WU_surface/"), # For example NY
         pattern = paste0("^", city, ".*\\.rds$"),
         full.names = TRUE)
-    } else if (source == "Grid") {
-        
+      tree_climate <- read_rds(input_dir) |>
+        st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F) |>
+        st_transform(crs = 9311)
+    } else if (source == "Grid") { # UHAT and Daymet
+       input_dir <- list.files(
+        # path = "~/phenology-urban/data/proc/tree_climate/WU_surface/",
+        path = paste0("~/phenology-urban/data/proc/urban/", city, "/WU_surface/"), # For example NY
+        pattern = paste0("^", city, ".*\\.rds$"),
+        full.names = TRUE)
+       tree_climate <- read_rds(input_dir) |>
+         select(id, taxa, lon, lat, year, temp_summer = UHAT_temp_summer, temp_winter = UHAT_temp_winter, 
+                prcp_summer = Daymet_prcp_summer, prcp_winter = Daymet_prcp_winter,
+                srad_summer = Daymet_srad_summer, srad_winter = Daymet_srad_winter) |>
+         st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F) |>
+         st_transform(crs = 9311)
     } else {
       stop("Invalid source. Must be 'WU' or 'Grid'.")
     }
     
-    tree_climate <- read_rds(input_dir) |>
-      st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F) |>
-      st_transform(crs = 9311)
+
     
     # Assign each point to a hexagon
     hex_size <- 5000

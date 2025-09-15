@@ -29,15 +29,14 @@ source(here("script/spatial_stats_model/prepare_model_input.R"))
 #   run_mcmc_spatial_exp(model_input_all, r_output_dir, phe_type, city, taxon_col = "genus")
 # }
 
-
-source("script/spatial_stats_model/mcmc_alg/run_spbayes_mat.R")
-for (phe_type in c("SOS", "EOS")) {
-  model_input_all <- prepare_data(city, source = "WU_surface", taxa_col= "canonicalname", phe_type = phe_type)
-  run_mcmc_spatial_mat(model_input_all, r_output_dir, phe_type, city, taxon_col = "canonicalname")
-  # model_input_all <- prepare_data(city, source = "WU_surface", taxa_col= "genus", phe_type = phe_type)
-  # run_mcmc_spatial_mat(model_input_all, r_output_dir, phe_type, city, taxon_col = "genus")
-
-}
+# 
+# source("script/spatial_stats_model/mcmc_alg/run_spbayes_mat.R")
+# for (phe_type in c("SOS", "EOS")) {
+#   model_input_all <- prepare_data(city, source = "Grid", taxa_col= "canonicalname", phe_type = phe_type)
+#   run_mcmc_spatial_mat(model_input_all, r_output_dir, phe_type, city, taxon_col = "canonicalname")
+#   model_input_all <- prepare_data(city, source = "WU_surface", taxa_col= "genus", phe_type = phe_type)
+#   run_mcmc_spatial_mat(model_input_all, r_output_dir, phe_type, city, taxon_col = "genus")
+# }
 
 # 
 # ################################## run non-spatial model ##################################
@@ -51,13 +50,13 @@ for (phe_type in c("SOS", "EOS")) {
 # }
 # 
 ################################## run random-group model ##################################
-# source("script/spatial_stats_model/mcmc_alg/run_bayes_randomsp.R")
-# for (phe_type in c("SOS", "EOS")) {
-#   model_input_all <- prepare_data(city, source = "Grid", taxa_col= "canonicalname", phe_type = phe_type)
-#   run_mcmc_randomsp(model_input_all, r_output_dir, phe_type, city, taxon_col = "canonicalname")
+source("script/spatial_stats_model/mcmc_alg/run_bayes_randomsp.R")
+for (phe_type in c("SOS", "EOS")) {
+  model_input_all <- prepare_data(city, source = "Grid", taxa_col= "canonicalname", phe_type = phe_type)
+  run_mcmc_randomsp(model_input_all, r_output_dir, phe_type, city, taxon_col = "canonicalname")
 #   model_input_all <- prepare_data(city, source = "Grid", taxa_col= "genus", phe_type = phe_type)
 #   run_mcmc_randomsp(model_input_all, r_output_dir, phe_type, city, taxon_col = "genus")
-# }
+}
 
 # ################################## run fixed-group model ##################################
 # source("script/spatial_stats_model/mcmc_alg/run_bayes_fixedsp.R")
