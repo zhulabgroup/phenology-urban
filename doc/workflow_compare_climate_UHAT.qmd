@@ -15,7 +15,6 @@ editor_options:
 library(zhulabtools)
 # Check and  load required packages
 load_packages(c("dplyr", "here", "sf","viridis", "leaflet", "cli", "terra","patchwork", "data.table", "plotly", "readxl", "tidyverse", "ks", "ggnewscale", "plotbiomes"))
-source("~/phenology-urban/script/spatial_stats_model/inla_alg/run_sp_inla.R")
 city = "NY"
 ```
 
@@ -60,335 +59,188 @@ leaflet(data = inventory_centroids) |>
   )
 ```
 
-This document adopts the same workflow for analyzing urban phenology data, with the key modification of **climate data source**. The aim is to provide a basis for discussion regarding the advantages and limitations of using different datasets (WU, Daymet and HUMID) in urban phenology studies. New York City is selected as the case-study area for comparison. Phenological observations of individual trees derived from remote sensing are available for 2017–2024.
+This document adopts the same workflow for analyzing urban phenology data, with the key modification of **climate data source**. The aim is to provide a basis for discussion regarding the advantages and limitations of using different datasets (WU, Daymet and U-HAT) in urban phenology studies. New York City is selected as the case-study area for comparison. Phenological observations of individual trees derived from remote sensing are available for 2017–2024.
 
 ```{r}
 #| include: false
-#| eval: false
-valid_HUMID_Daymet <- readRDS("~/phenology-urban/data/raw/NY/HUMID/temp_monthly_all_tree.rds") |>
-  rename(temp_humid = value) |>
-  left_join(readRDS("~/phenology-urban/data/raw/NY/HUMID/prcp_monthly_all_tree.rds") |>
-              rename(prcp_humid = value),
-            by = c("id", "date")) |>
-  left_join(readRDS("~/phenology-urban/data/raw/NY/HUMID/srad_monthly_all_tree.rds") |>
-              rename(srad_humid = value),
-            by = c("id", "date")) |>
-  left_join(readRDS("~/phenology-urban/data/raw/NY/Daymet/monthly2016-2024/tmax_monthly_all_tree.rds") |>
-              select(id, value, date) |>
-              rename(tmax_daymet = value), 
-            by = c("id", "date")) |>
-  left_join(readRDS("~/phenology-urban/data/raw/NY/Daymet/monthly2016-2024/tmin_monthly_all_tree.rds") |>
-              select(id, value, date) |>
-              rename(tmin_daymet = value),
-            by = c("id", "date")) |>
-  left_join(readRDS("~/phenology-urban/data/raw/NY/Daymet/monthly2016-2024/prcp_monthly_all_tree.rds") |>
-              select(id, value, date) |>
-              rename(prcp_daymet = value), 
-            by = c("id", "date")) |>
-  left_join(readRDS("~/phenology-urban/data/raw/NY/Daymet/monthly2016-2024/srad_monthly_all_tree.rds") |>
-              select(id, value, date) |>
-              rename(srad_daymet = value),
-            by = c("id", "date")) |>
-  mutate(temp_daymet = (tmax_daymet + tmin_daymet) / 2,
-         temp_humid = as.numeric(temp_humid),
-         prcp_humid = as.numeric(prcp_humid),
-         srad_humid = as.numeric(srad_humid)) |>
-  select(id, date, temp_humid, temp_daymet, prcp_humid, prcp_daymet, srad_humid, srad_daymet) |>
-  mutate(
-    season = case_when(
-      substr(date, 6, 7) %in% c("03", "04", "05") ~ "spring",
-      substr(date, 6, 7) %in% c("06", "07", "08") ~ "summer",
-      substr(date, 6, 7) %in% c("09", "10", "11") ~ "fall",
-      substr(date, 6, 7) %in% c("12", "01", "02") ~ "winter"
-    )) |>
-  mutate(year = as.integer(substr(date, 1, 4)),
-         year = if_else(substr(date, 6, 7) == "12", year + 1, year)) |>
-  group_by(id, year, season) |>
-  summarise(
-  # Use sum for prcp, and mean for tmax and tmin
-  temp_humid_avg = mean(temp_humid, na.rm = TRUE),
-  temp_daymet_avg = mean(temp_daymet, na.rm = TRUE),
-  prcp_humid_sum = sum(prcp_humid, na.rm = TRUE),
-  prcp_daymet_sum = sum(prcp_daymet, na.rm = TRUE),
-  srad_humid_avg = mean(srad_humid, na.rm = TRUE),
-  srad_daymet_avg = mean(srad_daymet, na.rm = TRUE),
-  .groups = "drop"
-) |>
-  filter(year > 2016 & year < 2019)
+#| eval: true
 
-saveRDS(valid_HUMID_Daymet, "~/phenology-urban/data/proc/urban/Example_city/NY/valid_HUMID_Daymet.rds")
+compare_climate <- read_rds("~/phenology-urban/data/proc/urban/NY/WU_surface/NY.rds")
+
 ```
 
 ## Data source comparison
 
-Weather Underground (WU) data were obtained from the [Weather Underground program](https://www.wunderground.com/), drawing on multiple personal weather stations located within New York City. These data include daily measurements of temperature and precipitation. 
-
-Because the Weather Underground stations are unevenly distributed and are not located exactly with individual tree locations, trees within a 500-meter buffer of each station were selected to share that station's meteorological data. This approach results in spatial clustering of the selected tree points around station locations (see @fig-predictors).
-
-```{r}
-#| label: fig-predictors
-#| include: true
-#| fig-width: 15
-#| fig-height: 6
-#| fig-cap: "Spatial distribution of Weather Underground sites and shortwave radiation data in New York City."
-#| warning: false
-
-points_in_buffer <- read_csv(paste0("~/phenology-urban/data/proc/urban/",city,"/tree_WU_500_buffer_PS.csv"), show_col_types = FALSE)
-
-points_sf <- st_as_sf(points_in_buffer, coords = c("lon", "lat"), crs = 4326, remove = F) |>
-  st_transform(crs = 9311)
-hex_size <- 5000
-bbox <- st_bbox(points_sf)
-hex_grid_geom <- st_make_grid(bbox, cellsize = hex_size, square = FALSE)
-hex_grid <- st_sf(geometry = hex_grid_geom) |>
-  mutate(hex_id = row_number()) |>
-  mutate(centroid = st_centroid(geometry)) |>
-  mutate(
-    hex_lon = st_coordinates(centroid)[, 1],
-    hex_lat = st_coordinates(centroid)[, 2]
-  )
-# Assign each point to a hexagon
-points_in_buffer <- st_join(points_sf, hex_grid, join = st_within) |>
-  mutate(hex_id = as.factor(hex_id)) |>
-  filter(thres == 0.5 & year == 2020 & taxa == "Acer platanoides") |>
-  st_transform(crs = 4326)
-
-boundary <- read_sf("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp", quiet = T) |>
-  st_transform(crs = 4326)
-
-wu_location <- read_csv(paste0("~/urban-cooling/data/raw/WU/", city, "/location.csv"), show_col_types = FALSE) |>
-  st_as_sf(coords = c("Lon", "Lat"), crs = 4326)
-  
-tempprep = ggplot() +
-  geom_sf(data = boundary, fill = "grey90") +
-  geom_sf(data = wu_location, color = "blue", size = 0.5) +
-  geom_point(data = points_in_buffer, aes(x = lon, y = lat), color = "red",size = 0.1, alpha = 0.5) +
-  theme_minimal()+
-  theme(axis.text.x = element_text(size = 10, angle = 45, hjust = 1))
-
-tempprep_large = ggplot() +
-  geom_sf(data = boundary, fill = "grey90", color = NA) +
-  geom_sf(data = wu_location |> st_buffer(dist = 500),
-          aes(fill = "500 m buffer"), alpha = 0.2, color = NA) +
-  geom_sf(data = wu_location,
-          aes(color = "WU Station"), size = 2) +
-  geom_point(data = points_in_buffer,
-             aes(x = lon, y = lat, color = "Selected Trees"),
-             size = 0.5, alpha = 0.5) +
-  scale_color_manual(
-    name = "Legend",
-    values = c("WU Station" = "blue", "Selected Trees" = "red")
-  ) +
-  scale_fill_manual(
-    name = "Legend",
-    values = c("500 m buffer" = "red")
-  ) +
-  coord_sf(
-    xlim = c(-73.88, -73.84),
-    ylim = c(40.85, 40.87),
-    expand = FALSE
-  ) +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(size = 10, angle = 45, hjust = 1),
-    legend.position = "right"
-  )
-
-tempprep + tempprep_large  
-```
+Weather Underground (WU) data were obtained from the [Weather Underground program](https://www.wunderground.com/), drawing on multiple personal weather stations located within New York City. These data include daily measurements of temperature and precipitation. Since Weather Underground stations are unevenly distributed, I used INLA-based spatial models to interpolate Weather Underground station observations, allowing me to generate continuous climate surfaces and assign values to all individual tree locations.
 
 Daymet data were accessed via the [Daymet](https://daymet.ornl.gov/), which provides gridded daily weather data at a spatial resolution of 1 km². For this comparison, I extracted daily maximum and minimum temperature as well as precipitation data for the same period (2016–2023).
 
-HUMID data were accessed from @humid_data, which provides urban-corrected daily weather data at a spatial resolution of 1 km². For this comparison, I extracted the daily maximum and minimum temperature 2 m estimated air temperature after bias correction as well as precipitation rate (kg m⁻² s⁻¹) and daily mean downward shortwave forcing at the surface (W m⁻²) for the overlapping period (2017–2018).
+U-HAT data were accessed from @uhat_climate, which provides urban air temperature data at large scales across the contiguous United States (CONUS) at a spatial resolution of 1 km². For this comparison, I extracted the day and night temperature and calculated the average temperature for the same period (2016–2023).
 
 ### Temprature
 
-The figure below illustrates the direct comparison between the two datasets, focusing on the average seasonal temperature for trees within the WU buffer. The left panel shows the average winter temperature for the start of season (SOS) and the right panel displays the average summer temperature for the end of season (EOS). The x-axis represents the temperature from the WU data, while the y-axis represents the corresponding Daymet data. The red line represents a 1:1 relationship, indicating where the two datasets align perfectly ([@fig-compare-we-daymet]). Each point represents a tree-year observation.
+In this section, I compare the temperature data from three different sources: WU-interpolated, Daymet, and U-HAT.
+
+#### U-HAT vs. WU-interpolate
+
+The [@fig-compare-wu-uhat] below illustrates the direct comparison between the WU-interpolated data and the U-HAT data, focusing on the average seasonal temperature in each year. The first row shows the average winter temperature for the start of season (SOS) and the second row displays the average summer temperature for the end of season (EOS).
+
+Overall, the UHAT tends to report higher temperatures and higher variance than WU in both winter and summer (as indicated by most points falling beyond the 1:1 reference line, and the wider range of point distribution). Also, WU data exhibit a greater number of outliers, which may reflect the variability and less standardized measurement protocols of personal weather stations. Therefore, I think UHAT is more reliable than WU-interpolated data in capturing thermal heterogeneity within city.
 
 ```{r}
-#| label: fig-compare-we-daymet
+#| label: fig-compare-wu-uhat
 #| include: true
-#| fig-width: 12
-#| fig-cap: "The comparison of temperature data from Weather Underground (WU) and Daymet for trees within the WU buffer in New York City"
+#| fig-width: 15
+#| fig-height: 5
+#| fig-cap: "Comparison of temperature data from Weather Underground (WU) and U-HAT for trees in New York City"
 #| warning: false
-#| eval: true
 
-source("~/phenology-urban/script/spatial_stats_model/tidy_data.R")
-# compare 2 temp/prcp
-valid_WU_Daymet <- readRDS("~/phenology-urban/data/proc/urban/NY/valid_WU_Daymet.rds")
-wu_daymet_winter <- ggplot(data = valid_climate(valid_WU_Daymet, "SOS")) +
-  geom_point(aes(x = temp_winter, y = temp_d_winter), alpha = 0.3) +
-  geom_abline(slope = 1, intercept = 0, color = "red") +
-  labs(x = "Weather Underground", y = "Daymet") +
-  ggtitle("Winter temperature for SOS") +
-  theme_minimal()
-wu_daymet_summer <- ggplot(data = valid_climate(valid_WU_Daymet, "EOS")) +
-  geom_point(aes(x = temp_summer, y = temp_d_summer), alpha = 0.3) +
-  geom_abline(slope = 1, intercept = 0, color = "red") +
-  labs(x = "Weather Underground", y = "Daymet") +
-  ggtitle("Summer temperature for EOS") +
-  theme_minimal()
+wu_uhat <- compare_climate |> 
+  select(id, year, temp_summer, temp_winter, UHAT_temp_summer, UHAT_temp_winter)
 
-wu_daymet_winter + wu_daymet_summer
+wu_uhat_winter <- wu_uhat %>%
+  select(year, x = temp_winter, y = UHAT_temp_winter) %>%
+  tidyr::drop_na() %>%
+  group_split(year) %>%
+  purrr::map(~{
+    rng <- range(c(.x$x, .x$y), na.rm = TRUE)
+    ggplot(.x, aes(x, y)) +
+      geom_point(size = 0.2, alpha = 0.1) +
+      geom_abline(slope = 1, intercept = 0, color = "red") +
+      labs(x = "Weather Underground", y = "UHAT",
+           title = paste0(unique(.x$year))) +
+      coord_fixed(xlim = rng, ylim = rng) +
+      theme_minimal()
+  }) |>
+  wrap_plots(ncol = 7) + plot_annotation(title = "Winter temperature for EOS")
+  
+wu_uhat_summer <- wu_uhat %>%
+  select(year, x = temp_summer, y = UHAT_temp_summer) %>%
+  tidyr::drop_na() %>%
+  group_split(year) %>%
+  purrr::map(~{
+    rng <- range(c(.x$x, .x$y), na.rm = TRUE)
+    ggplot(.x, aes(x, y)) +
+      geom_point(size = 0.2, alpha = 0.1) +
+      geom_abline(slope = 1, intercept = 0, color = "red") +
+      labs(x = "Weather Underground", y = "UHAT",
+           title = paste0(unique(.x$year))) +
+      coord_fixed(xlim = rng, ylim = rng) +
+      theme_minimal()
+  }) |>
+  wrap_plots(ncol = 7) + plot_annotation(title = "Summer temperature for EOS")
+
+wu_uhat_winter/
+  wu_uhat_summer
 ```
 
-Overall, the Daymet data show good alignment with the WU data. However, Daymet tends to report slightly lower temperatures than WU in both winter and summer (as indicated by most points falling below the 1:1 reference line). In winter, WU data exhibit a greater number of outliers, which may reflect the variability and less standardized measurement protocols of personal weather stations.
+#### U-HAT vs. Daymet
+
+Similarly, I ploted [@fig-compare-daymet-uhat] below to compare the Daymet data and the U-HAT data. Generally, U-HAT reports higher temperatures and larger variance than Daymet in both winter and summer (as indicated by most points falling beyond the 1:1 reference line), which means UHAT could capture the urban heat island effect. 
+
+```{r}
+#| label: fig-compare-daymet-uhat
+#| include: true
+#| fig-width: 15
+#| fig-height: 5
+#| fig-cap: "Comparison of temperature data from Daymet and U-HAT for trees in New York City"
+#| warning: false
+
+daymet_uhat <- compare_climate |> 
+  select(id, year, Daymet_temp_summer, Daymet_temp_winter, UHAT_temp_summer, UHAT_temp_winter)
+
+daymet_uhat_winter <- daymet_uhat %>%
+  select(year, x = Daymet_temp_winter, y = UHAT_temp_winter) %>%
+  tidyr::drop_na() %>%
+  group_split(year) %>%
+  purrr::map(~{
+    rng <- range(c(.x$x, .x$y), na.rm = TRUE)
+    ggplot(.x, aes(x, y)) +
+      geom_point(size = 0.2, alpha = 0.1) +
+      geom_abline(slope = 1, intercept = 0, color = "red") +
+      labs(x = "Daymet", y = "UHAT",
+           title = paste0(unique(.x$year))) +
+      coord_fixed(xlim = rng, ylim = rng) +
+      theme_minimal()
+  }) |>
+  wrap_plots(ncol = 7) + plot_annotation(title = "Winter temperature for EOS")
+  
+daymet_uhat_summer <- daymet_uhat %>%
+  select(year, x = Daymet_temp_summer, y = UHAT_temp_summer) %>%
+  tidyr::drop_na() %>%
+  group_split(year) %>%
+  purrr::map(~{
+    rng <- range(c(.x$x, .x$y), na.rm = TRUE)
+    ggplot(.x, aes(x, y)) +
+      geom_point(size = 0.2, alpha = 0.1) +
+      geom_abline(slope = 1, intercept = 0, color = "red") +
+      labs(x = "Daymet", y = "UHAT",
+           title = paste0(unique(.x$year))) +
+      coord_fixed(xlim = rng, ylim = rng) +
+      theme_minimal()
+  }) |>
+  wrap_plots(ncol = 7) + plot_annotation(title = "Summer temperature for EOS")
+
+daymet_uhat_winter/
+  daymet_uhat_summer
+```
 
 ### Precipitation
 
-In this section, I compare the temperature, precipitation, and shortwave radiation from HUMID and Daymet for all available trees in New York City. Each point represents a tree-year observation.
+In this section, I compare the precipitation data from WU-interpolated and Daymet.
 
-**Daymet vs. WU**
+#### WU-interpolate vs. Daymet
 
-Daymet reports lower temperatures than HUMID in both winter and summer (as indicated by most points falling beyond the 1:1 reference line). In summer, the variation of HUMID temperature is larger than that of Daymet, which may reflect the influence of urban heat islands and localized temperature variations captured by HUMID ([@fig-compare-humid-daymet1]).
-
-```{r}
-#| label: fig-compare-humid-daymet1
-#| include: true
-#| fig-width: 12
-#| fig-cap: "The comparison of temperature data from HUMID and Daymet for all available trees in New York City"
-#| warning: false
-#| eval: true
-
-
-valid_HUMID_Daymet <- readRDS("~/phenology-urban/data/proc/urban/NY/valid_HUMID_Daymet.rds") |>
-  filter(season %in% c("winter", "summer")) |>
-  mutate(year = as.factor(year)) |>
-  na.omit()
-
-split_by_type <- valid_HUMID_Daymet %>%
-  group_by(season) %>%
-  group_split()
-
-# Define a function to fit and plot each case
-plot_weighted_fit <- function(df) {
-  type_name <- unique(df$season)
-  model <- lm(temp_humid_avg ~ temp_daymet_avg, data = df)
-  df$fitted <- predict(model)
-
-  slope <- round(coef(model)[2], 3)
-  intercept <- round(coef(model)[1], 3)
-  R_squared <- round(summary(model)$r.squared, 3)
-
-  annot_label <- paste0("y = ", slope, "x + ",intercept, "\nR^2 = ", R_squared)
-
-  ggplot(df, aes(x = temp_daymet_avg, y = temp_humid_avg)) +
-    geom_point(aes(color = year), alpha = 0.2, size = 0.5) +
-    geom_abline(slope = 1, intercept = 0, color = "red") +
-    geom_line(aes(y = fitted), color = "grey50", linetype = "dashed") +
-    annotate("text",
-             x = min(df$temp_daymet_avg, na.rm = TRUE),
-             y = max(df$temp_humid_avg, na.rm = TRUE),
-             label = annot_label,
-             hjust = 0, vjust = 1, size = 4) +
-    labs(
-      title = paste(type_name, "temperature"),
-      x = "Daymet",
-      y = "HUMID"
-    ) +
-    theme_minimal()
-}
-
-plots <- lapply(split_by_type, plot_weighted_fit)
-
-plots[[2]] + plots[[1]] +
-  plot_layout(guides = "collect") & 
-  theme(legend.position = "right")
-```
-
-**Precipitation**
-
-The HUMID precipitation data are derived from a combination of daily gridded precipitation analysis data, PRISM long-term climatologies, and temporal disaggregation using radar, satellite, or reanalysis data based on availability, whereas Daymet precipitation data are based directly on selected weather stations with additional quality control constraints. So I believe Daymet provides more reliable precipitation estimates for the analysis.
+Overall, the Daymet precipitation data tend to be higher than the WU-interpolated data (as indicated by most points falling below the 1:1 reference line in [@fig-compare-daymet-wu]). However, WU-interpolated data show a wider spread, which could either capture localized heavy rainfall that Daymet overlooks or simply reflect outliers.
 
 ```{r}
-#| label: fig-compare-humid-daymet3
+#| label: fig-compare-daymet-wu
 #| include: true
-#| fig-width: 12
-#| fig-cap: "The comparison of precipitation data from HUMID and Daymet for all available trees in New York City"
+#| fig-width: 15
+#| fig-height: 5
+#| fig-cap: "Comparison of precipitation data from Daymet and Weather Underground (WU) for trees in New York City"
 #| warning: false
-#| eval: true
 
-# Define a function to fit and plot each case
-plot_weighted_fit <- function(df) {
-  type_name <- unique(df$season)
-  model <- lm(prcp_humid_sum ~ prcp_daymet_sum, data = df)
-  df$fitted <- predict(model)
+daymet_wu <- compare_climate |> 
+  select(id, year, Daymet_prcp_summer, Daymet_prcp_winter, wu_prcp_summer = prcp_summer, wu_prcp_winter = prcp_winter) |>
+  filter(year < 2024)
 
-  slope <- round(coef(model)[2], 3)
-  intercept <- round(coef(model)[1], 3)
-  R_squared <- round(summary(model)$r.squared, 3)
+daymet_wu_winter <- daymet_wu %>%
+  select(year, x = Daymet_prcp_winter, y = wu_prcp_winter) %>%
+  tidyr::drop_na() %>%
+  group_split(year) %>%
+  purrr::map(~{
+    rng <- range(c(.x$x, .x$y), na.rm = TRUE)
+    ggplot(.x, aes(x, y)) +
+      geom_point(size = 0.2, alpha = 0.1) +
+      geom_abline(slope = 1, intercept = 0, color = "red") +
+      labs(x = "Daymet", y = "wu",
+           title = paste0(unique(.x$year))) +
+      coord_fixed(xlim = rng, ylim = rng) +
+      theme_minimal()
+  }) |>
+  wrap_plots(ncol = 7) + plot_annotation(title = "Winter precipitation for EOS")
+  
+daymet_wu_summer <- daymet_wu %>%
+  select(year, x = Daymet_prcp_summer, y = wu_prcp_summer) %>%
+  tidyr::drop_na() %>%
+  group_split(year) %>%
+  purrr::map(~{
+    rng <- range(c(.x$x, .x$y), na.rm = TRUE)
+    ggplot(.x, aes(x, y)) +
+      geom_point(size = 0.2, alpha = 0.1) +
+      geom_abline(slope = 1, intercept = 0, color = "red") +
+      labs(x = "Daymet", y = "wu",
+           title = paste0(unique(.x$year))) +
+      coord_fixed(xlim = rng, ylim = rng) +
+      theme_minimal()
+  }) |>
+  wrap_plots(ncol = 7) + plot_annotation(title = "Summer precipitation for EOS")
 
-  annot_label <- paste0("y = ", slope, "x + ",intercept, "\nR^2 = ", R_squared)
-
-  ggplot(df, aes(x = prcp_daymet_sum, y = prcp_humid_sum)) +
-    geom_point(aes(color = year), alpha = 0.2, size = 0.5) +
-    geom_line(aes(y = fitted), color = "grey50", linetype = "dashed") +
-    annotate("text",
-             x = min(df$prcp_daymet_sum, na.rm = TRUE),
-             y = max(df$prcp_humid_sum, na.rm = TRUE),
-             label = annot_label,
-             hjust = 0, vjust = 1, size = 4) +
-    labs(
-      title = paste(type_name, "precipitation"),
-      x = "Daymet (mm)",
-      y = "HUMID (kg/m² s)"
-    ) +
-    theme_minimal()
-}
-
-plots <- lapply(split_by_type, plot_weighted_fit)
-
-plots[[2]] + plots[[1]] +
-  plot_layout(guides = "collect") & 
-  theme(legend.position = "right")
+daymet_wu_winter/
+  daymet_wu_summer
 ```
 
-### Shortwave radiation
-
-Unlike Daymet, which estimates shortwave radiation indirectly using an empirical relationship with the Tmax and Tmin, HUMID uses downscaled radiation inputs from the NLDAS-2 reanalysis, which includes the effects of cloud cover and atmospheric conditions. This physically driven modeling framework makes HUMID better suited for capturing the spatial variability and complexity of urban energy balance.
-
-```{r}
-#| label: fig-compare-humid-daymet2
-#| include: true
-#| fig-width: 12
-#| fig-cap: "The comparison of shortwave data from HUMID and Daymet for all available trees in New York City"
-#| warning: false
-#| eval: true
-
-# Define a function to fit and plot each case
-plot_weighted_fit <- function(df) {
-  type_name <- unique(df$season)
-  model <- lm(srad_humid_avg ~ srad_daymet_avg, data = df)
-  df$fitted <- predict(model)
-
-  slope <- round(coef(model)[2], 3)
-  intercept <- round(coef(model)[1], 3)
-  R_squared <- round(summary(model)$r.squared, 3)
-
-  annot_label <- paste0("y = ", slope, "x + ",intercept, "\nR^2 = ", R_squared)
-
-  ggplot(df, aes(x = srad_daymet_avg, y = srad_humid_avg)) +
-    geom_point(aes(color = year), alpha = 0.2, size = 0.5) +
-    geom_line(aes(y = fitted), color = "grey50", linetype = "dashed") +
-    annotate("text",
-             x = min(df$srad_daymet_avg, na.rm = TRUE),
-             y = max(df$srad_humid_avg, na.rm = TRUE),
-             label = annot_label,
-             hjust = 0, vjust = 1, size = 4) +
-    labs(
-      title = paste(type_name, "shortwave radiation"),
-      x = "Daymet",
-      y = "HUMID"
-    ) +
-    theme_minimal()
-}
-
-plots <- lapply(split_by_type, plot_weighted_fit)
-
-plots[[2]] + plots[[1]] +
-  plot_layout(guides = "collect") & 
-  theme(legend.position = "right")
-```
 
 <!-- ## Result (phenology response to temperature) comparison -->
 
@@ -1442,18 +1294,42 @@ plots[[2]] + plots[[1]] +
 
 <!-- It is also important to note that the two datasets are based on different sample sizes. The WU dataset includes only the points within the defined buffer, whereas the HUMID dataset currently provides data extending through 2018. -->
 
-## Discussion
+## Summary
 
-This document records the differences between climate datasets. To further evaluate the suitability of each dataset and inform future data selection, I summarize the key characteristics of both datasets as follows:
+This document records the differences between climate datasets, to evaluate the suitability of each dataset and inform future data selection.
 
--   **HUMID** data: HUMID tends to report higher temperatures and a wider range of variation compared to Daymet data, with fewer extreme outliers compared to WU data. It seems to capture the urban heat island and temperature heterogeneity well, as it conduct the urban bias correction. It has finer spatial resolution (1 km²) and uniform spatial coverage across the study area. However, the data only extends to 2018, meaning that only the years 2017–2018 overlap with the remote sensing observations.
+-   **Temperature**: Comparisons with both WU and Daymet show that U-HAT better captures urban heat island effects and fine-scale thermal heterogeneity, while WU is prone to outliers and Daymet underestimates urban temperatures. Thus, U-HAT provides the most reliable dataset for intra-urban temperature analyses.
 
--   **Daymet** data: Daymet tends to report slightly lower temperatures and a narrower range of variation compared to WU data, with fewer extreme outliers. It has finer spatial resolution (1 km²) and uniform spatial coverage across the study area.
+-   **Precipitation**: Comparisons between WU and Daymet indicate that Daymet precipitation is generally higher, while WU shows a wider spread that may reflect outliers rather than true localized events. Since urban precipitation is less influenced by urban effects, Daymet provides a more reliable dataset with fewer outliers. 
 
--   **Weather Underground (WU)** data: WU data generally report slightly higher temperatures and a broader range of variation than Daymet, with more extreme outliers, likely due to less standardized measurement practices of personal weather stations. The data may be limited by the number of available stations, especially in smaller cities, and their uneven spatial distribution. Further analyses require defining a buffer around stations to select relevant trees.
+-   **Shortwave radiation**: Similarly, for shortwave radiation, where available data come primarily from Daymet and HUMID, I rely on Daymet for the same reason.
 
-I still have some remaining questions regarding the datasets:
+## Remaining questions
 
--   How well do these datasets capture precipitation and shortwave? Given coverage and resolution, can Daymet resolve their within-city heterogeneity?
+I still have two remaining questions regarding the UHAT:
 
--   If interpolate Weather Underground PWS data to a surface, could that compete with spatial random effects in my further phenology models?
+-   Why does the number of points differ across dates? Is this related to the input imagery coverage or data quality control?
+
+-   I used a MODIS/Aqua LST/E Daily L3 Global 1 km raaster map as a template and projected the seasonal aggregated UHAT data (in point format) onto it to generate raster maps. However, I noticed striping patterns along the latitude (e.g., horizontal lines at 41.0°N and 40.75°N in the @fig-example-uhat). Could this be an issue with my calculation method, or might it be related to the varying number of available points across dates as in the first question?
+
+```{r}
+#| label: fig-example-uhat
+#| fig-cap: "Example of the U-HAT temperature raster for summer 2020 in New York - Newark city cluster."
+#| include: true
+#| fig-width: 5
+#| fig-height: 5
+#| warning: false
+
+tif <- raster::raster("~/lab-data/datasets/climate/UHAT/clean/NY_summer_2020.tif")
+tif_df <- as.data.frame(tif, xy = TRUE, na.rm = TRUE) |>
+  rename_with(~ "value", .cols = 3)
+
+ggplot(tif_df, aes(x = x, y = y, fill = value)) +
+  geom_tile() +
+  scale_fill_viridis_c() +
+  coord_equal() +
+  theme_minimal() +
+  labs(fill = "UHAT (°C)", 
+       title = "New York - Newark, Summer 2020")
+```
+
