@@ -27,7 +27,7 @@ ENDYEAR   = 2023
 NO_NAME = "NULL"
 YEAR_LINE = "years:"
 VAR_LINE  = "variables:"
-DAYMET_VARIABLES = ['srad']
+DAYMET_VARIABLES = ['prcp']
 DAYMET_YEARS     = [str(year) for year in range(STARTYEAR, ENDYEAR + 1)]
 DAYMET_URL_STR = r'https://daymet.ornl.gov/single-pixel/api/data?lat={}&lon={}'
 doy_files = glob.glob(str(Path("/home/jializ/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input").expanduser() / f"*.rds"))
@@ -56,10 +56,10 @@ def daymet_url(lat, lon):
     return DAYMET_URL_STR.format(lat, lon) + var_str + years_str
 
 def parse_and_aggregate(text_str, id_value):
-    pos = text_str.find("year,yday,srad")
+    pos = text_str.find("year,yday,prcp")
     df = pd.read_csv(StringIO(text_str[pos:]), dtype={"year":"int32","yday":"int16"})
-    srad_col = next(c for c in df.columns if c.lower().startswith("srad"))
-    if srad_col != "srad": df = df.rename(columns={srad_col: "srad"})
+    prcp_col = next(c for c in df.columns if c.lower().startswith("prcp"))
+    if prcp_col != "prcp": df = df.rename(columns={prcp_col: "prcp"})
     dt = pd.to_datetime(df["year"]*1000 + df["yday"], format="%Y%j")
     m  = dt.dt.month.values
     season = np.where(np.isin(m,[3,4,5]), "spring",
@@ -69,8 +69,8 @@ def parse_and_aggregate(text_str, id_value):
     df.loc[m == 12, "year"] += 1
     df["id"] = id_value
     out = (df.groupby(["id","year","season"], as_index=False)
-             .agg(Avg_srad=("srad","mean"),
-                  srad_count=("srad", lambda s: s.notna().sum())))
+             .agg(Sum_Sum_mm=("prcp","sum"),
+                  prcp_count=("prcp", lambda s: s.notna().sum())))
     return out
 
 def fetch_one(idx):
@@ -92,7 +92,7 @@ for doy_file in doy_files:
 
     out_dir  = Path.home() / "phenology-urban/data/raw/CONUS/Daymet/all_city_trees" / city
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_file = out_dir / "srad_monthly_2016_2024.csv"
+    out_file = out_dir / "prcp_monthly_2016_2024.csv"
     if out_file.exists():
         print("File exists, skip:", out_file)
         continue
