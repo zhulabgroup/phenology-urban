@@ -3,6 +3,8 @@ load_packages(c("tidyverse", "ggplot2", "sf", "spBayes", "INLA", "lubridate", "t
 select <- dplyr::select
 
 
+################################ WU ##################################
+
 prepare_tree_WU_climate <- function(city, type, buffer_dist = NULL){
   #type %in% c(WU_buffer, WU_surface)
   if (type == "WU_buffer" && is.null(buffer_dist)) {
@@ -211,9 +213,6 @@ prepare_tree_WU_climate <- function(city, type, buffer_dist = NULL){
   }
 }
 
-
-
-##################################################################
 # Run for WU_buffer
 file_path <- path.expand("~/phenology-urban/data/raw/CONUS/WU")
 sub_folders <- list.dirs(file_path, recursive = FALSE, full.names = FALSE) 
@@ -234,7 +233,7 @@ for (city in sub_folders){
 file_path <- path.expand("~/phenology-urban/data/raw/CONUS/WU")
 sub_folders <- list.dirs(file_path, recursive = FALSE, full.names = FALSE) 
 # example of running the function
-for (city in sub_folders[54:78]){
+for (city in sub_folders[53]){
   tryCatch(
     {
       prepare_tree_WU_climate(city, type = "WU_surface")
@@ -245,13 +244,19 @@ for (city in sub_folders[54:78]){
   )}
 
 
-##################################################################
-# Test WU-surface for existing city
+
+
+################################ GRID ##################################
 
 prepare_tree_Grid_climate <- function(city){
+  out_path <- paste0("~/phenology-urban/data/proc/tree_climate/Grid/", city, ".rds")
+  
   ################## Calculate seasonal climate ##################
   message(paste0("Processing example city: ", city, "..."))
-  message("Calculating seasonal climate...")
+  
+  tree_dir <- paste0("~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/", city, ".rds")
+  tree_location <- read_rds(tree_dir) |>
+    st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F)
   
   ###### Daymet shortwave radiation #######
   daymet_srad <- read_csv(paste0("~/phenology-urban/data/raw/CONUS/Daymet/all_city_trees/", city, "/srad_monthly_2016_2024.csv"), show_col_types = FALSE)
@@ -261,7 +266,7 @@ prepare_tree_Grid_climate <- function(city){
     
   uhat_files <- list.files(
     path = "~/lab-data/datasets/climate/UHAT/clean/",
-    pattern = paste0("^", city, ".*\\.tif$"), 
+    pattern = paste0(city, ".*\\.tif$"),
     full.names = TRUE
   )
   missing_files <- uhat_files[!file.exists(uhat_files)]
@@ -271,7 +276,6 @@ prepare_tree_Grid_climate <- function(city){
   uhat_climate <- map(uhat_files, function(file) {
     r <- rast(file)
     vals <- terra::extract(r, tree_location, ID = FALSE)
-    
     fname <- basename(file)
     fname <- str_remove(fname, "\\.tif$")
     season <- str_extract(fname, "summer|winter")
@@ -281,8 +285,7 @@ prepare_tree_Grid_climate <- function(city){
       tibble(id = tree_location$id, year = year, season = season),
       vals
     )
-    vals
-  }) |> 
+    vals}) |> 
     bind_rows() |>
     pivot_wider(
       names_from  = season,
@@ -305,4 +308,16 @@ prepare_tree_Grid_climate <- function(city){
     write_rds(points_surface, out_path, compress = "gz")
 }
 
-prepare_tree_Grid_climate(city = "NewYork")
+
+tree_dir <- "~/phenology-urban/data/raw/CONUS/StreetTrees/cleaned_ps_input/"
+rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
+cities <- gsub("\\.rds$", "", basename(rds_files))
+for (city in cities){
+  tryCatch(
+    {
+      prepare_tree_Grid_climate(city)
+    },
+    error = function(e) {
+      message("Skipping ", city, ": ", e$message)
+    }
+  )}
