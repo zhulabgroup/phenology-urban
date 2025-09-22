@@ -2830,3 +2830,12 @@ if(Binghamton){
     })
 }
 
+
+# add <- matching_npn |> 
+#   filter(city == "Seattle") |>
+#   select(site = city, lon, lat, id = new_id) |>
+#   mutate(taxa = "Validation",
+#          genus = "Validation")
+# update_seattle <- bind_rows(Seattle, add) |>
+#   arrange(id)
+# write_rds(update_seattle, "~/lab-data/datasets/vegetation/PS/CONUS_urban/Tree_point/Seattle.rds", compress = "gz")
