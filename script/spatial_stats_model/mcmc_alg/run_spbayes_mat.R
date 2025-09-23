@@ -3,22 +3,22 @@
 run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, taxon_col, 
                                  n_cores = 15) {
   taxon_list <- unique(model_input_all[[taxon_col]])
-  boundary <- switch(
-    city,
-    "NewYork" = st_read("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp"),
-    "DT" = st_read("~/urban-cooling/data/raw/WU/DT/City_of_Detroit_Boundary/City_of_Detroit_Boundary.shp"),
-    "ST" = st_read("~/urban-cooling/data/raw/WU/ST/seattle_boundary/CityUGA.shp") %>%
-      filter(CITY_NM == "Seattle"),
-    "HT" = st_read("~/urban-cooling/data/raw/WU/HT/HGAC_City_Boundaries/HGAC_City_Boundaries.shp") %>%
-      filter(NAME == "Houston"),  # change to some distance
-    "TP" = st_read("~/urban-cooling/data/raw/WU/TP/Municipal_Boundary/Municipal_Boundary.shp") %>%
-      filter(NAME == "Tampa"),
-    "DV" = st_read("~/urban-cooling/data/raw/WU/DV/DRCOG_Municipalities/DRCOG_Municipalities.shp") %>%
-      filter(city == "Denver"),
-    "AT" = st_read("~/urban-cooling/data/raw/WU/AT/TxDOT_City_Boundaries/Cities.shp") %>%
-      filter(CITY_NM == "Austin"),
-    stop("Invalid city abbreviation.")
-  )
+  # boundary <- switch(
+  #   city,
+  #   "NewYork" = st_read("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp"),
+  #   "DT" = st_read("~/urban-cooling/data/raw/WU/DT/City_of_Detroit_Boundary/City_of_Detroit_Boundary.shp"),
+  #   "ST" = st_read("~/urban-cooling/data/raw/WU/ST/seattle_boundary/CityUGA.shp") %>%
+  #     filter(CITY_NM == "Seattle"),
+  #   "HT" = st_read("~/urban-cooling/data/raw/WU/HT/HGAC_City_Boundaries/HGAC_City_Boundaries.shp") %>%
+  #     filter(NAME == "Houston"),  # change to some distance
+  #   "TP" = st_read("~/urban-cooling/data/raw/WU/TP/Municipal_Boundary/Municipal_Boundary.shp") %>%
+  #     filter(NAME == "Tampa"),
+  #   "DV" = st_read("~/urban-cooling/data/raw/WU/DV/DRCOG_Municipalities/DRCOG_Municipalities.shp") %>%
+  #     filter(city == "Denver"),
+  #   "AT" = st_read("~/urban-cooling/data/raw/WU/AT/TxDOT_City_Boundaries/Cities.shp") %>%
+  #     filter(CITY_NM == "Austin"),
+  #   stop("Invalid city abbreviation.")
+  # )
   Sys.setenv(OMP_NUM_THREADS = "1", OPENBLAS_NUM_THREADS = "1", MKL_NUM_THREADS = "1",
              VECLIB_MAXIMUM_THREADS = "1", NUMEXPR_NUM_THREADS = "1")
   
@@ -26,7 +26,7 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
   on.exit(parallel::stopCluster(cl), add = TRUE)
   registerDoParallel(cl)
   parallel::clusterEvalQ(cl, { library(sf); options(sf_use_s2 = FALSE) })
-  parallel::clusterExport(cl, c("boundary"), envir = environment())
+  parallel::clusterExport(cl, envir = environment())
   
   `%dopar%` <- foreach::`%dopar%`
   res <- foreach(taxon = taxon_list, .packages = c(
@@ -60,12 +60,12 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
       phe_metric <- "doy_diff"
     }
     tavg_phe <- model_input_sf |> st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F) |>
-      st_transform(crs = st_crs(boundary)) #jitter
+      st_transform(crs = 5070) #jitter
     temp_col <- names(tavg_phe)[grepl("^temp", names(tavg_phe))]
     prcp_col <- names(tavg_phe)[grepl("^prcp", names(tavg_phe))]
     srad_col <- names(tavg_phe)[grepl("^srad", names(tavg_phe))]
     coords_ori <- st_coordinates(model_input_sf |> st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F) |>
-                                   st_transform(crs = st_crs(boundary)))
+                                   st_transform(crs = 5070))
     
     tavg_phe_df <- as.data.frame(tavg_phe)
     tavg_phe_df$year <- as.factor(tavg_phe_df$year) 

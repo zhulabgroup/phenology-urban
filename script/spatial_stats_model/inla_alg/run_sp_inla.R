@@ -7,22 +7,22 @@ run_inla_genus = function(model_input_all, r_output_dir, phe_type, city){
   # install.packages("INLA",repos=c(getOption("repos"),INLA="https://inla.r-inla-download.org/R/stable"), dep=TRUE)
   
   genus_list <- unique(model_input_all$genus)
-  boundary <- switch(
-    city,
-    "NY" = st_read("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp"),
-    "DT" = st_read("~/urban-cooling/data/raw/WU/DT/City_of_Detroit_Boundary/City_of_Detroit_Boundary.shp"),
-    "ST" = st_read("~/urban-cooling/data/raw/WU/ST/seattle_boundary/CityUGA.shp") %>%
-      filter(CITY_NM == "Seattle"),
-    "HT" = st_read("~/urban-cooling/data/raw/WU/HT/HGAC_City_Boundaries/HGAC_City_Boundaries.shp") %>%
-      filter(NAME == "Houston"),  # change to some distance
-    "TP" = st_read("~/urban-cooling/data/raw/WU/TP/Municipal_Boundary/Municipal_Boundary.shp") %>%
-      filter(NAME == "Tampa"),
-    "DV" = st_read("~/urban-cooling/data/raw/WU/DV/DRCOG_Municipalities/DRCOG_Municipalities.shp") %>%
-      filter(city == "Denver"),
-    "AT" = st_read("~/urban-cooling/data/raw/WU/AT/TxDOT_City_Boundaries/Cities.shp") %>%
-      filter(CITY_NM == "Austin"),
-    stop("Invalid city abbreviation.")
-  )
+  # boundary <- switch(
+  #   city,
+  #   "NY" = st_read("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp"),
+  #   "DT" = st_read("~/urban-cooling/data/raw/WU/DT/City_of_Detroit_Boundary/City_of_Detroit_Boundary.shp"),
+  #   "ST" = st_read("~/urban-cooling/data/raw/WU/ST/seattle_boundary/CityUGA.shp") %>%
+  #     filter(CITY_NM == "Seattle"),
+  #   "HT" = st_read("~/urban-cooling/data/raw/WU/HT/HGAC_City_Boundaries/HGAC_City_Boundaries.shp") %>%
+  #     filter(NAME == "Houston"),  # change to some distance
+  #   "TP" = st_read("~/urban-cooling/data/raw/WU/TP/Municipal_Boundary/Municipal_Boundary.shp") %>%
+  #     filter(NAME == "Tampa"),
+  #   "DV" = st_read("~/urban-cooling/data/raw/WU/DV/DRCOG_Municipalities/DRCOG_Municipalities.shp") %>%
+  #     filter(city == "Denver"),
+  #   "AT" = st_read("~/urban-cooling/data/raw/WU/AT/TxDOT_City_Boundaries/Cities.shp") %>%
+  #     filter(CITY_NM == "Austin"),
+  #   stop("Invalid city abbreviation.")
+  # )
   
   for (genus in genus_list) {
     folder_path <- paste0(r_output_dir, "spatial_spde/",city,"/genus/")
@@ -42,7 +42,7 @@ run_inla_genus = function(model_input_all, r_output_dir, phe_type, city){
     model_input_sf <- model_input_all %>%
       filter(genus == !!genus) %>%
       st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
-      st_transform(crs = st_crs(boundary)) %>%
+      st_transform(crs = 5070) %>%
       mutate(lon = st_coordinates(.)[,1], lat = st_coordinates(.)[,2],
              year = as.factor(year)) 
     
@@ -570,22 +570,22 @@ run_inla_species = function(model_input_all, r_output_dir, phe_type, city){
 # install.packages("INLA",repos=c(getOption("repos"),INLA="https://inla.r-inla-download.org/R/stable"), dep=TRUE)
   
   species_list <- unique(model_input_all$canonicalname)
-  boundary <- switch(
-    city,
-    "NewYork" = st_read("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp"),
-    "DT" = st_read("~/urban-cooling/data/raw/WU/DT/City_of_Detroit_Boundary/City_of_Detroit_Boundary.shp"),
-    "ST" = st_read("~/urban-cooling/data/raw/WU/ST/seattle_boundary/CityUGA.shp") %>%
-      filter(CITY_NM == "Seattle"),
-    "HT" = st_read("~/urban-cooling/data/raw/WU/HT/HGAC_City_Boundaries/HGAC_City_Boundaries.shp") %>%
-      filter(NAME == "Houston"),  # change to some distance
-    "TP" = st_read("~/urban-cooling/data/raw/WU/TP/Municipal_Boundary/Municipal_Boundary.shp") %>%
-      filter(NAME == "Tampa"),
-    "DV" = st_read("~/urban-cooling/data/raw/WU/DV/DRCOG_Municipalities/DRCOG_Municipalities.shp") %>%
-      filter(city == "Denver"),
-    "AT" = st_read("~/urban-cooling/data/raw/WU/AT/TxDOT_City_Boundaries/Cities.shp") %>%
-      filter(CITY_NM == "Austin"),
-    stop("Invalid city abbreviation.")
-  )
+  # boundary <- switch(
+  #   city,
+  #   "NewYork" = st_read("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp"),
+  #   "DT" = st_read("~/urban-cooling/data/raw/WU/DT/City_of_Detroit_Boundary/City_of_Detroit_Boundary.shp"),
+  #   "ST" = st_read("~/urban-cooling/data/raw/WU/ST/seattle_boundary/CityUGA.shp") %>%
+  #     filter(CITY_NM == "Seattle"),
+  #   "HT" = st_read("~/urban-cooling/data/raw/WU/HT/HGAC_City_Boundaries/HGAC_City_Boundaries.shp") %>%
+  #     filter(NAME == "Houston"),  # change to some distance
+  #   "TP" = st_read("~/urban-cooling/data/raw/WU/TP/Municipal_Boundary/Municipal_Boundary.shp") %>%
+  #     filter(NAME == "Tampa"),
+  #   "DV" = st_read("~/urban-cooling/data/raw/WU/DV/DRCOG_Municipalities/DRCOG_Municipalities.shp") %>%
+  #     filter(city == "Denver"),
+  #   "AT" = st_read("~/urban-cooling/data/raw/WU/AT/TxDOT_City_Boundaries/Cities.shp") %>%
+  #     filter(CITY_NM == "Austin"),
+  #   stop("Invalid city abbreviation.")
+  # )
   failed_sp <- c()
   for (species in species_list) {
     tryCatch({
@@ -607,7 +607,7 @@ run_inla_species = function(model_input_all, r_output_dir, phe_type, city){
       model_input_sf <- model_input_all %>%
         filter(canonicalname == species) %>%
         st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
-        st_transform(crs = st_crs(boundary)) %>%
+        st_transform(crs = 5070) %>%
         mutate(lon = st_coordinates(.)[,1], lat = st_coordinates(.)[,2],
                year = as.factor(year)) 
       
