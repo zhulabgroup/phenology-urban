@@ -169,14 +169,14 @@ run_inla_genus = function(model_input_all, r_output_dir, phe_type, city){
     fitted_spatial <- as.vector(A.phe %*% spatial_field_mean)
     temp_vec <- model_input %>% select(starts_with("temp")) %>% pull()
     
-    cor_temp_spatial <- cor(temp_vec, fitted_spatial, use = "complete.obs")
-    print(paste("Correlation between temp and spatial random effect:", round(cor_temp_spatial, 3)))
-    ggplot(data.frame(temp = temp_vec, spatial = fitted_spatial), aes(x = temp, y = spatial)) +
-      geom_point(alpha = 0.6) +
-      geom_smooth(method = "lm", se = FALSE, color = "red") +
-      labs(title = paste("Spatial Confounding: cor =", round(cor_temp_spatial, 2)),
-           x = "Temperature", y = "Spatial Random Effect") +
-      theme_minimal()
+    # cor_temp_spatial <- cor(temp_vec, fitted_spatial, use = "complete.obs")
+    # print(paste("Correlation between temp and spatial random effect:", round(cor_temp_spatial, 3)))
+    # ggplot(data.frame(temp = temp_vec, spatial = fitted_spatial), aes(x = temp, y = spatial)) +
+    #   geom_point(alpha = 0.6) +
+    #   geom_smooth(method = "lm", se = FALSE, color = "red") +
+    #   labs(title = paste("Spatial Confounding: cor =", round(cor_temp_spatial, 2)),
+    #        x = "Temperature", y = "Spatial Random Effect") +
+    #   theme_minimal()
     
     ######################################## Compare with non-spatial model ########################################
     formula_nosp <- y ~ 0 + Intercept + temp + prcp + srad + f(year, model = 'iid')
@@ -187,44 +187,44 @@ run_inla_genus = function(model_input_all, r_output_dir, phe_type, city){
                      control.predictor = list(
                        compute = TRUE,
                        A = inla.stack.A(stk.full)
-                     ),
+                     ), 
                      control.compute = list(cpo = TRUE, dic = TRUE, waic = TRUE))
     # summary(res_nosp)
     # Extract variance components
-    var_fixed_with_spatial <- res$summary.fixed$mean^2 %>% sum()
-    var_fixed_nospatial <- res_nosp$summary.fixed$mean^2 %>% sum()
+    # var_fixed_with_spatial <- res$summary.fixed$mean^2 %>% sum()
+    # var_fixed_nospatial <- res_nosp$summary.fixed$mean^2 %>% sum()
+    # 
+    # index_est <- inla.stack.index(stack = stk.full, tag = "est")$data
+    # fitted_total <- res$summary.fitted.values$mean[index_est]
+    # y_obs <- model_input[[phe_metric]]
+    # var_y <- var(y_obs, na.rm = TRUE)
+    # residuals <- y_obs - fitted_total
+    # var_resid <- var(residuals, na.rm = TRUE)
+    # R2_conditional <- 1 - var_resid / var_y
+    # 
+    # 
+    # fitted_fixed_only <- res_nosp$summary.fitted.values$mean[index_est]
+    # resid_fixed <- y_obs - fitted_fixed_only
+    # var_resid_fixed <- var(resid_fixed, na.rm = TRUE)
+    # R2_marginal <- 1 - var_resid_fixed / var_y
+    # 
+    # cat("Marginal R² (fixed only):", round(R2_marginal, 3), "\n")
+    # cat("Conditional R² (fixed + random):", round(R2_conditional, 3), "\n")
     
-    index_est <- inla.stack.index(stack = stk.full, tag = "est")$data
-    fitted_total <- res$summary.fitted.values$mean[index_est]
-    y_obs <- model_input[[phe_metric]]
-    var_y <- var(y_obs, na.rm = TRUE)
-    residuals <- y_obs - fitted_total
-    var_resid <- var(residuals, na.rm = TRUE)
-    R2_conditional <- 1 - var_resid / var_y
-    
-    
-    fitted_fixed_only <- res_nosp$summary.fitted.values$mean[index_est]
-    resid_fixed <- y_obs - fitted_fixed_only
-    var_resid_fixed <- var(resid_fixed, na.rm = TRUE)
-    R2_marginal <- 1 - var_resid_fixed / var_y
-    
-    cat("Marginal R² (fixed only):", round(R2_marginal, 3), "\n")
-    cat("Conditional R² (fixed + random):", round(R2_conditional, 3), "\n")
-    
-    resid_df <- data.frame(
-      lon = model_input$lon,
-      lat = model_input$lat,
-      resid = resid_fixed
-    )
-    
-    library(ggplot2)
-    ggplot(resid_df, aes(x = lon, y = lat, color = resid)) +
-      geom_point() +
-      scale_color_gradient2() +
-      coord_equal() +
-      labs(title = "Residuals from non-spatial model",
-           fill = "Residual") +
-      theme_minimal()
+    # resid_df <- data.frame(
+    #   lon = model_input$lon,
+    #   lat = model_input$lat,
+    #   resid = resid_fixed
+    # )
+    # 
+    # library(ggplot2)
+    # ggplot(resid_df, aes(x = lon, y = lat, color = resid)) +
+    #   geom_point() +
+    #   scale_color_gradient2() +
+    #   coord_equal() +
+    #   labs(title = "Residuals from non-spatial model",
+    #        fill = "Residual") +
+    #   theme_minimal()
     
     ######################################## Save the model results ########################################
     
@@ -572,7 +572,7 @@ run_inla_species = function(model_input_all, r_output_dir, phe_type, city){
   species_list <- unique(model_input_all$canonicalname)
   boundary <- switch(
     city,
-    "NY" = st_read("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp"),
+    "NewYork" = st_read("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp"),
     "DT" = st_read("~/urban-cooling/data/raw/WU/DT/City_of_Detroit_Boundary/City_of_Detroit_Boundary.shp"),
     "ST" = st_read("~/urban-cooling/data/raw/WU/ST/seattle_boundary/CityUGA.shp") %>%
       filter(CITY_NM == "Seattle"),
@@ -586,152 +586,159 @@ run_inla_species = function(model_input_all, r_output_dir, phe_type, city){
       filter(CITY_NM == "Austin"),
     stop("Invalid city abbreviation.")
   )
-  
+  failed_sp <- c()
   for (species in species_list) {
-    folder_path <- paste0(r_output_dir, "spatial_spde/",city,"/canonicalname/")
-    if (!dir.exists(folder_path)) {
-      dir.create(folder_path, recursive = TRUE)
-    }
-    species_clean <- gsub(" ", "_", species)
-    model_path <- paste0(folder_path, species_clean, "_", phe_type, ".rds")
-    
-    cat(sprintf("\n Running INLA for species: %s, phe_type: %s, city: %s\n", 
-                species, phe_type, city))
-    if (phe_type %in% c("SOS","EOS")) {
-      phe_metric <- "doy"
-    } else {
-      phe_metric <- "doy_diff"
-    }
-    
-    model_input_sf <- model_input_all %>%
-      filter(canonicalname == species) %>%
-      st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
-      st_transform(crs = st_crs(boundary)) %>%
-      mutate(lon = st_coordinates(.)[,1], lat = st_coordinates(.)[,2],
-             year = as.factor(year)) 
-    
-    model_input <- model_input_sf %>% 
-      st_drop_geometry()
-    
-    if (nrow(model_input) < 30) {
-      message(paste("Not enough unique coordinates for taxon:", species, "with", nrow(model_input), "unique points. Skipping..."))
-      next  # Skip the current iteration of the loop
-    }
-    if (file.exists(model_path)) {
-      cat(sprintf("\n File already exists for species: %s, phe_type: %s, city: %s. Skipping INLA run.\n", 
+    tryCatch({
+      folder_path <- paste0(r_output_dir, "spatial_spde/",city,"/canonicalname/")
+      if (!dir.exists(folder_path)) {
+        dir.create(folder_path, recursive = TRUE)
+      }
+      species_clean <- gsub(" ", "_", species)
+      model_path <- paste0(folder_path, species_clean, "_", phe_type, ".rds")
+      
+      cat(sprintf("\n Running INLA for species: %s, phe_type: %s, city: %s\n", 
                   species, phe_type, city))
-      next  # Skip the current iteration of the loop
-    } # if the file exists, skip to the next iteration 
-    ### Prediction (In-sample)
-    prediction <- model_input
-    coorp <- cbind(prediction$lon, prediction$lat) 
+      if (phe_type %in% c("SOS","EOS")) {
+        phe_metric <- "doy"
+      } else {
+        phe_metric <- "doy_diff"
+      }
+      
+      model_input_sf <- model_input_all %>%
+        filter(canonicalname == species) %>%
+        st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
+        st_transform(crs = st_crs(boundary)) %>%
+        mutate(lon = st_coordinates(.)[,1], lat = st_coordinates(.)[,2],
+               year = as.factor(year)) 
+      
+      model_input <- model_input_sf %>% 
+        st_drop_geometry()
+      
+      if (nrow(model_input) < 30) {
+        message(paste("Not enough unique coordinates for taxon:", species, "with", nrow(model_input), "unique points. Skipping..."))
+        next  # Skip the current iteration of the loop
+      }
+      if (file.exists(model_path)) {
+        cat(sprintf("\n File already exists for species: %s, phe_type: %s, city: %s. Skipping INLA run.\n", 
+                    species, phe_type, city))
+        next  # Skip the current iteration of the loop
+      } # if the file exists, skip to the next iteration 
+      ### Prediction (In-sample)
+      prediction <- model_input
+      coorp <- cbind(prediction$lon, prediction$lat) 
+      
+      # Load required libraries
+      ######################################## Prepare the mesh and spde ######################################## 
+      
+      ### Build the mesh 
+      coord <- cbind(model_input$lon, model_input$lat) # coordinates of observations
+      domain <- inla.nonconvex.hull(as.matrix(coord),
+                                    concave = -.07,convex = -0.05, resolution=c(100,100))
+      
+      mesh <- inla.mesh.2d(boundary = domain, loc = coord,
+                           max.edge = c(10000, 20000), 
+                           cutoff = 1000)  # prevent close points from being connected
+      
+      ### Build the spde 
+      
+      spde <- inla.spde2.matern(mesh = mesh, alpha = 2, constr = TRUE)
+      A.phe <- inla.spde.make.A(mesh = mesh, loc = coord)
+      s.index <- inla.spde.make.index(name = "spatial.field",
+                                      n.spde = spde$n.spde)
+      
+      A.phe.p <- inla.spde.make.A(mesh = mesh, loc = coorp)
+      
+      ######################################## Stack the data ########################################
+      
+      stk.e <- inla.stack(
+        tag = "est",
+        data = list(y = model_input[[phe_metric]]),
+        A = list(1, A.phe),
+        effects = list(data.frame(Intercept = rep(1, nrow(coord)),
+                                  temp = (model_input %>% select(starts_with("temp")) %>% pull()),
+                                  prcp = (model_input %>% select(starts_with("prcp")) %>% pull()),
+                                  srad = (model_input %>% select(starts_with("srad")) %>% pull()),
+                                  year = model_input$year), 
+                       s = s.index)
+      )
+      
+      
+      stk.p <- inla.stack(
+        tag = "pred",
+        data = list(y = NA),
+        A = list(1, A.phe.p),
+        effects = list(data.frame(Intercept = rep(1, nrow(coorp)),
+                                  temp = (prediction %>% select(starts_with("temp")) %>% pull()),
+                                  prcp = (prediction %>% select(starts_with("prcp")) %>% pull()),
+                                  srad = (prediction %>% select(starts_with("srad")) %>% pull()),
+                                  year = prediction$year), 
+                       s = s.index)
+      )
+      
+      # stk.full has stk.e and stk.p
+      stk.full <- inla.stack(stk.e, stk.p)
+      
+      ######################################## Run/Save the model ########################################
+      fixed.priors <- list(
+        mean = list(Intercept = 180, temp = 0, prcp = 0, srad = 0),
+        prec = list(Intercept = 1 / (40^2), temp = 1 / (5^2), prcp = 1 / (1^2), srad = 1 / (1^2))
+      )
+      ### Run the model
+      formula <- y ~ 0 + Intercept + temp + prcp + srad + 
+        f(year, model = "iid",
+          hyper = list(prec = list(
+            prior = "loggamma",
+            param = c(0.01, 0.01),
+            initial = 0, 
+            fixed = FALSE
+          ))) + f(spatial.field, model = spde)
+      
+      res <- inla(formula,
+                  family = "gaussian",
+                  data = inla.stack.data(stk.full),
+                  control.inla = list(strategy = "laplace",interpolator = "gaussian",fast = FALSE,restart = 5),
+                  control.fixed = fixed.priors,
+                  control.compute = list(cpo = TRUE, dic = TRUE, waic = TRUE),
+                  control.predictor = list(
+                    compute = TRUE,
+                    A = inla.stack.A(stk.full)))
+      # res$waic$waic
+      # summary(res)
+      
+      fix_effect <- as.data.frame(summary(res)$fixed)%>%
+        rename(Estimate = mean,Lower = `0.025quant`,Upper = `0.975quant`) %>%
+        mutate(Sig = ifelse(Lower*Upper>0, "*", "")) 
+      fix_effect <- data.frame(
+        Factor = rownames(fix_effect),  # Add Factor column
+        fix_effect, 
+        row.names = NULL  # Remove row names to avoid duplication
+      ) %>%
+        filter(Factor == "temp") %>%
+        mutate(Factor = ifelse(Factor == "temp", species, Factor))
+      
+      index <- inla.stack.index(stack = stk.full, tag = "pred")$data
+      pred_mean <- res$summary.fitted.values[index, "mean"]
+      
+      compare<- rbind(
+        Lon = coorp[, 1], Lat = coorp[, 2],
+        value = pred_mean, variable = "pred_mean", true_value = model_input[[phe_metric]]
+      )
+      
+      list(mesh = mesh,
+           res = res,
+           spde = spde,
+           stk.full = stk.full,
+           fix_effect = fix_effect,
+           compare = compare,
+           species = species) %>%
+        write_rds(model_path, compress = "gz")
+    }, error = function(e){
+      message("Something wrong", species)
+      failed_sp <- c(failed_sp, species)
+    })
     
-    # Load required libraries
-    ######################################## Prepare the mesh and spde ######################################## 
-    
-    ### Build the mesh 
-    coord <- cbind(model_input$lon, model_input$lat) # coordinates of observations
-    domain <- inla.nonconvex.hull(as.matrix(coord),
-                                  concave = -.07,convex = -0.05, resolution=c(100,100))
-    
-    mesh <- inla.mesh.2d(boundary = domain, loc = coord,
-                         max.edge = c(10000, 20000), 
-                         cutoff = 1000)  # prevent close points from being connected
-    
-    ### Build the spde 
-    
-    spde <- inla.spde2.matern(mesh = mesh, alpha = 2, constr = TRUE)
-    A.phe <- inla.spde.make.A(mesh = mesh, loc = coord)
-    s.index <- inla.spde.make.index(name = "spatial.field",
-                                    n.spde = spde$n.spde)
-    
-    A.phe.p <- inla.spde.make.A(mesh = mesh, loc = coorp)
-    
-    ######################################## Stack the data ########################################
-    
-    stk.e <- inla.stack(
-      tag = "est",
-      data = list(y = model_input[[phe_metric]]),
-      A = list(1, A.phe),
-      effects = list(data.frame(Intercept = rep(1, nrow(coord)),
-                                temp = (model_input %>% select(starts_with("temp")) %>% pull()),
-                                prcp = (model_input %>% select(starts_with("prcp")) %>% pull()),
-                                srad = (model_input %>% select(starts_with("srad")) %>% pull()),
-                                year = model_input$year), 
-                     s = s.index)
-    )
-    
-    
-    stk.p <- inla.stack(
-      tag = "pred",
-      data = list(y = NA),
-      A = list(1, A.phe.p),
-      effects = list(data.frame(Intercept = rep(1, nrow(coorp)),
-                                temp = (prediction %>% select(starts_with("temp")) %>% pull()),
-                                prcp = (prediction %>% select(starts_with("prcp")) %>% pull()),
-                                srad = (prediction %>% select(starts_with("srad")) %>% pull()),
-                                year = prediction$year), 
-                     s = s.index)
-    )
-    
-    # stk.full has stk.e and stk.p
-    stk.full <- inla.stack(stk.e, stk.p)
-    
-    ######################################## Run/Save the model ########################################
-    fixed.priors <- list(
-      mean = list(Intercept = 180, temp = 0, prcp = 0, srad = 0),
-      prec = list(Intercept = 1 / (40^2), temp = 1 / (5^2), prcp = 1 / (1^2), srad = 1 / (1^2))
-    )
-    ### Run the model
-    formula <- y ~ 0 + Intercept + temp + prcp + srad + 
-      f(year, model = "iid",
-        hyper = list(prec = list(
-          prior = "loggamma",
-          param = c(0.01, 0.01),
-          initial = 0, 
-          fixed = FALSE
-        ))) + f(spatial.field, model = spde)
-    
-    res <- inla(formula,
-                family = "gaussian",
-                data = inla.stack.data(stk.full),
-                control.inla = list(strategy = "laplace",interpolator = "gaussian",fast = FALSE,restart = 5),
-                control.fixed = fixed.priors,
-                control.compute = list(cpo = TRUE, dic = TRUE, waic = TRUE),
-                control.predictor = list(
-                  compute = TRUE,
-                  A = inla.stack.A(stk.full)))
-    # res$waic$waic
-    # summary(res)
-    
-    fix_effect <- as.data.frame(summary(res)$fixed)%>%
-      rename(Estimate = mean,Lower = `0.025quant`,Upper = `0.975quant`) %>%
-      mutate(Sig = ifelse(Lower*Upper>0, "*", "")) 
-    fix_effect <- data.frame(
-      Factor = rownames(fix_effect),  # Add Factor column
-      fix_effect, 
-      row.names = NULL  # Remove row names to avoid duplication
-    ) %>%
-      filter(Factor == "temp") %>%
-      mutate(Factor = ifelse(Factor == "temp", species, Factor))
-    
-    index <- inla.stack.index(stack = stk.full, tag = "pred")$data
-    pred_mean <- res$summary.fitted.values[index, "mean"]
-    
-    compare<- rbind(
-      Lon = coorp[, 1], Lat = coorp[, 2],
-      value = pred_mean, variable = "pred_mean", true_value = model_input[[phe_metric]]
-    )
-    
-    list(mesh = mesh,
-         res = res,
-         spde = spde,
-         stk.full = stk.full,
-         fix_effect = fix_effect,
-         compare = compare,
-         species = species) %>%
-      write_rds(model_path, compress = "gz")
   }
+  message("Failed species, ", failed_sp)
 }
 
 

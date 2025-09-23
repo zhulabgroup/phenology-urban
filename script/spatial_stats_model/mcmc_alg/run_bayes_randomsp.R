@@ -1,5 +1,5 @@
 run_mcmc_randomsp <- function(model_input_all, r_output_dir, phe_type, city, taxon_col, 
-                                 n_cores = 6) {
+                                 n_cores = 15) {
   taxon_list <- unique(model_input_all[[taxon_col]])
   
   Sys.setenv(OMP_NUM_THREADS = "1", OPENBLAS_NUM_THREADS = "1", MKL_NUM_THREADS = "1",
@@ -112,10 +112,10 @@ run_mcmc_randomsp <- function(model_input_all, r_output_dir, phe_type, city, tax
     monitors <- c("beta", "year_effect", "sp_effect")
     
     
-    ni <- 300000   # nb iterations 
+    ni <- 200000   # nb iterations 
     nt <- 10       # thinning interval
-    nb <- 250000    # nb iterations as burn-in 
-    nc <- 4         # nb chains
+    nb <- 150000    # nb iterations as burn-in 
+    nc <- 2         # nb chains
     
     
     #################### Run/Save the model ####################

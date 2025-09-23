@@ -1,11 +1,11 @@
 # taxon = "Betula nigra"
 
 run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, taxon_col, 
-                                 n_cores = 6) {
+                                 n_cores = 15) {
   taxon_list <- unique(model_input_all[[taxon_col]])
   boundary <- switch(
     city,
-    "NY" = st_read("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp"),
+    "NewYork" = st_read("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp"),
     "DT" = st_read("~/urban-cooling/data/raw/WU/DT/City_of_Detroit_Boundary/City_of_Detroit_Boundary.shp"),
     "ST" = st_read("~/urban-cooling/data/raw/WU/ST/seattle_boundary/CityUGA.shp") %>%
       filter(CITY_NM == "Seattle"),
@@ -435,34 +435,34 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
     
     ############################ Calculate WAIC ############################
     
-    calc_WAIC_spLM <- function(chains_recover, formula, data) {
-      message("Calculating WAIC...")
-      X <- model.matrix(formula, data)
-      y <- data[[all.vars(formula)[1]]]
-      n <- length(y)
-      
-      loglik_list <- lapply(chains_recover, function(chain) {
-        beta_samples <- chain$p.beta.recover.samples        # S x p
-        tau_samples  <- chain$p.theta.recover.samples[, "tau.sq"]  # S x 1
-        w_samples    <- t(chain$p.w.recover.samples)         # 转为 S x n
-        S <- nrow(beta_samples)
-        
-        loglik_samples <- matrix(NA, nrow = S, ncol = n)
-        for (s in 1:S) {
-          mu_s <- X %*% beta_samples[s, ] + w_samples[s, ]
-          loglik_samples[s, ] <- dnorm(y, mean = mu_s, sd = sqrt(tau_samples[s]), log = TRUE)
-        }
-        loglik_samples
-      })
-      
-      loglik_samples_all <- do.call(rbind, loglik_list)
-      lppd <- sum(log(colMeans(exp(loglik_samples_all))))
-      p_waic <- sum(apply(loglik_samples_all, 2, var))
-      waic <- -2 * (lppd - p_waic)
-      return(waic)
-    }
-    
-    res_waic <- calc_WAIC_spLM(chains_recover = res$chains_recover, formula = sp_formula, data = tavg_phe_df)
+    # calc_WAIC_spLM <- function(chains_recover, formula, data) {
+    #   message("Calculating WAIC...")
+    #   X <- model.matrix(formula, data)
+    #   y <- data[[all.vars(formula)[1]]]
+    #   n <- length(y)
+    #   
+    #   loglik_list <- lapply(chains_recover, function(chain) {
+    #     beta_samples <- chain$p.beta.recover.samples        # S x p
+    #     tau_samples  <- chain$p.theta.recover.samples[, "tau.sq"]  # S x 1
+    #     w_samples    <- t(chain$p.w.recover.samples)         # 转为 S x n
+    #     S <- nrow(beta_samples)
+    #     
+    #     loglik_samples <- matrix(NA, nrow = S, ncol = n)
+    #     for (s in 1:S) {
+    #       mu_s <- X %*% beta_samples[s, ] + w_samples[s, ]
+    #       loglik_samples[s, ] <- dnorm(y, mean = mu_s, sd = sqrt(tau_samples[s]), log = TRUE)
+    #     }
+    #     loglik_samples
+    #   })
+    #   
+    #   loglik_samples_all <- do.call(rbind, loglik_list)
+    #   lppd <- sum(log(colMeans(exp(loglik_samples_all))))
+    #   p_waic <- sum(apply(loglik_samples_all, 2, var))
+    #   waic <- -2 * (lppd - p_waic)
+    #   return(waic)
+    # }
+    # 
+    # res_waic <- calc_WAIC_spLM(chains_recover = res$chains_recover, formula = sp_formula, data = tavg_phe_df)
     
     ############################ Plot covariance function ############################
     
@@ -525,7 +525,7 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
     
     modelMCMCrun <- list(
       samples = res$beta_mcmc_list,
-      WAIC = list(WAIC = res_waic),
+      # WAIC = list(WAIC = res_waic),
       converge = converge$psrf[1],
       CorDF = CorDF,
       surf_sf = surf_sf

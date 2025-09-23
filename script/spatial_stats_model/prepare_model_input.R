@@ -1,5 +1,5 @@
-# city <- "NY"
-# source <- "WU_buffer" # "WU_buffer" or "Grid" or "WU_surface"
+# city <- "NewYork"
+# source <- "Grid" # "WU_buffer" or "Grid" or "WU_surface"
 # taxa_col <- "canonicalname" # "canonicalname" or "genus"
 # phe_type <- "SOS" # "SOS", "EOS"
 
@@ -22,9 +22,8 @@ prepare_data <- function(city, source, taxa_col, phe_type) {
         st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F) |>
         st_transform(crs = 9311)
     } else if (source == "Grid") { # UHAT and Daymet
-       input_dir <- list.files(
-        # path = "~/phenology-urban/data/proc/tree_climate/WU_surface/",
-        path = paste0("~/phenology-urban/data/proc/urban/", city, "/WU_surface/"), # For example NY
+       input_dir <- list.files(,
+        path = paste0("~/phenology-urban/data/proc/tree_climate/Grid/"), # For example NY
         pattern = paste0("^", city, ".*\\.rds$"),
         full.names = TRUE)
        tree_climate <- read_rds(input_dir) |>
@@ -58,7 +57,7 @@ prepare_data <- function(city, source, taxa_col, phe_type) {
       st_drop_geometry()
     
     #Join to phenology data
-    file_list <- list.files(path = "~/lab-data/datasets/vegetation/PS/urban/doy", pattern = paste0("^doy_",city,"_.*\\.rds$"), full.names = TRUE)
+    file_list <- list.files(path = "/scratch/zhukai_root/zhukai0/jializ/PS/CONUS_urban/doy/", pattern = paste0("^doy_",city,"_.*\\.rds$"), full.names = TRUE)
     data_list <- file_list %>%
       map(~ read_rds(.x))
     all_doy <- bind_rows(data_list)
@@ -83,7 +82,7 @@ prepare_species_data <- function(phe_type, tree_climate_phe) {
     thres <- 0.5
     model_input <- tree_climate_phe %>%
       filter(direction == !!direction & thres == !!thres) %>%
-      select(id, taxa, lon, lat, year, doy, hex_id, ends_with("winter")) %>%
+      select(id, canonicalname = taxa, lon, lat, year, doy, hex_id, ends_with("winter")) %>%
       drop_na()
   } else if (phe_type == "EOS") {
     phe_metric <- "doy"
@@ -91,7 +90,7 @@ prepare_species_data <- function(phe_type, tree_climate_phe) {
     thres <- 0.5
     model_input <- tree_climate_phe %>%
       filter(direction == !!direction & thres == !!thres) %>%
-      select(id, taxa, lon, lat, year, doy, hex_id, ends_with("summer")) %>%
+      select(id, canonicalname = taxa, lon, lat, year, doy, hex_id, ends_with("summer")) %>%
       drop_na()
   } else if (phe_type == "GreenUp") {
     phe_metric <- "doy_diff"
@@ -106,7 +105,7 @@ prepare_species_data <- function(phe_type, tree_climate_phe) {
     model_input = tree_climate_phe %>%
       filter(direction == !!direction & thres == 0.2) %>%
       left_join(diff, by = c("year", "id")) %>%
-      select(id, taxa, lon, lat, year, doy_diff, hex_id, ends_with("spring")) %>%
+      select(id, canonicalname = taxa, lon, lat, year, doy_diff, hex_id, ends_with("spring")) %>%
       drop_na()
     
   } else {
@@ -121,34 +120,13 @@ prepare_species_data <- function(phe_type, tree_climate_phe) {
     model_input = tree_climate_phe %>%
       filter(direction == !!direction & thres == 0.2) %>%
       left_join(diff, by = c("year", "id")) %>%
-      select(id, taxa, lon, lat, year, doy_diff, hex_id, ends_with("fall")) %>%
+      select(id, canonicalname = taxa, lon, lat, year, doy_diff, hex_id, ends_with("fall")) %>%
       drop_na()
   }
-  
-  # Delete this step for general cities
-  gbif_taxon_keys <- model_input$taxa %>% # get the first column of the data.frame
-    unique()  %>% # remove duplicates
-    name_backbone_checklist(kingdom = "Plantae", phylum = "Tracheophyta") %>%
-    filter(kingdom == "Plantae", phylum == "Tracheophyta") |>
-    filter(status %in% c("ACCEPTED", "SYNONYM") & rank == "SPECIES") %>% # get only accepted names and remove anything that might have matched to a non-species
-    select(canonicalName, verbatim_name) # check for missing values
-  
-  model_input_top_10_species <- model_input %>%
-    left_join(gbif_taxon_keys, by = c("taxa" = "verbatim_name")) %>% # join the GBIF taxon keys
-    filter(canonicalName %in% (model_input %>%
-                                 left_join(gbif_taxon_keys, by = c("taxa" = "verbatim_name")) %>%
-                                 drop_na(canonicalName) %>% 
-                                 group_by(canonicalName) %>%
-                                 summarise(n = n(), .groups = "drop") %>%
-                                 filter(n >= 30) %>%
-                                 # arrange(desc(n)) %>%
-                                 # head(10) %>% # get the top 10 species, otherwise all sp
-                                 pull(canonicalName))) |> # filter to the taxa in the original data)
-    rename(canonicalname = canonicalName)
-  return(model_input_top_10_species)
+  return(model_input)
 }
 
-prepare_genus_data <- function(phe_type, points_in_buffer, all_sites_temp, srad_daily, source) {
+prepare_genus_data <- function(phe_type, tree_climate_phe) {
   if (phe_type == "SOS") {
     phe_metric <- "doy"
     direction <- "up"

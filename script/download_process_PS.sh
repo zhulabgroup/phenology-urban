@@ -1,13 +1,13 @@
 #!/bin/bash
-#SBATCH --job-name=download_process_PS_Down_28_30
+#SBATCH --job-name=download_process_down_PS_61_65
 #SBATCH --account=zhukai0                   # Account name
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err
 #SBATCH --array=1
 #SBATCH --time=24:00:00
 #SBATCH --partition=standard
-#SBATCH --mem=13G
-#SBATCH --cpus-per-task=13
+#SBATCH --mem=25G
+#SBATCH --cpus-per-task=31
 #SBATCH --mail-user=jializ@umich.edu        # Where to send mail
 #SBATCH --mail-type=BEGIN,END               # Mail notifications at the start and end of the job
 
