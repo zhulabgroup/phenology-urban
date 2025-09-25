@@ -127,6 +127,7 @@ for (city in cities) {
   }
   # run for all (year, season) pairs
   for (yr in years_to_do) {
+    message(paste0("Processing year", yr))
     for (seas in seasons_to_do) {
       build_UHAT_tif(yr, seas, out_dir)
     }
