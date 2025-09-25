@@ -1,15 +1,20 @@
 ##### Save the tif of seasonal average temperature #####
 library(zhulabtools)
-load_packages(c("tidyverse", "ggplot2", "sf", "spBayes", "INLA", "lubridate", "terra"))
+load_packages(c("tidyverse", "ggplot2", "sf", "lubridate", "terra"))
 select <- dplyr::select
 
-tree_dir <- "~/phenology-urban/data/raw/CONUS/StreetTrees/cleaned_ps_input/"
+tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
 cities <- gsub("\\.rds$", "", basename(rds_files))
 
 for (city in cities) {
   message(paste0("Processing city: ", city))
-  raw_uhat <- read_csv(paste0("~/lab-data/datasets/climate/UHAT/raw/", city, ".csv"))
+  uhat_file <- paste0("~/lab-data/datasets/climate/UHAT/raw/", city, ".csv")
+  if (!file.exists(uhat_file)) {
+    message(paste0("No UHAT found for: ", city))
+    next  # Skip the current iteration of the loop
+  }
+  raw_uhat <- read_csv(uhat_file)
   UHAT_climate <- raw_uhat |>
     mutate(season = case_when(
       month(time) %in% 3:5 ~ "spring",

@@ -26,10 +26,14 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
   on.exit(parallel::stopCluster(cl), add = TRUE)
   registerDoParallel(cl)
   parallel::clusterEvalQ(cl, { library(sf); options(sf_use_s2 = FALSE) })
-  parallel::clusterExport(cl, envir = environment())
+  parallel::clusterExport(cl, varlist = c("r_output_dir","city","taxon_col","phe_type","model_input_all"),
+                          envir = environment())
   
   `%dopar%` <- foreach::`%dopar%`
-  res <- foreach(taxon = taxon_list, .packages = c(
+  
+  model_split <- split(model_input_all, model_input_all[[taxon_col]])
+  res <- foreach(taxon = taxon_list, .export = c("r_output_dir","city","taxon_col","phe_type","model_split"), 
+                 .packages = c(
     "spBayes", "dplyr", "data.table","here","lubridate", "sf",
     "tidyverse", "coda", "terra", "fields", "ggplot2", "RANN"
   ),
@@ -40,15 +44,15 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
     ############################ Set input ############################
     taxon_clean <- gsub(" ", "_", taxon)
     out_dir <- paste0(r_output_dir, "/spatial_mat/",city,"/", taxon_col,"/")
-    if (!dir.exists(out_dir)) {
-      dir.create(out_dir, recursive = TRUE)
-    }
+    # if (!dir.exists(out_dir)) {
+    #   dir.create(out_dir, recursive = TRUE)
+    # }
     model_path <- paste0(out_dir, taxon_clean, "_", phe_type, ".rds")
     
     if (file.exists(model_path)) {
       next  # Skip the current iteration of the loop
     }
-    model_input_sf <- model_input_all |>
+    model_input_sf <- model_split[[taxon]] |>
       filter(!!sym(taxon_col) == !!taxon) |>
       mutate(
         lon_jitter = lon,
@@ -532,7 +536,6 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
       # mean_logml = mean(res_logml)
     )
     write_rds(modelMCMCrun, file = model_path, compress = "gz")
-    
     list(taxon = taxon, ok = TRUE)
   }
   

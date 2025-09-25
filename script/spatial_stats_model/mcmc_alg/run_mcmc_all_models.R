@@ -12,13 +12,15 @@ r_output_dir <- Sys.getenv("R_OUTPUT_DIR")
 city <- Sys.getenv("CITY")
 
 # r_input_dir <- "~/phenology-urban/data/"
-# r_output_dir <- "~/phenology-urban/data/proc/model_output/final_models/"
-# city = "NY"
+# r_output_dir <- "~/phenology-urban/data/proc/model_output/final_models_Grid/"
+# city = "NewYork"
 # phe_type = "SOS"
 
 select <- dplyr::select
 r_output_dir <- paste0(r_output_dir, "mcmc/")
 source(here("script/spatial_stats_model/prepare_model_input.R"))
+
+
 
 ################################## run random-group model ##################################
 source("script/spatial_stats_model/mcmc_alg/run_bayes_randomsp.R")
@@ -45,6 +47,7 @@ for (phe_type in c("SOS", "EOS")) {
   # model_input_all <- prepare_data(city, source = "WU_surface", taxa_col= "genus", phe_type = phe_type)
   # run_mcmc_spatial_mat(model_input_all, r_output_dir, phe_type, city, taxon_col = "genus")
 }
+
 # 
 # ################################## run non-spatial model ##################################
 # 
