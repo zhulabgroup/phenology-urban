@@ -212,6 +212,7 @@ p_geo + p_pca +
 ### Just phenology variation
 
 Distribution of phenology variation measured by Tukey’s whisker range, with each sample corresponding to a City–Species–Year combination.
+
 ```{r}
 source(here("script/spatial_stats_model/prepare_data_genus_species.R"))
 cities = c("NY", "TP", "ST", "HT", "DV")
@@ -285,12 +286,12 @@ whisker_sp$city_density / whisker_sp$cities_histogram +
 ### Phenology variation and temperature variation (one city)
 
 ```{r}
-source(here("script/spatial_stats_model/prepare_data_genus_species.R"))
-city = "NY"
+source(here("script/spatial_stats_model/prepare_model_input.R"))
+city = "Albuquerque"
 
 plot_phe_temp_city <- function(city, taxon_col){
   plots <- lapply(c("SOS", "EOS"), function(phe_type) {
-    model_input_all <- prepare_data(city = city, source = "WU", taxa_col= taxon_col, phe_type = phe_type)
+    model_input_all <- prepare_data(city, source = "Grid", taxa_col= taxon_col, phe_type = phe_type)
   
     fixed_taxa <- unique(model_input_all[[taxon_col]]) |>
       sort()

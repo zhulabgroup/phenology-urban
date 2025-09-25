@@ -28,13 +28,13 @@ where $y(\mathbf{s}_i, \mathbf{t})$ represents the phenological event (e.g., SOS
 
 $\mathbf{x}_{\mathbf{s}_i,\mathbf{t}} = [1, \text{AvgTemp}_{\mathbf{s}_i,\mathbf{t}}, \text{AvgPrecp}_{\mathbf{s}_i,\mathbf{t}}, \text{AvgSrad}_{\mathbf{s}_i,\mathbf{t}}]$ is the vector of predictors, where each variable represents the preseason average (winter for SOS and summer for EOS, respectively).
 
-$\boldsymbol{\beta} = (\beta_0, \beta_1, \beta_2, \beta_3)^\top$ are the regression coefficients for the intercept and covariates. 
+$\boldsymbol{\beta} = (\beta_0, \beta_1, \beta_2, \beta_3)^\top$ are the regression coefficients for the intercept and covariates.
 
-$\beta_1$ is the coefficient for the average temperature, which is the main interest in this study. 
+$\beta_1$ is the coefficient for the average temperature, which is the main interest in this study.
 
 $w(\mathbf{s}_i)$ is the spatial random effect which accounts for spatial autocorrelation among locations
 
-$u(\mathbf{t})$ is the temporal random effect which captures random year effect. 
+$u(\mathbf{t})$ is the temporal random effect which captures random year effect.
 
 $\epsilon(\mathbf{s}_i, \mathbf{t})$ represents the residual error term.
 
@@ -136,7 +136,7 @@ wu_uhat_winter/
 
 #### U-HAT vs. Daymet
 
-Similarly, I ploted [@fig-compare-daymet-uhat] below to compare the Daymet data and the U-HAT data. Generally, U-HAT reports higher temperatures and larger variance than Daymet in both winter and summer (as indicated by most points falling beyond the 1:1 reference line), which means UHAT could capture the urban heat island effect. 
+Similarly, I ploted [@fig-compare-daymet-uhat] below to compare the Daymet data and the U-HAT data. Generally, U-HAT reports higher temperatures and larger variance than Daymet in both winter and summer (as indicated by most points falling beyond the 1:1 reference line), which means UHAT could capture the urban heat island effect.
 
 ```{r}
 #| label: fig-compare-daymet-uhat
@@ -241,14 +241,13 @@ daymet_wu_winter/
   daymet_wu_summer
 ```
 
-
 ## Summary
 
 This document records the differences between climate datasets, to evaluate the suitability of each dataset and inform future data selection.
 
 -   **Temperature**: Comparisons with both WU and Daymet show that U-HAT better captures urban heat island effects and fine-scale thermal heterogeneity, while WU is prone to outliers and Daymet underestimates urban temperatures. Thus, U-HAT provides the most reliable dataset for intra-urban temperature analyses.
 
--   **Precipitation**: Comparisons between WU and Daymet indicate that Daymet precipitation is generally higher, while WU shows a wider spread that may reflect outliers rather than true localized events. Since urban precipitation is less influenced by urban effects, Daymet provides a more reliable dataset with fewer outliers. 
+-   **Precipitation**: Comparisons between WU and Daymet indicate that Daymet precipitation is generally higher, while WU shows a wider spread that may reflect outliers rather than true localized events. Since urban precipitation is less influenced by urban effects, Daymet provides a more reliable dataset with fewer outliers.
 
 -   **Shortwave radiation**: Similarly, for shortwave radiation, where available data come primarily from Daymet and HUMID, I rely on Daymet for the same reason.
 
@@ -294,8 +293,9 @@ ggplot(tif_df, aes(x = x, y = y, fill = value)) +
 #| eval: true
 
 phe_types <- c("SOS", "EOS")
-city = "NY"
-plot_coef_sp_city <- function(r_output_dir, phe_type){
+city = "NewYork"
+
+prepare_coef_summary <- function(r_output_dir, phe_type){
   pattern = paste0(phe_type,"\\.rds$")
   files <- list.files(r_output_dir, pattern = pattern, full.names = TRUE)
   coef_summary <- data.frame()
@@ -319,7 +319,11 @@ plot_coef_sp_city <- function(r_output_dir, phe_type){
   coef_summary <- coef_summary %>%
     mutate(SigAlpha = ifelse(Sig == "*", 1, 0.2)) %>%
     mutate(Color = ifelse(Estimate >0, "#0D0887FF" , "#FCA636FF"))
-  
+  write_rds(coef_summary, paste0(r_output_dir, phe_type, "_summary.rds"))
+}
+
+plot_coef_sp_city <- function(r_output_dir, phe_type){
+  coef_summary <- read_rds(paste0(r_output_dir, phe_type, "_summary.rds"))
   p_coef <-  ggplot(coef_summary, aes(x = factor(Factor, levels = rev(Factor)), 
                                y = Estimate,
                                colour = Color)) +
@@ -345,7 +349,7 @@ plot_coef_sp_city <- function(r_output_dir, phe_type){
   ))
 }
 
-r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_Grid/inla/spatial_spde/NY/canonicalname/")
+r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_Grid/inla/spatial_spde/NewYork/canonicalname/")
 plots_coef <- list()
 assess_species <- data.frame()
 
@@ -360,7 +364,7 @@ ny_sp = wrap_plots(plots_coef, ncol = 2)
 ny_sp
 ```
 
-### MCMC, random group - most conservative 
+### MCMC, random group - most conservative
 
 ```{r}
 #| label: fig-random-mcmc
@@ -518,6 +522,3 @@ s_plot_obj_srad <- generate_mcmc_plot(s_dir_path,  coef = "beta[4]", fixed_sp = 
   (s_plot_obj_srad$coef_summary_plot +  ggtitle("Shortwave radiation")) + (s_plot_obj_srad$coef_density_plot +  ggtitle("Shortwave radiation")) +
   plot_layout(ncol = 2, nrow =3)
 ```
-
-
-
