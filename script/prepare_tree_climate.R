@@ -275,6 +275,17 @@ prepare_tree_Grid_climate <- function(city){
   }
   uhat_climate <- map(uhat_files, function(file) {
     r <- rast(file)
+    dir_path <- "~/lab-data/datasets/climate/UHAT/grid"
+    tifs <- list.files(
+      dir_path,
+      pattern = "^MYD11A1\\..*LST_Day_1km\\.tif$",
+      full.names = TRUE
+    )
+    r_template <- terra::rast(tifs[1])
+    crs(r) <- crs(r_template)  # ensure correct CRS
+    tree_location <- tree_location|>
+      st_transform(crs(r))
+    
     vals <- terra::extract(r, tree_location, ID = FALSE)
     fname <- basename(file)
     fname <- str_remove(fname, "\\.tif$")
