@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=download_process_doy_PS_ST
+#SBATCH --job-name=download_process_down_PS_TP
 #SBATCH --account=zhukai0                   # Account name
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err

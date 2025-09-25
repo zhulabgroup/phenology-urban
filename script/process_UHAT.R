@@ -142,33 +142,32 @@ library(ggplot2)
 library(patchwork)    # wrap_plots
 library(stringr)
 library(scales)       # oob = squish
-# 可选：更好看的连续色带
-# install.packages("viridis")
 library(viridis)
+library(leaflet)
 
-tif_files <- list.files(out_dir, pattern = "_winter_2022\\.tif$", full.names = TRUE)
-stopifnot(length(tif_files) > 0)
 
-rng <- do.call(rbind, lapply(tif_files, function(f) {
-  m <- terra::minmax(terra::rast(f))
-  data.frame(min = m[1, 1], max = m[2, 1])
-}))
+tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
+rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
+cities <- gsub("\\.rds$", "", basename(rds_files))
 
-plot_one <- function(f) {
+plot_one <- function(city) {
+  f <- paste0(out_dir, "/", city, "_winter_2020.tif")
   r <- terra::rast(f)
   r1 <- r[[1]]
   df <- as.data.frame(r1, xy = TRUE, na.rm = TRUE)
   val_col <- names(df)[3]
-  
-  ggplot(df, aes(x = x, y = y, fill = .data[[val_col]])) +
-    geom_raster() +
+  tree_rds <- read_rds(paste0(tree_dir, city, ".rds"))
+  tree_sf <- tree_rds |>
+    st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = FALSE)
+    
+  ggplot() +
+    geom_tile(data = df, aes(x = x, y = y, fill = .data[[val_col]])) +
     coord_equal() +
-    scale_fill_viridis(
-      oob = scales::squish,
-      name = val_col
-    ) +
+    scale_fill_viridis(oob = scales::squish, name = val_col) +
+    geom_sf(data = tree_sf, color = "black", fill = "black",
+            size = 0.6, alpha = 0.8, shape = 16) +
     labs(
-      title = str_replace(basename(f), "_2020_summer.tif", ""),
+      title = str_replace(basename(f), ".tif", ""),
       x = NULL, y = NULL
     ) +
     theme_minimal(base_size = 10) +
@@ -180,14 +179,67 @@ plot_one <- function(f) {
 }
 
 
-city_plots <- lapply(tif_files, plot_one)
-final_plot <- wrap_plots(city_plots, ncol = 8) &
+city_plots <- lapply(cities, plot_one)
+final_plot <- wrap_plots(city_plots[15:17], ncol = 8) &
   theme(plot.margin = margin(6, 6, 6, 6))
+final_plot
+
 
 test <- Moab |>
   group_by(lat, lon) |>
   summarize(count = n())
 
+plot_one_leaflet <- function(city, out_dir, tree_dir,
+                             tif_suffix = "_winter_2020.tif",
+                             raster_opacity = 0.8,
+                             point_radius = 3,
+                             point_color = "black",
+                             point_opacity = 0.8) {
+  
+  f <- file.path(out_dir, paste0(city, tif_suffix))
+  stopifnot(file.exists(f))
+  r <- terra::rast(f)
+  r1 <- r[[1]]
+  r1_ll <- terra::project(r1, "EPSG:4326")   # 投影到经纬度
+  rr <- raster::raster(r1_ll)                # 转为 raster 对象以便 addRasterImage
+  
+  # 2) 颜色映射（使用 viridis）
+  vals <- raster::values(rr)
+  pal <- colorNumeric(viridis(256), domain = vals, na.color = "transparent")
+  
+  # 3) 读树点并确保为 WGS84
+  tree_rds_path <- file.path(tree_dir, paste0(city, ".rds"))
+  stopifnot(file.exists(tree_rds_path))
+  tree_rds <- readr::read_rds(tree_rds_path)
+  
+  # 如果列名不是 lon/lat，请改成你实际的列名
+  tree_sf <- st_as_sf(tree_rds, coords = c("lon", "lat"), crs = 4326, remove = FALSE)
+  
+  # 4) 计算地图范围（用栅格范围）
+  ex <- terra::ext(r1_ll)
+  # xmin, xmax, ymin, ymax
+  xmin <- ex[1]; xmax <- ex[2]; ymin <- ex[3]; ymax <- ex[4]
+  
+  # 5) 组装 Leaflet 地图
+  leaflet() |>
+    addProviderTiles(providers$OpenStreetMap) |>
+    addRasterImage(rr, colors = pal, opacity = raster_opacity, project = FALSE) |>
+    addCircleMarkers(
+      data = tree_sf,
+      lng = ~lon, lat = ~lat,
+      radius = point_radius,
+      fillColor = point_color, color = point_color,
+      fillOpacity = point_opacity, opacity = point_opacity,
+      stroke = FALSE
+    ) |>
+    fitBounds(lng1 = xmin, lat1 = ymin, lng2 = xmax, lat2 = ymax) |>
+    addControl(html = htmltools::tags$div(
+      style = "background: rgba(255,255,255,0.85); padding: 6px 8px; border-radius: 4px; font-size: 12px;",
+      htmltools::tags$b(str_replace(basename(f), ".tif", ""))
+    ),
+    position = "topleft")
+}
+plot_one_leaflet(city = "Moab",out_dir,tree_dir)
 
 
 
