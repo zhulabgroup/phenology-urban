@@ -7,7 +7,7 @@ tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
 cities <- gsub("\\.rds$", "", basename(rds_files))
 
-for (city in cities) {
+for (city in cities[40:76]) {
   message(paste0("Processing city: ", city))
   uhat_file <- paste0("~/lab-data/datasets/climate/UHAT/raw/", city, ".csv")
   if (!file.exists(uhat_file)) {
@@ -133,6 +133,60 @@ for (city in cities) {
     }
   }
 }
+
+
+
+library(terra)        # 读tif
+library(dplyr)
+library(ggplot2)
+library(patchwork)    # wrap_plots
+library(stringr)
+library(scales)       # oob = squish
+# 可选：更好看的连续色带
+# install.packages("viridis")
+library(viridis)
+
+tif_files <- list.files(out_dir, pattern = "_winter_2022\\.tif$", full.names = TRUE)
+stopifnot(length(tif_files) > 0)
+
+rng <- do.call(rbind, lapply(tif_files, function(f) {
+  m <- terra::minmax(terra::rast(f))
+  data.frame(min = m[1, 1], max = m[2, 1])
+}))
+
+plot_one <- function(f) {
+  r <- terra::rast(f)
+  r1 <- r[[1]]
+  df <- as.data.frame(r1, xy = TRUE, na.rm = TRUE)
+  val_col <- names(df)[3]
+  
+  ggplot(df, aes(x = x, y = y, fill = .data[[val_col]])) +
+    geom_raster() +
+    coord_equal() +
+    scale_fill_viridis(
+      oob = scales::squish,
+      name = val_col
+    ) +
+    labs(
+      title = str_replace(basename(f), "_2020_summer.tif", ""),
+      x = NULL, y = NULL
+    ) +
+    theme_minimal(base_size = 10) +
+    theme(
+      panel.grid = element_blank(),
+      plot.title = element_text(hjust = 0.5, face = "bold"),
+      legend.position = "none"
+    )
+}
+
+
+city_plots <- lapply(tif_files, plot_one)
+final_plot <- wrap_plots(city_plots, ncol = 8) &
+  theme(plot.margin = margin(6, 6, 6, 6))
+
+test <- Moab |>
+  group_by(lat, lon) |>
+  summarize(count = n())
 
 
 
