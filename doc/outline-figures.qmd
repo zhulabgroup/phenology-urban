@@ -287,7 +287,7 @@ whisker_sp$city_density / whisker_sp$cities_histogram +
 
 ```{r}
 source(here("script/spatial_stats_model/prepare_model_input.R"))
-city = "Albuquerque"
+city = "Moab"
 
 plot_phe_temp_city <- function(city, taxon_col){
   plots <- lapply(c("SOS", "EOS"), function(phe_type) {
@@ -332,7 +332,7 @@ plot_phe_temp_city <- function(city, taxon_col){
   return(plot)
 }
 
-p <- plot_phe_temp_city(city, "genus") / plot_phe_temp_city(city, "canonicalname") +
+p <- plot_phe_temp_city(city, "genus") / plot_phe_temp_city(city,taxa_col=  "canonicalname") +
   plot_annotation(title = paste0("Phenology variation across species in ",city))
 ```
 
