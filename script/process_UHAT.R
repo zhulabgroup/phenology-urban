@@ -191,13 +191,13 @@ plot_one <- function(city, out_dir, tree_dir,
   df <- as.data.frame(r_aligned, xy = TRUE, na.rm = TRUE)
   val_col <- names(df)[3]
   ggplot() +
-    geom_tile(data = df, aes(x = x, y = y, fill = .data[[val_col]])) +
-    coord_equal() +
-    scale_fill_viridis(oob = scales::squish, name = val_col) +
     geom_sf(data = tree_sf, color = "black", fill = "black",
-            size = 0.6, alpha = 0.8, shape = 16) +
+            size = 0.1, alpha = 0.8, shape = 16) +
     geom_sf(data = UHAT_climate_point, color = "red", fill = "red",
-            size = 1.5, alpha = 0.7, shape = 16) +
+            size = 0.5, alpha = 0.7, shape = 16) +
+    geom_tile(data = df, aes(x = x, y = y, fill = .data[[val_col]]), alpha = 0.8) +
+    # coord_equal() +
+    scale_fill_viridis(oob = scales::squish, name = val_col) +
     labs(
       title = str_replace(basename(f), ".tif", ""),
       x = NULL, y = NULL
@@ -208,8 +208,31 @@ plot_one <- function(city, out_dir, tree_dir,
       plot.title = element_text(hjust = 0.5, face = "bold"),
       legend.position = "none"
     )
+  # 
+  # leaflet() |>
+  #   addProviderTiles(providers$OpenStreetMap,
+  #                    options = providerTileOptions(opacity = 0.9)) |>
+  #   addRasterImage(r_aligned |> project("EPSG:4326"), colors = pal, opacity = 0.7, project = FALSE) |>
+  #   addCircleMarkers(
+  #     data = tree_sf,
+  #     lng = ~lon, lat = ~lat,
+  #     radius = 2,
+  #     fillColor = "black", color = "black",
+  #     fillOpacity = 0.4, opacity = 0.4,
+  #     stroke = FALSE
+  #   ) |>
+  #   addCircleMarkers(
+  #     data = UHAT_climate_point,
+  #     lng = ~lon, lat = ~lat,
+  #     radius = 3,
+  #     fillColor = "red", color = "red",
+  #     fillOpacity = 0.6, opacity = 0.6,
+  #     stroke = FALSE
+  #   ) |>
+  #   addScaleBar(position = "bottomleft", options = scaleBarOptions(metric = TRUE, imperial = FALSE))
+  
 }
-plot_one(city = "Nephi", out_dir, tree_dir)
+plot_one(city = "Aurora", out_dir, tree_dir)
 
 city_plots <- lapply(cities, plot_one)
 final_plot <- wrap_plots(city_plots[15:17], ncol = 8) &
