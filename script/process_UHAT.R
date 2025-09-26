@@ -163,8 +163,8 @@ plot_one <- function(city, out_dir, tree_dir,
   # r <- crop(r, e, snap = "out")
   vals <- raster::values(r_aligned)
   pal <- colorNumeric(viridis(256), domain = vals, na.color = "transparent")
-  
-  UHAT_climate_point <-  read_csv(paste0("~/lab-data/datasets/climate/UHAT/raw/", city, ".csv")) |>
+
+  UHAT_climate_point <-  read_csv(paste0("~/lab-data/datasets/climate/UHAT/raw/", city, ".csv"), show_col_types = FALSE) |>
     mutate(season = case_when(
       month(time) %in% 3:5 ~ "spring",
       month(time) %in% 6:8 ~ "summer",
@@ -194,7 +194,7 @@ plot_one <- function(city, out_dir, tree_dir,
     geom_sf(data = tree_sf, color = "black", fill = "black",
             size = 0.1, alpha = 0.8, shape = 16) +
     geom_sf(data = UHAT_climate_point, color = "red", fill = "red",
-            size = 0.5, alpha = 0.7, shape = 16) +
+            size = 2, alpha = 0.7, shape = 16) +
     geom_tile(data = df, aes(x = x, y = y, fill = .data[[val_col]]), alpha = 0.8) +
     # coord_equal() +
     scale_fill_viridis(oob = scales::squish, name = val_col) +
@@ -232,10 +232,12 @@ plot_one <- function(city, out_dir, tree_dir,
   #   addScaleBar(position = "bottomleft", options = scaleBarOptions(metric = TRUE, imperial = FALSE))
   
 }
-plot_one(city = "Aurora", out_dir, tree_dir)
+plot_one(city = "Bozeman", out_dir, tree_dir, yr = 2014, seas = "summer")
 
-city_plots <- lapply(cities, plot_one)
-final_plot <- wrap_plots(city_plots[15:17], ncol = 8) &
+city_plots <- lapply(cities, function(city) {
+  plot_one(city = city, out_dir = out_dir, tree_dir = tree_dir, yr = 2014, seas = "winter")
+})
+final_plot <- wrap_plots(city_plots, ncol = 11) &
   theme(plot.margin = margin(6, 6, 6, 6))
 final_plot
 
