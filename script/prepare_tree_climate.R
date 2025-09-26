@@ -256,6 +256,7 @@ prepare_tree_Grid_climate <- function(city){
   
   tree_dir <- paste0("~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/", city, ".rds")
   tree_location <- read_rds(tree_dir) |>
+    filter(!(lon == "NaN") & !(lat == "NaN")) |>
     st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F)
   
   ###### Daymet shortwave radiation #######
