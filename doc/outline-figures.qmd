@@ -339,21 +339,25 @@ p <- plot_phe_temp_city(city, "genus") / plot_phe_temp_city(city,taxa_col=  "can
 ### Phenology variation plus temperature variation (across cities)
 
 ```{r}
-source(here("script/spatial_stats_model/prepare_data_genus_species.R"))
-cities = c("NY", "TP", "ST", "HT", "DV")
+tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
+rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
+cities <- gsub("\\.rds$", "", basename(rds_files))
 
-plot_phe_temp_cities <- function(cities, taxon_col){
+source(here("script/spatial_stats_model/prepare_model_input.R"))
+
+plot_phe_temp_cities <- function(cities, taxon_col, color_col = "city"){
   plots <- lapply(c("SOS", "EOS"), function(phe_type) {
     all_city_input <- lapply(cities, function(city) {
-      # message(paste0("Reading data in ", city))
-      prepare_data(city = city, source = "WU", taxa_col= taxon_col, phe_type = phe_type) |>
+      message(paste0("Reading data in ", city))
+      prepare_data(city, source = "Grid", taxa_col= taxon_col, phe_type = phe_type) |>
         mutate(city = city)
     })|> 
-      bind_rows()
+      bind_rows()|>
+      mutate(genus = str_extract(.data[[taxon_col]], "^[^ ]+"))
   
-    fixed_city <- unique(all_city_input$city) |>
+    fixed_taxa <- unique(all_city_input[[color_col]]) |>
       sort()
-    color_palette <- setNames(viridis(length(fixed_city)), fixed_city)
+    color_palette <- setNames(viridis(length(fixed_taxa)), fixed_taxa)
     
     temp_col = grep("^temp", names(all_city_input), value = TRUE)
     doy_temp_summary <- all_city_input %>%
@@ -368,13 +372,14 @@ plot_phe_temp_cities <- function(cities, taxon_col){
         lower_whisker_t = max(quantile(.data[[temp_col]], 0.25, na.rm = TRUE) - 1.5 * IQR_t, min(.data[[temp_col]], na.rm = TRUE)),
         upper_whisker_t = min(quantile(.data[[temp_col]], 0.75, na.rm = TRUE) + 1.5 * IQR_t, max(.data[[temp_col]], na.rm = TRUE)),
         .groups = "drop"
-      )
+      ) |>
+      mutate(genus = str_extract(.data[[taxon_col]], "^[^ ]+"))
     title_text <- if(taxon_col == "canonicalname") {
       "Species"
     } else {
       "Genus"
     }
-    ggplot(doy_temp_summary, aes(x = median_temp, y = median_doy, color = city)) +
+    ggplot(doy_temp_summary, aes(x = median_temp, y = median_doy, color = .data[[color_col]])) +
       geom_point(size = 1) +
       geom_errorbar(aes(ymin = lower_whisker_d, ymax = upper_whisker_d), width = 0.2, linewidth = 0.5, alpha = 0.2) +
       geom_errorbarh(aes(xmin = lower_whisker_t, xmax = upper_whisker_t), height = 4, linewidth = 0.5,  alpha = 0.2) +
@@ -393,9 +398,7 @@ plot_phe_temp_cities <- function(cities, taxon_col){
   return(plot)
 }
 
-(plot_phe_temp_cities(cities, "genus") / plot_phe_temp_cities(cities, "canonicalname")) +
-  plot_annotation(title = paste0("Phenology variation across species in ", city)) +
-  plot_layout(guides = "collect") & theme(legend.position = "right")
+plot_phe_temp_cities(cities[c(61:70)], taxon_col = "canonicalname", color = "city")
 
 ```
 

@@ -52,7 +52,7 @@ library(batchplanet)
 
 tree_dir <- "~/lab-data/datasets/vegetation/PS/CONUS_urban/Tree_point/"
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
-tree_df <- rds_files[75] |>
+tree_df <- rds_files[c(56, 15, 25)] |>
   map_dfr(read_rds) |>
   mutate(taxa = if_else(genus == "Validation", "Validation", gsub(" ", "", taxa))) 
 
