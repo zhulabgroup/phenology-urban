@@ -52,7 +52,7 @@ library(batchplanet)
 
 tree_dir <- "~/lab-data/datasets/vegetation/PS/CONUS_urban/Tree_point/"
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
-tree_df <- rds_files[c(56, 15, 25)] |>
+tree_df <- rds_files[25] |> #25
   map_dfr(read_rds) |>
   mutate(taxa = if_else(genus == "Validation", "Validation", gsub(" ", "", taxa))) 
 
@@ -87,9 +87,9 @@ for (site in site_list){
   update_group <- unique(tree_df2$group)
 
   message("Downloading time series...")
-  for (j in 1:length(year_splits)){
-    message(paste0("Downloading Part ", j," data for city: ", site))
-    download_planetscope_imagery_batch(dir = dir_data,  v_site = site, v_year = year_splits[[j]], setting = setting, num_cores = 30, overwrite = F)
+  for (j in 4:length(year_splits)){
+    # message(paste0("Downloading Part ", j," data for city: ", site))
+    # download_planetscope_imagery_batch(dir = dir_data,  v_site = site, v_year = year_splits[[j]], setting = setting, num_cores = 30, overwrite = F)
     retrieve_planetscope_time_series_batch(dir = dir_data, df_coordinates = tree_df2, v_site = site, num_cores = 30)
 
     message("Retrieval done. Cleaning Part ", j," raw imagery...")

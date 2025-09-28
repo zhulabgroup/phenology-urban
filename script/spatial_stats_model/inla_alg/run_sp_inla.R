@@ -635,10 +635,20 @@ run_inla_species = function(model_input_all, r_output_dir, phe_type, city){
       domain <- inla.nonconvex.hull(as.matrix(coord),
                                     concave = -.07,convex = -0.05, resolution=c(100,100))
       
-      mesh <- inla.mesh.2d(boundary = domain, loc = coord,
-                           max.edge = c(10000, 20000), 
-                           cutoff = 1000)  # prevent close points from being connected
+      xrange = diff(range(coord[,1]))
+      yrange = diff(range(coord[,2]))
+      diag_len = sqrt(xrange^2 +yrange^2)
+      max_edge_inner <- diag_len/10
+      max_edge_outer <- diag_len/3
+      cutoff_rec <- min(xrange, yrange)/100
+      cat("recommended max.edge =", c(max_edge_inner, max_edge_outer),
+          "cutoff =", cutoff_rec, "\n")
       
+      mesh <- inla.mesh.2d(boundary = domain, loc = coord,
+                           max.edge = c(max_edge_inner, max_edge_outer), 
+                           cutoff = cutoff_rec)  # prevent close points from being connected
+      plot(mesh)
+      points(coord, col = "red", pch = 20)
       ### Build the spde 
       
       spde <- inla.spde2.matern(mesh = mesh, alpha = 2, constr = TRUE)

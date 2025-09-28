@@ -1,13 +1,13 @@
 #!/bin/bash
-#SBATCH --job-name=test_INLA
+#SBATCH --job-name=test_INLA_newyork
 #SBATCH --account=zhukai0                   # Account name
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err
-#SBATCH --array=1-2
-#SBATCH --time=24:00:00
+#SBATCH --array=1
+#SBATCH --time=3:00:00
 #SBATCH --partition=standard
-#SBATCH --mem=30G
-#SBATCH --cpus-per-task=1
+#SBATCH --mem=45G
+#SBATCH --cpus-per-task=17
 #SBATCH --mail-user=jializ@umich.edu        # Where to send mail
 #SBATCH --mail-type=BEGIN,END               # Mail notifications at the start and end of the job
 
@@ -21,7 +21,7 @@
 
 
 # Define combinations of chains and iterations
-CITIES=("Anaheim", "Arlington") # "ST" "TP" "DV" "HT"
+CITIES=("NewYork") # "ST" "TP" "DV" "HT"
 
 # Get the combination for this array job
 CHAIN_INDEX=$((SLURM_ARRAY_TASK_ID - 1))
@@ -32,7 +32,7 @@ WORKING_DIR=../phenology-urban/
 R_INPUT_DIR=../phenology-urban/data/
 # R_SCRIPT_MCMC=../phenology-urban/script/spatial_stats_model/mcmc_alg/run_mcmc_all_models.R
 R_SCRIPT_INLA=../phenology-urban/script/spatial_stats_model/inla_alg/run_inla_all_models.R
-R_OUTPUT_DIR=../phenology-urban/data/proc/model_output/final_models_Grid/
+R_OUTPUT_DIR=../phenology-urban/data/proc/model_output/final_models_Grid_test/
 
 # Export variables to be used in the R script
 export R_INPUT_DIR

@@ -346,8 +346,8 @@ cities <- gsub("\\.rds$", "", basename(rds_files))
 source(here("script/spatial_stats_model/prepare_model_input.R"))
 
 plot_phe_temp_cities <- function(cities, taxon_col, color_col = "city"){
-  plots <- lapply(c("SOS", "EOS"), function(phe_type) {
-    all_city_input <- lapply(cities, function(city) {
+  plots <- lapply(c("SOS"), function(phe_type) {
+    all_city_input <- lapply(cities[c(1:24, 26:76)], function(city) {
       message(paste0("Reading data in ", city))
       prepare_data(city, source = "Grid", taxa_col= taxon_col, phe_type = phe_type) |>
         mutate(city = city)
@@ -363,6 +363,7 @@ plot_phe_temp_cities <- function(cities, taxon_col, color_col = "city"){
     doy_temp_summary <- all_city_input %>%
       dplyr::group_by(city, .data[[taxon_col]]) %>%
       dplyr::summarise(
+        obs = n(),
         median_doy = median(doy, na.rm = TRUE),
         IQR_d = quantile(doy, 0.75, na.rm = TRUE) - quantile(doy, 0.25, na.rm = TRUE),
         lower_whisker_d = max(quantile(doy, 0.25, na.rm = TRUE) - 1.5 * IQR_d, min(doy, na.rm = TRUE)),
@@ -374,15 +375,17 @@ plot_phe_temp_cities <- function(cities, taxon_col, color_col = "city"){
         .groups = "drop"
       ) |>
       mutate(genus = str_extract(.data[[taxon_col]], "^[^ ]+"))
+    
     title_text <- if(taxon_col == "canonicalname") {
       "Species"
     } else {
       "Genus"
     }
+    
     ggplot(doy_temp_summary, aes(x = median_temp, y = median_doy, color = .data[[color_col]])) +
-      geom_point(size = 1) +
-      geom_errorbar(aes(ymin = lower_whisker_d, ymax = upper_whisker_d), width = 0.2, linewidth = 0.5, alpha = 0.2) +
-      geom_errorbarh(aes(xmin = lower_whisker_t, xmax = upper_whisker_t), height = 4, linewidth = 0.5,  alpha = 0.2) +
+      geom_point(size = 1, alpha = 0.5) +
+      geom_errorbar(aes(ymin = lower_whisker_d, ymax = upper_whisker_d), width = 0.2, linewidth = 0.5, alpha = 0.1) +
+      geom_errorbarh(aes(xmin = lower_whisker_t, xmax = upper_whisker_t), height = 4, linewidth = 0.5,  alpha = 0.1) +
       scale_color_manual(values = color_palette) + 
       labs(x = temp_col, y = phe_type, title = title_text) +
       theme_classic() +
@@ -398,7 +401,7 @@ plot_phe_temp_cities <- function(cities, taxon_col, color_col = "city"){
   return(plot)
 }
 
-plot_phe_temp_cities(cities[c(61:70)], taxon_col = "canonicalname", color = "city")
+plot_phe_temp_cities(cities[c(26:76)], taxon_col = "canonicalname", color_col = "city")
 
 ```
 
