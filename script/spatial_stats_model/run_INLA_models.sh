@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=cities_INLA_formal_52_60
+#SBATCH --job-name=cities_INLA_formal_61_70
 #SBATCH --account=zhukai0                   # Account name
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err
@@ -21,7 +21,7 @@
 
 
 # Define combinations of chains and iterations
-CITIES=("Norfolk" "Oakland" "OklahomaCity" "Philadelphia" "Pittsburgh" "Portland" "Providence" "Reading" "Riverside") # "ST" "TP" "DV" "HT"
+CITIES=("Rochester" "Sacramento" "SanDiego" "SanFrancisco" "SanJose" "SantaRosa" "Seattle" "SiouxFalls" "Spokane" "StAugustine") # "ST" "TP" "DV" "HT"
 
 # Get the combination for this array job
 CHAIN_INDEX=$((SLURM_ARRAY_TASK_ID - 1))
