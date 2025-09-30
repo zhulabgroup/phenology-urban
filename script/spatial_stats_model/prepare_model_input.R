@@ -11,7 +11,7 @@ prepare_data <- function(city, source, taxa_col, phe_type) {
       full.names = TRUE)
     tree_climate <- read_rds(input_dir) |>
       st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F) |>
-      st_transform(crs = 9311)
+      st_transform(crs = 5070)
     } else if (source == "WU_surface") {
       input_dir <- list.files(
         # path = "~/phenology-urban/data/proc/tree_climate/WU_surface/",
@@ -20,7 +20,7 @@ prepare_data <- function(city, source, taxa_col, phe_type) {
         full.names = TRUE)
       tree_climate <- read_rds(input_dir) |>
         st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F) |>
-        st_transform(crs = 9311)
+        st_transform(crs = 5070)
     } else if (source == "Grid") { # UHAT and Daymet
        input_dir <- list.files(,
         path = paste0("~/phenology-urban/data/proc/tree_climate/Grid/"), # For example NY
@@ -31,15 +31,16 @@ prepare_data <- function(city, source, taxa_col, phe_type) {
                 prcp_summer = Daymet_prcp_summer, prcp_winter = Daymet_prcp_winter,
                 srad_summer = Daymet_srad_summer, srad_winter = Daymet_srad_winter) |>
          st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F) |>
-         st_transform(crs = 9311)
+         st_transform(crs = 5070)
     } else {
       stop("Invalid source. Must be 'WU' or 'Grid'.")
     }
     
-
-    
     # Assign each point to a hexagon
-    hex_size <- 5000
+    xrange = diff(range(st_coordinates(tree_climate)[,1]))
+    yrange = diff(range(st_coordinates(tree_climate)[,2]))
+    diag_len = sqrt(xrange^2 +yrange^2)
+    hex_size <- diag_len/15
     bbox <- st_bbox(tree_climate)
     
     hex_grid_geom <- st_make_grid(bbox, cellsize = hex_size, square = FALSE)
