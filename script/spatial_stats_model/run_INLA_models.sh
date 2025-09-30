@@ -6,7 +6,7 @@
 #SBATCH --array=1-16
 #SBATCH --time=3:00:00
 #SBATCH --partition=standard
-#SBATCH --mem=20G
+#SBATCH --mem=30G
 #SBATCH --cpus-per-task=1
 #SBATCH --mail-user=jializ@umich.edu        # Where to send mail
 #SBATCH --mail-type=BEGIN,END               # Mail notifications at the start and end of the job
@@ -21,7 +21,7 @@
 
 
 # Define combinations of chains and iterations
-CITIES=("Rochester" "Sacramento" "SanDiego" "SanFrancisco" "SanJose" "SantaRosa" "Seattle" "SiouxFalls" "Spokane" "StAugustine" "StGeorge" "StLouis" "Stockton" "Tempe" "TP" "WashingtonDC") # "ST" "TP" "DV" "HT"
+CITIES=("Denver" "Rochester" "Sacramento" "SanDiego" "SanFrancisco" "SanJose" "SantaRosa" "Seattle" "SiouxFalls" "Spokane" "StAugustine" "StGeorge" "StLouis" "Stockton" "Tempe" "TP" "WashingtonDC") # "ST" "TP" "DV" "HT"
 
 # Get the combination for this array job
 CHAIN_INDEX=$((SLURM_ARRAY_TASK_ID - 1))
