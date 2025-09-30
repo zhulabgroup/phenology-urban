@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=cities_INLA_formal_6_10
+#SBATCH --job-name=cities_INLA_formal_11_20
 #SBATCH --account=zhukai0                   # Account name
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err
-#SBATCH --array=1-5
+#SBATCH --array=1-10
 #SBATCH --time=3:00:00
 #SBATCH --partition=standard
-#SBATCH --mem=45G
+#SBATCH --mem=20G
 #SBATCH --cpus-per-task=1
 #SBATCH --mail-user=jializ@umich.edu        # Where to send mail
 #SBATCH --mail-type=BEGIN,END               # Mail notifications at the start and end of the job
@@ -21,7 +21,7 @@
 
 
 # Define combinations of chains and iterations
-CITIES=("Atlanta" "Aurora" "Austin" "Baltimore" "Berkeley") # "ST" "TP" "DV" "HT"
+CITIES=("Binghamton" "Bloomington" "Boise" "Boston" "Boulder" "Bozeman" "Buffalo" "Cambridge" "CapeCoral" "Champaign") # "ST" "TP" "DV" "HT"
 
 # Get the combination for this array job
 CHAIN_INDEX=$((SLURM_ARRAY_TASK_ID - 1))
@@ -67,7 +67,7 @@ formatted_duration=$(printf "%02d:%02d:%02d" $hh $mm $ss)
 mem_gb=$((SLURM_MEM_PER_NODE / 1024))
 
 # Log job information
-job_info=$OUTPUT_DIR/slurm_job${SLURM_ARRAY_JOB_ID}_task${CITY}.log
+job_info=$OUTPUT_DIR/slurm_job${SLURM_ARRAY_JOB_ID}_task${SLURM_ARRAY_TASK_ID}.log
 echo "Job ID: $SLURM_ARRAY_JOB_ID" > $job_info
 echo "Job Name: $SLURM_JOB_NAME" >> $job_info
 echo "Partition: $SLURM_JOB_PARTITION" >> $job_info
@@ -81,6 +81,6 @@ echo "Duration: $formatted_duration" >> $job_info
 
 # Move Slurm output and error files to the output directory
 # Move Slurm output and error files to the output directory
-mv slurm_job${SLURM_JOB_ID}_task${CITY}.out $R_OUTPUT_DIR/
-mv slurm_job${SLURM_JOB_ID}_task${CITY}.err $R_OUTPUT_DIR/
+mv slurm_job${SLURM_JOB_ID}_task${SLURM_ARRAY_TASK_ID}.out $R_OUTPUT_DIR/
+mv slurm_job${SLURM_JOB_ID}_task${SLURM_ARRAY_TASK_ID}.err $R_OUTPUT_DIR/
 
