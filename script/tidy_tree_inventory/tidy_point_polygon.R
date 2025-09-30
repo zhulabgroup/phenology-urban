@@ -48,7 +48,7 @@ for (f in file_list) {
   bbox_poly <- st_as_sfc(st_bbox(sf_pts))
   st_crs(bbox_poly) <- st_crs(sf_pts)
   bbox_poly <- st_as_sf(bbox_poly)
-  base <- unique(obj$site)
+  base <- sub(".rds", "", basename(f))
   center_pt$site <- base
   center_pt$num_tree <- nrow(obj)
   bbox_poly$site  <- base
