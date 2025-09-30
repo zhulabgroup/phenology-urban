@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=cities_INLA_formal
+#SBATCH --job-name=cities_MCMC_randomgroup
 #SBATCH --account=zhukai0                   # Account name
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err
 #SBATCH --array=1
-#SBATCH --time=3:00:00
+#SBATCH --time=24:00:00
 #SBATCH --partition=standard
-#SBATCH --mem=50G
+#SBATCH --mem=70G
 #SBATCH --cpus-per-task=16
 #SBATCH --mail-user=jializ@umich.edu        # Where to send mail
 #SBATCH --mail-type=BEGIN,END               # Mail notifications at the start and end of the job
@@ -30,8 +30,7 @@ CITY=${CITIES[$CHAIN_INDEX]}
 # Define the R script and input/output files
 WORKING_DIR=../phenology-urban/
 R_INPUT_DIR=../phenology-urban/data/
-# R_SCRIPT_MCMC=../phenology-urban/script/spatial_stats_model/mcmc_alg/run_mcmc_all_models.R
-R_SCRIPT_INLA=../phenology-urban/script/spatial_stats_model/inla_alg/run_inla_all_models.R
+R_SCRIPT_MCMC=../phenology-urban/script/spatial_stats_model/mcmc_alg/run_mcmc_all_models.R
 R_OUTPUT_DIR=../phenology-urban/data/proc/model_output/final_models_Grid/
 
 # Export variables to be used in the R script
@@ -51,8 +50,7 @@ module load Rgeospatial/4.2.0-2023-04-25
 start_time=$(date +%s)
 
 # Run the R script
-Rscript $R_SCRIPT_INLA
-# Rscript $R_SCRIPT_MCMC
+Rscript $R_SCRIPT_MCMC
 
 
 # Record the end time and calculate duration

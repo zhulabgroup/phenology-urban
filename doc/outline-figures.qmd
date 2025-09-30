@@ -404,7 +404,7 @@ plot_phe_temp_cities <- function(cities, taxon_col, color_col = "city"){
   return(plot)
 }
 
-plot_phe_temp_cities(cities[c(26:76)], taxon_col = "canonicalname", color_col = "city")
+plot_phe_temp_cities(cities, taxon_col = "canonicalname", color_col = "city")
 
 ```
 
