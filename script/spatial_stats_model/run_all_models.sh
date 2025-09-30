@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=cities_MCMC_randomgp
+#SBATCH --job-name=cities_MCMC_mat
 #SBATCH --account=zhukai0                   # Account name
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err
@@ -41,9 +41,9 @@ export CITY
 echo "Running model for $CITY"
 
 # Load necessary modules
-module load Rgeospatial/4.2.0-2023-04-25
+# module load Rgeospatial/4.2.0-2023-04-25
 # Only for spBayes
-# module load Rgeospatial/4.4.0-2024-05-11
+module load Rgeospatial/4.4.0-2024-05-11
 
 
 # Record the start time
