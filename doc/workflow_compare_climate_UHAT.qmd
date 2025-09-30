@@ -349,7 +349,7 @@ plot_coef_sp_city <- function(r_output_dir, phe_type){
   ))
 }
 
-r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_Grid/inla/spatial_spde/NewYork/canonicalname/")
+r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_Grid_test/inla/spatial_spde/NewYork/canonicalname/")
 plots_coef <- list()
 assess_species <- data.frame()
 
