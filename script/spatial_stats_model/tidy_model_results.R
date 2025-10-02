@@ -32,16 +32,13 @@ prepare_coef_summary <- function(r_output_dir, phe_type){
   write_rds(coef_summary, paste0(r_output_dir, phe_type, "_summary.rds"))
 }
 
-for (city in cities[2:10]) {
+for (city in cities[c(25, 61:75)]) { 
   message(paste0("Processing city: ", city))
   r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_Grid/inla/spatial_spde/", city, "/canonicalname/")
   for (phe_type in phe_types){
     prepare_coef_summary(r_output_dir, phe_type)
   }
 }
-
-
-
 
 plot_coef_sp_city <- function(r_output_dir, phe_type){
   coef_summary <- read_rds(paste0(r_output_dir, phe_type, "_summary.rds"))
@@ -70,7 +67,8 @@ plot_coef_sp_city <- function(r_output_dir, phe_type){
   ))
 }
 
-city = "Berkeley"
+
+city = "Champaign"
 r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_Grid/inla/spatial_spde/", city, "/canonicalname/")
 plots_coef <- list()
 assess_species <- data.frame()
@@ -81,3 +79,68 @@ for (phe_type in phe_types) {
 }
 wrap_plots(plots_coef, ncol = 2)
 
+
+############################### MCMC model result #########################
+
+tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
+rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
+cities <- gsub("\\.rds$", "", basename(rds_files))
+phe_types <- c("SOS", "EOS")
+
+prepare_coef_summary_mcmc <- function(r_output_dir, phe_type){
+  process_files <- function(file_list, phe_type_label) {
+    param_list <- map(file_list, function(file) {
+      model_data <- readRDS(file)
+      genus <- sub(paste0("(.*?)_", phe_type_label, "\\.rds"), "\\1", basename(file))
+        param_data <- ggs(model_data$samples) |>
+          filter(str_starts(Parameter, fixed(coef))) |>
+          rename(ParameterOriginal = Parameter) |>
+          mutate(Parameter = genus) |>
+          # mutate(waic = model_data$WAIC$WAIC,
+          mutate(converge = model_data$converge)
+        #        milk = model_data$mean_logml)
+      return(param_data)
+    })
+    combined_param_data <- bind_rows(param_list)
+    return(combined_param_data)
+  }
+  
+  files <- list.files(r_output_dir, pattern = paste0(phe_type, "\\.rds$"), full.names = TRUE)
+  combined_param_data <- map(files, function(file) {
+    model_data <- readRDS(file)
+    genus <- sub(paste0("(.*?)_", phe_type_label, "\\.rds"), "\\1", basename(file))
+    param_data <- ggs(model_data$samples) |>
+      filter(str_starts(Parameter, fixed(coef))) |>
+      rename(ParameterOriginal = Parameter) |>
+      mutate(Parameter = genus) |>
+      # mutate(waic = model_data$WAIC$WAIC,
+      mutate(converge = model_data$converge)
+    #        milk = model_data$mean_logml)
+  }) |>
+    bind_rows()
+  
+  # Summarize
+  summary_data <- combined_param_data |>
+    group_by(Parameter) |>
+    summarise(
+      median_value = median(value, na.rm = TRUE),
+      lower_2_5 = quantile(value, 0.025, na.rm = TRUE),
+      upper_97_5 = quantile(value, 0.975, na.rm = TRUE),
+      # waic = first(waic),
+      converge = first(converge),
+      # milk = first(milk),
+      .groups = "drop"
+    ) |>
+    mutate(Sig = ifelse(lower_2_5 * upper_97_5 > 0, "*", ""),
+           SigAlpha = ifelse(Sig == "*", 1, 0.2),
+           Color = ifelse(median_value >0, "#0D0887FF" , "#FCA636FF")) 
+  write_rds(summary_data, paste0(r_output_dir, phe_type, "_summary.rds"))
+}
+  
+for (city in cities[51]) { 
+  message(paste0("Processing city: ", city))
+  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_Grid_test/mcmc/random_group_sp/", city, "/canonicalname/")
+  for (phe_type in phe_types){
+    prepare_coef_summary_mcmc(r_output_dir, phe_type)
+  }
+}

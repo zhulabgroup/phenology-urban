@@ -28,7 +28,16 @@ phe_types <- c("SOS", "EOS")
 
 # Updated model fitted with `spBayes`
 
-Compared to the [previous version](https://public.websites.umich.edu/~jializ/urban-phe/workflow_validate_spmodel_WU.html#mcmc-1), I have updated the spatial random effect model fitted with `spBayes`. The updates include corrections to the previously unsuitable knots settings and adjustments to the prior settings in the model.
+Compared to the [previous version](https://public.websites.umich.edu/~jializ/urban-phe/workflow_validate_spmodel_WU.html#mcmc-1), I have updated the following parts:
+
+-   Update spatial random effect model fitted with `spBayes`. The updates include corrections to the previously unsuitable knots settings and adjustments to the prior settings in the model.
+
+-   Replaced the temperature data source with U-HAT, a seamless 1-km gridded dataset, instead of the previous station-based observations.
+
+-   Increased the sample size by incorporating more individual phenology records.
+
+-   Models were fitted separately for each species.
+
 
 In terms of coefficients in [@fig-sp-mcmc], the results are similar to those from other models. However, in `spBayes`, I couldn't find a method to specify the random effect for the `year`, so it was treated as a fixed categorical effect. Additionally, the WAIC values became difficult to compare, being 10 times larger than those from other models (which may be due to the WAIC calculation function I set up myself). But, I believe the model fit is reasonable in general.
 
@@ -50,7 +59,6 @@ generate_mcmc_plot <- function(dir_path, coef, fixed_sp){
       return(param_data)
     })
     combined_param_data <- bind_rows(param_list) |>
-      filter(Parameter != "Alnus") |>
       mutate(phe_type = phe_type_label)
     return(combined_param_data)
 }
@@ -109,7 +117,7 @@ generate_mcmc_plot <- function(dir_path, coef, fixed_sp){
       axis.text.x = element_text(size = 14)
     ) +
       coord_flip()
-  p2 <- ggplot(combined_param_data, aes(x = value)) +
+  p2 <- ggplot(combined_param_data |> filter(Parameter %in% c("Tilia_tomentosa", "Ulmus_americana")), aes(x = value)) +
     geom_density(fill = "skyblue", alpha = 0.5) +
     facet_wrap(~ Parameter, ncol = 1, scales = "free_y") +
     labs(
@@ -118,7 +126,7 @@ generate_mcmc_plot <- function(dir_path, coef, fixed_sp){
     ) +
     facet_grid(Parameter ~ phe_type, scales = "free_y")+
     # geom_text(data = summary_data, aes(x = median_value-3, y = 0, label = round(median_value, 3)), vjust = -1, size = 3) +
-    geom_text(data = summary_data, aes(x = median_value+3, y = 0, label = paste0("gelman.diag: ", round(converge, 4))), vjust = -1, color = "red", size = 2) +
+    geom_text(data = summary_data |> filter(Parameter %in% c("Tilia_tomentosa", "Ulmus_americana")), aes(x = median_value+3, y = 0, label = paste0("gelman.diag: ", round(converge, 4))), vjust = -1, color = "red", size = 2) +
     theme_minimal(base_size = 9) +
     theme(
       axis.text.y = element_blank(),
@@ -185,20 +193,20 @@ mcmc_semi_matern <- function(r_output_dir, phe_type) {
 #| warning: false
 #| eval: true
 
-g_dir_path <- "~/phenology-urban/data/proc/model_output/final_models/mcmc/spatial_mat/NY/genus/"
-s_dir_path <- "~/phenology-urban/data/proc/model_output/final_models_humid/mcmc/spatial_mat/NY/canonicalname/"
-s_dir_path <- "~/phenology-urban/data/proc/model_output/final_models_WUsurface/mcmc/spatial_mat/NY/canonicalname/"
+s_dir_path <- "~/phenology-urban/data/proc/model_output/final_models_Grid_test/mcmc/spatial_mat/NewYork/canonicalname/"
+
+s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "temp", fixed_sp = F)
+
+(s_plot_obj$coef_summary_plot +  ggtitle("Species")) + (s_plot_obj$coef_density_plot +  ggtitle("Species")) +
+  plot_layout(ncol = 2)
 
 
+s_dir_path <- "~/phenology-urban/data/proc/model_output/final_models_Grid_test/mcmc/random_group_sp/NewYork/canonicalname/"
 
-g_plot_obj <- generate_mcmc_plot(g_dir_path, coef = "temp", fixed_sp = F)
-s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2]", fixed_sp = F)
-s_plot_obj_humid <- generate_mcmc_plot(s_dir_path,  coef = "temp", fixed_sp = F)
-s_plot_obj_wusurface <- generate_mcmc_plot(s_dir_path,  coef = "temp", fixed_sp = F)
+s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2", fixed_sp = F)
 
-(g_plot_obj$coef_summary_plot + ggtitle("Genus")) + (g_plot_obj$coef_density_plot + ggtitle("Genus")) + 
-  (s_plot_obj_wusurface$coef_summary_plot +  ggtitle("Species")) + (s_plot_obj_wusurface$coef_density_plot +  ggtitle("Species")) +
-  plot_layout(ncol = 2, nrow = 2)
+(s_plot_obj$coef_summary_plot +  ggtitle("Species")) + (s_plot_obj$coef_density_plot +  ggtitle("Species")) +
+  plot_layout(ncol = 2)
 ```
 
 Next, I updated the spatial field and covariance function fitted with `spBayes`. Using the Genus - Start of Season (SOS) as an example, some genera (such as Juglans, Quercus and Ulmus) show very small ranges, exhibiting noisy patterns in spatial fields. Other genera, on the other hand, show smoother spatial patterns. This might be due to differences in sample sizes or inherent differences in spatial variability between species/genera.
