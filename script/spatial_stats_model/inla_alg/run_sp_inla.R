@@ -763,7 +763,7 @@ plot_coef_sp_city <- function(r_output_dir, phe_type){
   assess <- data.frame()
   
   # for one genus
-  for (file in files) {
+  for (file in files[1:10]) {
     model_data <- readRDS(file)
     species <- model_data$species
     # beta_names <- c("beta[0]", "beta[AvgTemp_mean]", "beta[Sum_mm_sum]", "beta[srad_mean]")

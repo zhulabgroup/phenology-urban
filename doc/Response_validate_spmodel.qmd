@@ -38,6 +38,96 @@ Compared to the [previous version](https://public.websites.umich.edu/~jializ/urb
 
 -   Models were fitted separately for each species.
 
+Here are the distribution of the updated predictors:
+
+```{r}
+#| label: fig-predictor
+#| include: true
+#| fig-width: 14
+#| fig-height: 7
+#| fig-cap: "Spatial distribution of Weather Underground sites and shortwave radiation data in New York City."
+#| warning: false
+#| eval: true
+
+tree_dir <- paste0("~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/NewYork.rds")
+tree_location <- read_rds(tree_dir) |>
+  filter(!(lon == "NaN") & !(lat == "NaN")) |>
+  st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F) |>
+  filter(taxa == "Acer rubrum")
+
+file <- "~/lab-data/datasets/climate/UHAT/clean/NewYork_summer_2023.tif"
+temp_tif <- terra::rast(file)
+
+tifs <- list.files(
+  "~/lab-data/datasets/climate/UHAT/grid",
+  pattern = "^MYD11A1\\..*LST_Day_1km\\.tif$",
+  full.names = TRUE
+)
+r_template <- terra::rast(tifs[1])
+crs(temp_tif) <- crs(r_template)  # ensure correct CRS
+tree_location <- tree_location|>
+  st_transform(crs(temp_tif))
+
+clipped <- crop(temp_tif, vect(tree_location))
+temp_df <- as.data.frame(clipped, xy = TRUE) |>
+  rename_with(~ "value", .cols = 3)
+
+bbox <- st_bbox(tree_location)
+
+temp <- ggplot() +
+  geom_tile(data = temp_df, aes(x = x, y = y, fill = value)) +
+  geom_sf(data = tree_location, aes(color = "Red maple location"), size = 0.5) +
+  scale_fill_viridis_c(name = "C") +
+  scale_color_manual(name = "", values = c("Red maple location" = "red")) + 
+  labs(title = "Temperature - 2023 Summer", x = "x", y = "y") +
+  theme_minimal() +
+  guides(color = "none") +    
+  coord_sf(xlim = c(bbox["xmin"], bbox["xmax"]),
+           ylim = c(bbox["ymin"], bbox["ymax"]),
+           expand = FALSE)
+
+
+data_dir <- paste0("~/phenology-urban/data/raw/Example_city/NY/Daymet/daily2016-2024/")
+file <- list.files(data_dir, pattern = "prcp_daily_2023_ncss\\.nc$", full.names = TRUE)
+prcp_nc <- terra::rast(file)
+
+tree_location <- tree_location|>
+  st_transform(crs(prcp_nc))
+
+prcp_df <- as.data.frame(prcp_nc[[272]], xy = TRUE)
+prcp <- ggplot() +
+  geom_tile(data = prcp_df, aes(x = x, y = y, fill = prcp_272)) +
+  scale_fill_viridis_c(name = "mm/day") +
+  geom_sf(data = tree_location, aes(color = "Red maple location"), size = 0.5) +
+  scale_color_manual(name = "", values = c("Red maple location" = "red")) + 
+  labs(title = "Precipitation - 2023-09-19", x = "x", y = "y") +
+  guides(color = "none") +    
+  theme_minimal()
+
+
+data_dir <- paste0("~/phenology-urban/data/raw/Example_city/NY/Daymet/daily2016-2024/")
+file <- list.files(data_dir, pattern = "srad_daily_2023_ncss\\.nc$", full.names = TRUE)
+srad_nc <- terra::rast(file)
+
+
+tree_location <- tree_location|>
+  st_transform(crs(srad_nc))
+
+srad_df <- as.data.frame(srad_nc[[272]], xy = TRUE)
+srad <- ggplot() +
+  geom_tile(data = srad_df, aes(x = x, y = y, fill = srad_272)) +
+  scale_fill_viridis_c(name = "W/m²") +
+  geom_sf(data = tree_location, aes(color = "Red maple location"), size = 0.5) +
+  scale_color_manual(name = "", values = c("Red maple location" = "red")) + 
+  labs(title = "Shortwave Radiation (W/m²) - 2023-09-19", x = "x", y = "y") +
+  theme_minimal()
+
+(temp + 
+   prcp + 
+   srad) +
+  plot_layout(ncol = 3)
+
+```
 
 In terms of coefficients in [@fig-sp-mcmc], the results are similar to those from other models. However, in `spBayes`, I couldn't find a method to specify the random effect for the `year`, so it was treated as a fixed categorical effect. Additionally, the WAIC values became difficult to compare, being 10 times larger than those from other models (which may be due to the WAIC calculation function I set up myself). But, I believe the model fit is reasonable in general.
 
@@ -199,17 +289,9 @@ s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "temp", fixed_sp = F)
 
 (s_plot_obj$coef_summary_plot +  ggtitle("Species")) + (s_plot_obj$coef_density_plot +  ggtitle("Species")) +
   plot_layout(ncol = 2)
-
-
-s_dir_path <- "~/phenology-urban/data/proc/model_output/final_models_Grid_test/mcmc/random_group_sp/NewYork/canonicalname/"
-
-s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "beta[2", fixed_sp = F)
-
-(s_plot_obj$coef_summary_plot +  ggtitle("Species")) + (s_plot_obj$coef_density_plot +  ggtitle("Species")) +
-  plot_layout(ncol = 2)
 ```
 
-Next, I updated the spatial field and covariance function fitted with `spBayes`. Using the Genus - Start of Season (SOS) as an example, some genera (such as Juglans, Quercus and Ulmus) show very small ranges, exhibiting noisy patterns in spatial fields. Other genera, on the other hand, show smoother spatial patterns. This might be due to differences in sample sizes or inherent differences in spatial variability between species/genera.
+Next, I updated the spatial field and covariance function fitted with `spBayes`. Using Start of Season (SOS) for 10 species as an example, some species show very small ranges, exhibiting noisy patterns in spatial fields. Other genera, on the other hand, show smoother spatial patterns. This might be due to differences in sample sizes or inherent differences in spatial variability between species/genera.
 
 **MCMC**
 
@@ -241,8 +323,8 @@ Compared to the results from INLA below ([@fig-ny-inla-plot_semi]), the two cova
 #| fig-cap: "The fitted Matern correlation functions and spatial fields for each genus in New York city, generated via spBayes."
 
 source("~/phenology-urban/script/spatial_stats_model/inla_alg/run_sp_inla.R")
-r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/sp_model/fixed_preseason/inla_alg/spatial_spde/NY/genus/")
-p1 <- plot_coef_genus_city(r_output_dir, phe_type = "SOS")
+r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_Grid_test/inla/spatial_spde/NewYork/canonicalname/")
+p1 <- plot_coef_sp_city(r_output_dir, phe_type = "SOS")
 p1$combined_plot_semi/p1$combined_plot_mean
 ```
 
@@ -250,11 +332,11 @@ p1$combined_plot_semi/p1$combined_plot_mean
 
 > you could smooth the temperature surface to create a predictor without having to specify the 500m radius around stations, which is somewhat arbitrary
 
-Do you mean using interpolation? That would be feasible in this project. But I am curious if we reconstruct the temperature surface using some covariance structure, would that compete with the random spatial effect in the model and potentially affect the inference? I also have a raster-based temperature product as an alternative. But that raster is itself built from spatial autocorrelation, so I’m concerned it could have the same kind of overlap with the spatial random effect.
+I changed the temperature data source to U-HAT temperature surface, a seamless 1-km gridded dataset, instead of the previous station-based observations.
 
 > what is the sample size?
 
-It depends on the species or genus, ranging from over 30 unique points to as many as 300.
+It depends on the species. In New York City, it ranged from over 30 unique points to as many as 300.
 
 > to me it's unclear what the fixed effects without correlation represent. I'm not sure what you mean
 
