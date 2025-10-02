@@ -336,7 +336,7 @@ I changed the temperature data source to U-HAT temperature surface, a seamless 1
 
 > what is the sample size?
 
-It depends on the species. In New York City, it ranged from over 30 unique points to as many as 300.
+It depends on the species. In New York City, it ranged from over 30 unique points to as many as \~1700.
 
 > to me it's unclear what the fixed effects without correlation represent. I'm not sure what you mean
 
@@ -348,7 +348,7 @@ The hexagon cells only provide grouping information for point-referenced data; t
 
 > you split the trees into genus, but you did not mention that earlier. do you run the analysis separately for each genus or are you using genus as a covariate? unclear
 
-For each genus and species, I ran the analysis separately.
+For each species, I ran the analysis separately.
 
 > you mention matern covariance -- do you estimate all parameters including the smoothness? if not, what did you fix the smoothness to? you should also mention how you chose the prior for the spatial range
 
@@ -356,7 +356,7 @@ In spBayes, I estimated all covariance parameters ($\phi$, $\sigma^2$, $\tau^2$,
 
 > figure 6 is very odd, with some panels being essentially constant and the scales being all over the place. check what's going on
 
-[@fig-ny-spbayes-plot_semi] is the updated version. Some genera (such as Juglans, Quercus and Ulmus) show very small ranges, exhibiting noisy patterns in spatial fields. Other genera, on the other hand, show smoother spatial patterns. This might be due to differences in sample sizes or inherent differences in spatial variability between species/genera.
+<!-- [@fig-ny-spbayes-plot_semi] is the updated version. Some species (such as Juglans, Quercus and Ulmus) show very small ranges, exhibiting noisy patterns in spatial fields. Other genera, on the other hand, show smoother spatial patterns. This might be due to differences in sample sizes or inherent differences in spatial variability between species/genera. -->
 
 > figure 10 mentions a hexagonal grid -- is this what you mentioned earlier? so you'd be assuming a piecewise constant intercept on the grid, with no spatial autocorrelation across grid points? it remains unclear what you mean by random vs fixed effects with respect to what you say in 2.4
 
@@ -368,7 +368,7 @@ Yes, figure 10 refers to the hexagonal grid, which provides grouping information
 
 > you make correlation plots for inla but not for spBayes, but you can do that too
 
-[@fig-ny-spbayes-plot_semi] is the updated version. Compared to the results from INLA ([@fig-ny-inla-plot_semi]), the two covariance functions differ, but the magnitude of the spatial random effect is similar. Additionally, `spBayes` avoids the extreme values seen in Platanus.
+<!-- [@fig-ny-spbayes-plot_semi] is the updated version. Compared to the results from INLA ([@fig-ny-inla-plot_semi]), the two covariance functions differ, but the magnitude of the spatial random effect is similar. Additionally, `spBayes` avoids the extreme values seen in Platanus. -->
 
 > there seems to be a disconnect between mcmc/inla and models. I would have guessed they should agree: if the spatial covariance model is better, it should be better regardless of what algorithm is used to fit it. so I would definitely double check your implementation in spBayes
 
