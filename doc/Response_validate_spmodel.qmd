@@ -131,7 +131,7 @@ srad <- ggplot() +
 
 ```
 
-In terms of coefficients in [@fig-sp-mcmc], the results are similar to those from other models. However, in `spBayes`, I couldn't find a method to specify the random effect for the `year`, so it was treated as a fixed categorical effect. Additionally, the WAIC values became difficult to compare, being 10 times larger than those from other models (which may be due to the WAIC calculation function I set up myself). But, I believe the model fit is reasonable in general.
+In terms of the coefficients shown in [@fig-sp-mcmc], the overall patterns are similar between the INLA-fitted model and the MCMC-fitted model. However, in `spBayes` I was unable to specify a random effect for `year`, so it was instead modeled as a fixed categorical effect. Moreover, the WAIC values became difficult to compare, as they were about 10 times larger than those from the other models (likely due to the custom WAIC calculation function I implemented). Nevertheless, I believe the model fit is generally reasonable.
 
 ```{r}
 #| include: false
@@ -335,15 +335,17 @@ for (phe_type in phe_types) {
   p1 <- plot_coef_sp_city(r_output_dir, phe_type)
   plots_coef[[phe_type]] <- p1$coef_summary_plot
 }
-ny_sp = wrap_plots(plots_coef, ncol = 2)
+
+plots_coef[[1]] <- plots_coef[[1]] + ggtitle("INLA")
+ny_sp <- wrap_plots(plots_coef, ncol = 2)
 
 (s_plot_obj_mcmc$coef_summary_plot +  ggtitle("MCMC")) + 
-  (ny_sp + ggtitle("INLA")) +
+  (ny_sp) +
   # (s_plot_obj_mcmc$coef_density_plot +  ggtitle("Species")) +
   plot_layout(ncol = 2)
 ```
 
-Next, I updated the spatial field and covariance function fitted with `spBayes`. Using Start of Season (SOS) for 10 species as an example, some species show very small ranges, exhibiting noisy patterns in spatial fields. Other genera, on the other hand, show smoother spatial patterns. This might be due to differences in sample sizes or inherent differences in spatial variability between species/genera.
+Next, using Start of Season (SOS) for 10 species as an example, I updated the spatial field and covariance function fitted with `spBayes` in [@fig-ny-spbayes-plot_semi]. I consider the range of variation here to be reasonable: the spatial variation is relatively smooth, and no extreme values appear.
 
 **MCMC**
 
@@ -361,7 +363,7 @@ p <- mcmc_semi_matern(r_output_dir, phe_type = "SOS")
 p$combined_plot_semi/p$combined_plot_mean
 ```
 
-Compared to the results from INLA below ([@fig-ny-inla-plot_semi]), the two covariance functions differ, but the magnitude of the spatial random effect is similar. Additionally, `spBayes` avoids the extreme values seen in Platanus. The Alnus, Carya and Salix were not included in the `spBayes` fitting because they have very small sample sizes, which leads to unreliable estimates.
+Compared to the spatial field in [@fig-ny-inla-plot_semi] for the same species, the two covariance functions differ. In the INLA results, the spatial variation occurs over shorter distances, meaning that even nearby locations can show substantial differences. In addition, two extreme situations appeared: in some cases, the spatial random effects fluctuate only around zero, while in others, extreme values emerge.
 
 **INLA**
 
@@ -404,11 +406,11 @@ For each species, I ran the analysis separately.
 
 > you mention matern covariance -- do you estimate all parameters including the smoothness? if not, what did you fix the smoothness to? you should also mention how you chose the prior for the spatial range
 
-In spBayes, I estimated all covariance parameters ($\phi$, $\sigma^2$, $\tau^2$, and $\nu$) in the Matérn model, with $\nu$ (smoothness) assigned a $\text{Uniform}(0.5, 2.5)$ prior and the spatial range $\phi$ was assigned a prior based on the maximum distance, specifically, $\phi \sim \text{Unif}(\frac{3}{0.75*\text{max.d}}, \frac{3}{0.001*\text{max.d}})$. In INLA, the SPDE model uses vague Gaussian priors on the log-precision parameters $\theta$ (mean 0, precision 0.1), with the prior median range heuristically set to about 20% of the mesh diameter, so the effective prior depends on the chosen mesh. The smoothness ($\nu$) is fixed at 1 by default.
+In `spBayes`, I estimated all covariance parameters ($\phi$, $\sigma^2$, $\tau^2$, and $\nu$) in the Matérn model, with $\nu$ (smoothness) assigned a $\text{Uniform}(0.5, 2.5)$ prior and the spatial range $\phi$ was assigned a prior based on the maximum distance, specifically, $\phi \sim \text{Unif}(\frac{3}{0.75*\text{max.d}}, \frac{3}{0.001*\text{max.d}})$. In INLA, the SPDE model uses vague Gaussian priors on the log-precision parameters $\theta$ (mean 0, precision 0.1), with the prior median range heuristically set to about 20% of the mesh diameter, so the effective prior depends on the chosen mesh. The smoothness ($\nu$) is fixed at 1 by default.
 
 > figure 6 is very odd, with some panels being essentially constant and the scales being all over the place. check what's going on
 
-<!-- [@fig-ny-spbayes-plot_semi] is the updated version. Some species (such as Juglans, Quercus and Ulmus) show very small ranges, exhibiting noisy patterns in spatial fields. Other genera, on the other hand, show smoother spatial patterns. This might be due to differences in sample sizes or inherent differences in spatial variability between species/genera. -->
+[@fig-ny-spbayes-plot_semi] is the updated version. At this point, I consider the spatial random field to be more reasonable.
 
 > figure 10 mentions a hexagonal grid -- is this what you mentioned earlier? so you'd be assuming a piecewise constant intercept on the grid, with no spatial autocorrelation across grid points? it remains unclear what you mean by random vs fixed effects with respect to what you say in 2.4
 
@@ -420,7 +422,7 @@ Yes, figure 10 refers to the hexagonal grid, which provides grouping information
 
 > you make correlation plots for inla but not for spBayes, but you can do that too
 
-<!-- [@fig-ny-spbayes-plot_semi] is the updated version. Compared to the results from INLA ([@fig-ny-inla-plot_semi]), the two covariance functions differ, but the magnitude of the spatial random effect is similar. Additionally, `spBayes` avoids the extreme values seen in Platanus. -->
+[@fig-ny-spbayes-plot_semi] is the updated version. Compared to the results from INLA ([@fig-ny-inla-plot_semi]), it better captures spatial variation and avoids the issues of correlations either dropping to zero too quickly or remaining completely flat. Additionally, `spBayes` avoids the extreme values.
 
 > there seems to be a disconnect between mcmc/inla and models. I would have guessed they should agree: if the spatial covariance model is better, it should be better regardless of what algorithm is used to fit it. so I would definitely double check your implementation in spBayes
 
