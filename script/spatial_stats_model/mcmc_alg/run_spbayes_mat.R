@@ -488,13 +488,13 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
     # 
     
     ############################ Plot spatial random effect - w ############################      
-    
+
     Y_pred <- do.call(
       rbind,
       lapply(res$predict_w, function(chain) chain$p.y.predictive.samples |> t())
     ) |> t()
     B_draws <- do.call(rbind, lapply(res$chains_recover, function(ch) {
-      as.matrix(ch$p.beta.recover.samples[2001:3001,])
+      as.matrix(ch$p.beta.recover.samples)
     }))  # S_total x p
     Xbeta <- pred.covar %*% t(B_draws)
     W_mat <- Y_pred - Xbeta     # n_pred x S
