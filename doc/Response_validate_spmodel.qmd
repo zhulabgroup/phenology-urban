@@ -188,12 +188,14 @@ generate_mcmc_plot <- function(dir_path, coef, fixed_sp){
            Color = ifelse(median_value >0, "#0D0887FF" , "#FCA636FF")) 
 
   param_levels <- rev(unique(summary_data$Parameter))
-  summary_data <- summary_data %>% mutate(phe_type = paste0("beta[Temp]~' for '~", phe_type))
-  my_labeller <- labeller(
-    phe_type = function(x) {
-      lapply(x, function(p) bquote(beta[Temp] ~ " for " ~ .(p)))
-    }
-  )
+  
+  summary_data <- summary_data %>% 
+    mutate(
+      phe_type = paste0("beta[Temp]~' for '~", phe_type),
+      phe_type = factor(phe_type, 
+                        levels = c("beta[Temp]~' for '~SOS", 
+                                   "beta[Temp]~' for '~EOS"))
+    )
 
   # Plot
   
@@ -208,7 +210,7 @@ generate_mcmc_plot <- function(dir_path, coef, fixed_sp){
     scale_color_identity() +
     guides(alpha = "none") +
     facet_grid( ~ phe_type,
-             scales = "free_y",
+             scales = "free_x",
              labeller = labeller(phe_type = label_parsed)) +
     theme_minimal() +
     labs(x = NULL, y = "Estimate") +
@@ -293,7 +295,8 @@ plot_coef_sp_city <- function(r_output_dir, phe_type){
                   position = position_dodge(w = 0.5), 
                   width = 0.2) +
     geom_hline(yintercept = 0, linetype = 2) +
-    labs(x = NULL, y = "Estimate") +
+    theme(legend.position = "right",
+          plot.subtitle = element_text(hjust = 0.5, margin = margin(b = 6))) +
     coord_flip() +
     scale_alpha_identity() +
     scale_color_identity() +
@@ -302,7 +305,6 @@ plot_coef_sp_city <- function(r_output_dir, phe_type){
     geom_text(aes(label = Estimate, y = Estimate  ), vjust = -0.7, show.legend = FALSE, size = 3) +
     guides(alpha = "none") +
     # add title
-    ggtitle(bquote(beta[Temp]~"for"~.(phe_type))) +
     theme_minimal()
   
   return(list(
@@ -334,7 +336,7 @@ for (phe_type in phe_types) {
 ny_sp = wrap_plots(plots_coef, ncol = 2)
 
 (s_plot_obj_mcmc$coef_summary_plot +  ggtitle("MCMC")) + 
-  ny_sp +
+  (ny_sp + ggtitle("INLA")) +
   # (s_plot_obj_mcmc$coef_density_plot +  ggtitle("Species")) +
   plot_layout(ncol = 2)
 ```
