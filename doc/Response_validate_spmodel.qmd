@@ -22,7 +22,7 @@ if (!require(plotbiomes)) {
 load_packages(c("dplyr","lubridate", "ggplot2", "sf","sp", "readr", "purrr", "stringr","glue", "tidyr", "broom","lme4", "broom.mixed", "ppcor", "spdep", "spatialreg", "lmtest","car", "spBayes", "coda", "patchwork", "performance", "terra", "ggpmisc", "gstat", "ggmcmc", "taxize", "stats", "viridis","INLA", "raster"))
 
 select <- dplyr::select # Avoid masking by base R's select function
-city <- "NY" # Set the city for analysis
+city <- "NewYork" # Set the city for analysis
 phe_types <- c("SOS", "EOS")
 ```
 
@@ -43,9 +43,9 @@ Here are the distribution of the updated predictors:
 ```{r}
 #| label: fig-predictor
 #| include: true
-#| fig-width: 14
-#| fig-height: 7
-#| fig-cap: "Spatial distribution of Weather Underground sites and shortwave radiation data in New York City."
+#| fig-width: 15
+#| fig-height: 6
+#| fig-cap: "Spatial distribution of temperature, precipi and shortwave radiation data in New York City."
 #| warning: false
 #| eval: true
 
@@ -122,10 +122,12 @@ srad <- ggplot() +
   labs(title = "Shortwave Radiation (W/m²) - 2023-09-19", x = "x", y = "y") +
   theme_minimal()
 
-(temp + 
-   prcp + 
-   srad) +
-  plot_layout(ncol = 3)
+
+(temp + prcp + srad) +
+  plot_layout(ncol = 3) &
+  theme(
+    plot.margin = margin(0, 0, 0, 0),
+    plot.title = element_text(margin = margin(t = 2, b = 2)))
 
 ```
 
@@ -186,6 +188,12 @@ generate_mcmc_plot <- function(dir_path, coef, fixed_sp){
            Color = ifelse(median_value >0, "#0D0887FF" , "#FCA636FF")) 
 
   param_levels <- rev(unique(summary_data$Parameter))
+  summary_data <- summary_data %>% mutate(phe_type = paste0("beta[Temp]~' for '~", phe_type))
+  my_labeller <- labeller(
+    phe_type = function(x) {
+      lapply(x, function(p) bquote(beta[Temp] ~ " for " ~ .(p)))
+    }
+  )
 
   # Plot
   
@@ -199,7 +207,9 @@ generate_mcmc_plot <- function(dir_path, coef, fixed_sp){
     scale_alpha_identity() +
     scale_color_identity() +
     guides(alpha = "none") +
-    facet_wrap(~ phe_type, scales = "free_x") +  # flip x/y means free_x
+    facet_grid( ~ phe_type,
+             scales = "free_y",
+             labeller = labeller(phe_type = label_parsed)) +
     theme_minimal() +
     labs(x = NULL, y = "Estimate") +
     theme(
@@ -207,6 +217,7 @@ generate_mcmc_plot <- function(dir_path, coef, fixed_sp){
       axis.text.x = element_text(size = 14)
     ) +
       coord_flip()
+  
   p2 <- ggplot(combined_param_data |> filter(Parameter %in% c("Tilia_tomentosa", "Ulmus_americana")), aes(x = value)) +
     geom_density(fill = "skyblue", alpha = 0.5) +
     facet_wrap(~ Parameter, ncol = 1, scales = "free_y") +
@@ -272,6 +283,32 @@ mcmc_semi_matern <- function(r_output_dir, phe_type) {
   ))
 }
 
+plot_coef_sp_city <- function(r_output_dir, phe_type){
+  coef_summary <- read_rds(paste0(r_output_dir, phe_type, "_summary.rds"))
+  p_coef <-  ggplot(coef_summary, aes(x = factor(Factor, levels = rev(Factor)), 
+                               y = Estimate,
+                               colour = Color)) +
+    geom_point(aes(alpha = SigAlpha), position = position_dodge(w = 0.5), size = 3) +
+    geom_errorbar(aes(ymin = Lower, ymax = Upper, alpha = SigAlpha), 
+                  position = position_dodge(w = 0.5), 
+                  width = 0.2) +
+    geom_hline(yintercept = 0, linetype = 2) +
+    labs(x = NULL, y = "Estimate") +
+    coord_flip() +
+    scale_alpha_identity() +
+    scale_color_identity() +
+    theme(legend.position = "right") +
+    geom_text(aes(label = Sig, y = Upper + 0.05  ), hjust = -0.5, show.legend = FALSE) +
+    geom_text(aes(label = Estimate, y = Estimate  ), vjust = -0.7, show.legend = FALSE, size = 3) +
+    guides(alpha = "none") +
+    # add title
+    ggtitle(bquote(beta[Temp]~"for"~.(phe_type))) +
+    theme_minimal()
+  
+  return(list(
+    coef_summary_plot = p_coef
+  ))
+}
 ```
 
 ```{r}
@@ -283,11 +320,22 @@ mcmc_semi_matern <- function(r_output_dir, phe_type) {
 #| warning: false
 #| eval: true
 
-s_dir_path <- "~/phenology-urban/data/proc/model_output/final_models_Grid_test/mcmc/spatial_mat/NewYork/canonicalname/"
+s_dir_path <- "~/phenology-urban/data/proc/model_output/final_models_Grid/mcmc/spatial_mat/NewYork/canonicalname/"
+s_plot_obj_mcmc <- generate_mcmc_plot(s_dir_path,  coef = "temp", fixed_sp = F)
 
-s_plot_obj <- generate_mcmc_plot(s_dir_path,  coef = "temp", fixed_sp = F)
 
-(s_plot_obj$coef_summary_plot +  ggtitle("Species")) + (s_plot_obj$coef_density_plot +  ggtitle("Species")) +
+r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_Grid/inla/spatial_spde/NewYork/canonicalname/")
+plots_coef <- list()
+
+for (phe_type in phe_types) {
+  p1 <- plot_coef_sp_city(r_output_dir, phe_type)
+  plots_coef[[phe_type]] <- p1$coef_summary_plot
+}
+ny_sp = wrap_plots(plots_coef, ncol = 2)
+
+(s_plot_obj_mcmc$coef_summary_plot +  ggtitle("MCMC")) + 
+  ny_sp +
+  # (s_plot_obj_mcmc$coef_density_plot +  ggtitle("Species")) +
   plot_layout(ncol = 2)
 ```
 
@@ -304,7 +352,7 @@ Next, I updated the spatial field and covariance function fitted with `spBayes`.
 #| eval: true
 #| fig-cap: "The fitted Matern correlation functions and spatial fields for each genus in New York city, generated via spBayes."
 
-r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models/mcmc/spatial_mat/NY/genus/")
+r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_Grid_test/mcmc/spatial_mat/NewYork/canonicalname/")
 p <- mcmc_semi_matern(r_output_dir, phe_type = "SOS")
 p$combined_plot_semi/p$combined_plot_mean
 ```
