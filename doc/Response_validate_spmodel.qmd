@@ -45,7 +45,7 @@ Here are the distribution of the updated predictors:
 #| include: true
 #| fig-width: 15
 #| fig-height: 6
-#| fig-cap: "Spatial distribution of temperature, precipi and shortwave radiation data in New York City."
+#| fig-cap: "Spatial distribution of temperature, precipitation and shortwave radiation data in New York City."
 #| warning: false
 #| eval: true
 
@@ -320,7 +320,7 @@ plot_coef_sp_city <- function(r_output_dir, phe_type){
 #| include: true
 #| fig-width: 14
 #| fig-height: 7
-#| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each taxon group in New York city."
+#| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each species in New York city. Left panel: MCMC algorithm (spBayes); Right panel: INLA algorithm."
 #| warning: false
 #| eval: true
 
