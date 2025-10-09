@@ -64,6 +64,14 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
       prcp_col, " + ", 
       srad_col, " + factor(year)"
     ))
+    
+    # check here
+    mm <- model.matrix(sp_formula, data = df)
+    cn <- colnames(mm)
+    year_cols <- grep("^factor\\(year\\)", cn)
+    p <- ncol(mm)
+    
+    
     ols_model <- lm(sp_formula, data = tavg_phe_df)
     X <- model.matrix(sp_formula, data = tavg_phe_df)
     y <- tavg_phe_df[[phe_metric]]
@@ -149,8 +157,15 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
       tau_cv    = 1.0
     )
     
+    # check here
+    tau2_year <- 5.0
+    v <- rep(100, p)
+    if (length(year_cols) > 0) v[year_cols] <- tau2_year
+    Sigma_beta <- diag(v)
+    beta_mean <- rep(0, p) 
+    
     priors <- list(
-      "beta.Norm" = list(rep(0, p), diag(100, p)),
+      "beta.Norm"  = list(beta_mean, as.matrix(Sigma_beta)),
       "phi.Unif" = c(3/(0.75*max.d), 3/(0.001*max.d)),  
       "sigma.sq.IG" = ig_priors$sigma.sq.IG,
       "tau.sq.IG" = ig_priors$tau.sq.IG,
