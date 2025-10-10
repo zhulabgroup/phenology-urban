@@ -66,7 +66,7 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
     ))
     
     # check here
-    mm <- model.matrix(sp_formula, data = df)
+    mm <- model.matrix(sp_formula, data = tavg_phe_df)
     cn <- colnames(mm)
     year_cols <- grep("^factor\\(year\\)", cn)
     p <- ncol(mm)

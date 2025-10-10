@@ -1,10 +1,10 @@
 #!/bin/bash
-#SBATCH --job-name=cities_MCMC_mat
-#SBATCH --account=zhukai0                   # Account name
+#SBATCH --job-name=cities_MCMC_mat_NY_prior
+#SBATCH --account=songyl0                   # Account name
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err
 #SBATCH --array=1
-#SBATCH --time=24:00:00
+#SBATCH --time=4:00:00
 #SBATCH --partition=standard
 #SBATCH --mem=90G
 #SBATCH --cpus-per-task=16
@@ -31,7 +31,7 @@ CITY=${CITIES[$CHAIN_INDEX]}
 WORKING_DIR=../phenology-urban/
 R_INPUT_DIR=../phenology-urban/data/
 R_SCRIPT_MCMC=../phenology-urban/script/spatial_stats_model/mcmc_alg/run_mcmc_all_models.R
-R_OUTPUT_DIR=../phenology-urban/data/proc/model_output/final_models_Grid_test/
+R_OUTPUT_DIR=../phenology-urban/data/proc/model_output/final_models_Grid_test2/
 
 # Export variables to be used in the R script
 export R_INPUT_DIR

@@ -19,7 +19,7 @@ check_install_packages(c("dplyr","lubridate", "ggplot2", "sf","sp", "readr", "pu
 if (!require(plotbiomes)) {
   devtools::install_github("valentinitnelav/plotbiomes")
 }
-load_packages(c("dplyr","lubridate", "ggplot2", "sf","sp", "readr", "purrr", "stringr","glue", "tidyr", "broom","lme4", "broom.mixed", "ppcor", "spdep", "spatialreg", "lmtest","car", "spBayes", "coda", "patchwork", "performance", "terra", "ggpmisc", "gstat", "ggmcmc", "taxize", "stats", "viridis","INLA", "raster"))
+load_packages(c("dplyr","lubridate", "ggplot2", "sf","sp", "readr", "purrr", "stringr","glue", "tidyr", "broom", "ppcor", "spBayes", "coda", "patchwork", "terra", "ggpmisc","ggmcmc", "gstat", "stats", "raster"))
 
 select <- dplyr::select # Avoid masking by base R's select function
 city <- "NewYork" # Set the city for analysis
@@ -38,7 +38,7 @@ Compared to the [previous version](https://public.websites.umich.edu/~jializ/urb
 
 -   Models were fitted separately for each species.
 
-Here are the distribution of the updated predictors:
+Here are the distributions of the updated predictors, with red points indicating the locations where phenology indicators were recorded (using one species, red maple, as an example):
 
 ```{r}
 #| label: fig-predictor
@@ -324,11 +324,11 @@ plot_coef_sp_city <- function(r_output_dir, phe_type){
 #| warning: false
 #| eval: true
 
-s_dir_path <- "~/phenology-urban/data/proc/model_output/final_models_Grid/mcmc/spatial_mat/NewYork/canonicalname/"
+s_dir_path <- "~/phenology-urban/data/proc/model_output/final_models_Grid_test2/mcmc/spatial_mat/NewYork/canonicalname/"
 s_plot_obj_mcmc <- generate_mcmc_plot(s_dir_path,  coef = "temp", fixed_sp = F)
 
 
-r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_Grid/inla/spatial_spde/NewYork/canonicalname/")
+r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_Grid_test2/inla/spatial_spde/NewYork/canonicalname/")
 plots_coef <- list()
 
 for (phe_type in phe_types) {
