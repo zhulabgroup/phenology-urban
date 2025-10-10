@@ -94,17 +94,17 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
       next  # Skip the current iteration of the loop
     }
     message(paste("Running spatial model for taxon:", taxon, "with", N_unique, "unique points."))
-    bbox_sfc <- tavg_phe |>
-      st_union() |>
-      st_convex_hull()
-    grid_poly_all <- st_make_grid(bbox_sfc, cellsize = 1000, what = "polygons")
-    grid_poly_in <- st_intersection(grid_poly_all, bbox_sfc)
-    grid_pts <- st_centroid(grid_poly_in)
-
-    pred.coords <- st_coordinates(grid_pts)
-    pred.covar <- matrix(0, nrow = nrow(pred.coords), ncol = p)
-    colnames(pred.covar) <- colnames(X)
-    pred.covar[, "(Intercept)"] <- 1
+    # bbox_sfc <- tavg_phe |>
+    #   st_union() |>
+    #   st_convex_hull()
+    # grid_poly_all <- st_make_grid(bbox_sfc, cellsize = 1000, what = "polygons")
+    # grid_poly_in <- st_intersection(grid_poly_all, bbox_sfc)
+    # grid_pts <- st_centroid(grid_poly_in)
+    # 
+    # pred.coords <- st_coordinates(grid_pts)
+    # pred.covar <- matrix(0, nrow = nrow(pred.coords), ncol = p)
+    # colnames(pred.covar) <- colnames(X)
+    # pred.covar[, "(Intercept)"] <- 1
     
     
     if (50 < N_unique){
@@ -226,14 +226,14 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
       cov.model = "matern", n.samples = n.samples,
       burn.in = burn.in,
       param_pattern = "temp_",
-      verbose = TRUE, use_knots,
-      pred.coords, pred.covar
+      verbose = TRUE, use_knots
+      # pred.coords, pred.covar
     ) {
       n.chains <- length(starting_list)
       if (is.null(burn.in)) burn.in <- floor(0.5 * n.samples)
       chain_results <- vector("list", n.chains)
       chain_recover <- vector("list", n.chains)
-      predict_w_list <- vector("list", n.chains)
+      # predict_w_list <- vector("list", n.chains)
       for (i in seq_len(n.chains)) {
         if (verbose) message("Running ", i, " chain")
         args_list <- list(
@@ -257,9 +257,9 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
           message("No samples recovered successfully for chain ", i)
           next  # Skip the current iteration of the loop
         }
-        if (verbose) message("Predicting spatial random effect")
-        predict_w <- spPredict(sp_model, pred.coords, pred.covar, start = 3000, verbose = F)
-        predict_w_list[[i]] <- predict_w
+        # if (verbose) message("Predicting spatial random effect")
+        # predict_w <- spPredict(sp_model, pred.coords, pred.covar, start = 3000, verbose = F)
+        # predict_w_list[[i]] <- predict_w
         chain_recover[[i]] <- chain_object
         # param_cols <- grep(param_pattern, colnames(chain_recover[[i]]$p.beta.recover.samples))
         chain <- chain_object$p.beta.recover.samples
@@ -279,8 +279,8 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
       
       return(list(
         beta_mcmc_list = beta_mcmc_list,
-        chains_recover = chain_recover,
-        predict_w = predict_w_list
+        chains_recover = chain_recover
+        # predict_w = predict_w_list
       ))
     }
     
@@ -296,9 +296,9 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
       n.samples = n.samples,
       burn.in = burn.in,
       param_pattern = "temp_",
-      use_knots = use_knots,
-      pred.coords = pred.coords,
-      pred.covar = pred.covar
+      use_knots = use_knots
+      # pred.coords = pred.coords,
+      # pred.covar = pred.covar
     )
     if (is.null(res)) {
       next  # Skip the current iteration of the loop
@@ -469,32 +469,32 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
     
     ############################ Plot covariance function ############################
     
-    samps <- do.call(
-      rbind,
-      lapply(res$chains_recover, function(chain) chain$p.theta.recover.samples)
-    ) |> as.data.frame()
-    matern_cor <- function(h, phi, nu) {
-      a <-  h * phi
-      out <- (2^(1 - nu) / gamma(nu)) * (a^nu) * besselK(a, nu)
-      out[a == 0] <- 1
-      out
-    }
-    dseq <- seq(0, 10000, length.out = 200)
-
-    ## Latent field correlation ρ(h) (no sigma.sq, no tau.sq)
-    rho_mat <- matrix(NA_real_, nrow = nrow(samps), ncol = length(dseq))
-    for (k in seq_len(nrow(samps))) {
-      rho_mat[k, ] <- matern_cor(dseq, samps[k, "phi"], samps[k, "nu"])
-    }
-
-    ## Credible band for correlation
-    ci <- apply(rho_mat, 2, quantile, c(0.5, 0.025, 0.975), na.rm = TRUE)
-    CorDF <- data.frame(
-      Distance = dseq,
-      Median   = ci[1, ],
-      Lower    = ci[2, ],
-      Upper    = ci[3, ]
-    )
+    # samps <- do.call(
+    #   rbind,
+    #   lapply(res$chains_recover, function(chain) chain$p.theta.recover.samples)
+    # ) |> as.data.frame()
+    # matern_cor <- function(h, phi, nu) {
+    #   a <-  h * phi
+    #   out <- (2^(1 - nu) / gamma(nu)) * (a^nu) * besselK(a, nu)
+    #   out[a == 0] <- 1
+    #   out
+    # }
+    # dseq <- seq(0, 10000, length.out = 200)
+    # 
+    # ## Latent field correlation ρ(h) (no sigma.sq, no tau.sq)
+    # rho_mat <- matrix(NA_real_, nrow = nrow(samps), ncol = length(dseq))
+    # for (k in seq_len(nrow(samps))) {
+    #   rho_mat[k, ] <- matern_cor(dseq, samps[k, "phi"], samps[k, "nu"])
+    # }
+    # 
+    # ## Credible band for correlation
+    # ci <- apply(rho_mat, 2, quantile, c(0.5, 0.025, 0.975), na.rm = TRUE)
+    # CorDF <- data.frame(
+    #   Distance = dseq,
+    #   Median   = ci[1, ],
+    #   Lower    = ci[2, ],
+    #   Upper    = ci[3, ]
+    # )
     # plot_cor <- ggplot(CorDF, aes(x = Distance, y = Median)) +
     #   geom_ribbon(aes(ymin = Lower, ymax = Upper), fill = "grey", alpha = 0.4) +
     #   geom_line(color = "blue", size = 1) +
@@ -504,18 +504,18 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
     
     ############################ Plot spatial random effect - w ############################      
 
-    Y_pred <- do.call(
-      rbind,
-      lapply(res$predict_w, function(chain) chain$p.y.predictive.samples |> t())
-    ) |> t()
-    B_draws <- do.call(rbind, lapply(res$chains_recover, function(ch) {
-      as.matrix(ch$p.beta.recover.samples)
-    }))  # S_total x p
-    Xbeta <- pred.covar %*% t(B_draws)
-    W_mat <- Y_pred - Xbeta     # n_pred x S
-    w_mean    <- rowMeans(W_mat)
-
-    surf_sf <- st_as_sf(data.frame(w_mean = w_mean), geometry = grid_poly_in)
+    # Y_pred <- do.call(
+    #   rbind,
+    #   lapply(res$predict_w, function(chain) chain$p.y.predictive.samples |> t())
+    # ) |> t()
+    # B_draws <- do.call(rbind, lapply(res$chains_recover, function(ch) {
+    #   as.matrix(ch$p.beta.recover.samples[2001:3001,])
+    # }))  # S_total x p
+    # Xbeta <- pred.covar %*% t(B_draws)
+    # W_mat <- Y_pred - Xbeta     # n_pred x S
+    # w_mean    <- rowMeans(W_mat)
+    # 
+    # surf_sf <- st_as_sf(data.frame(w_mean = w_mean), geometry = grid_poly_in)
     # plot_spatial_field <- ggplot(surf_sf) +
     #   geom_sf(aes(fill = w_mean), color = NA) +
     #   scale_fill_viridis_c() +
@@ -529,9 +529,9 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
     modelMCMCrun <- list(
       samples = res$beta_mcmc_list,
       # WAIC = list(WAIC = res_waic),
-      converge = converge$psrf[1],
-      CorDF = CorDF,
-      surf_sf = surf_sf
+      converge = converge$psrf[1]
+      # CorDF = CorDF,
+      # surf_sf = surf_sf
       # mean_logml = mean(res_logml)
     )
     write_rds(modelMCMCrun, file = model_path, compress = "gz")
