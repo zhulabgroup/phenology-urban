@@ -158,8 +158,11 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
     )
     
     # check here
-    tau2_year <- 5.0
+    tau2_year <- 25.0
     v <- rep(100, p)
+    tau2_temp <- 25.0
+    temp_idx <- which(cn==temp_col)
+    v[temp_idx] <- tau2_temp
     if (length(year_cols) > 0) v[year_cols] <- tau2_year
     Sigma_beta <- diag(v)
     beta_mean <- rep(0, p) 

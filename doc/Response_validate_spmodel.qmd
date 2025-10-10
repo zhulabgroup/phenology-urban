@@ -19,7 +19,7 @@ check_install_packages(c("dplyr","lubridate", "ggplot2", "sf","sp", "readr", "pu
 if (!require(plotbiomes)) {
   devtools::install_github("valentinitnelav/plotbiomes")
 }
-load_packages(c("dplyr","lubridate", "ggplot2", "sf","sp", "readr", "purrr", "stringr","glue", "tidyr", "broom", "ppcor", "spBayes", "coda", "patchwork", "terra", "ggpmisc","ggmcmc", "gstat", "stats", "raster"))
+load_packages(c("dplyr","lubridate", "ggplot2", "sf","sp", "readr", "purrr", "stringr","glue", "tidyr", "broom", "ppcor", "spBayes", "coda", "patchwork", "terra", "ggpmisc","ggmcmc", "gstat", "stats", "raster", "viridis"))
 
 select <- dplyr::select # Avoid masking by base R's select function
 city <- "NewYork" # Set the city for analysis
@@ -220,7 +220,7 @@ generate_mcmc_plot <- function(dir_path, coef, fixed_sp){
     ) +
       coord_flip()
   
-  p2 <- ggplot(combined_param_data |> filter(Parameter %in% c("Tilia_tomentosa", "Ulmus_americana")), aes(x = value)) +
+  p2 <- ggplot(combined_param_data, aes(x = value)) +
     geom_density(fill = "skyblue", alpha = 0.5) +
     facet_wrap(~ Parameter, ncol = 1, scales = "free_y") +
     labs(
@@ -229,7 +229,7 @@ generate_mcmc_plot <- function(dir_path, coef, fixed_sp){
     ) +
     facet_grid(Parameter ~ phe_type, scales = "free_y")+
     # geom_text(data = summary_data, aes(x = median_value-3, y = 0, label = round(median_value, 3)), vjust = -1, size = 3) +
-    geom_text(data = summary_data |> filter(Parameter %in% c("Tilia_tomentosa", "Ulmus_americana")), aes(x = median_value+3, y = 0, label = paste0("gelman.diag: ", round(converge, 4))), vjust = -1, color = "red", size = 2) +
+    geom_text(data = summary_data, aes(x = median_value+3, y = 0, label = paste0("gelman.diag: ", round(converge, 4))), vjust = -1, color = "red", size = 2) +
     theme_minimal(base_size = 9) +
     theme(
       axis.text.y = element_blank(),
@@ -324,11 +324,11 @@ plot_coef_sp_city <- function(r_output_dir, phe_type){
 #| warning: false
 #| eval: true
 
-s_dir_path <- "~/phenology-urban/data/proc/model_output/final_models_Grid_test2/mcmc/spatial_mat/NewYork/canonicalname/"
-s_plot_obj_mcmc <- generate_mcmc_plot(s_dir_path,  coef = "temp", fixed_sp = F)
+s_dir_path <- "~/phenology-urban/data/proc/model_output/final_models_Grid_test/mcmc/spatial_mat/NewYork/canonicalname/"
+s_plot_obj_mcmc <- generate_mcmc_plot(s_dir_path,  coef = "factor(year)2020", fixed_sp = F)
 
 
-r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_Grid_test2/inla/spatial_spde/NewYork/canonicalname/")
+r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_Grid_test/inla/spatial_spde/NewYork/canonicalname/")
 plots_coef <- list()
 
 for (phe_type in phe_types) {
