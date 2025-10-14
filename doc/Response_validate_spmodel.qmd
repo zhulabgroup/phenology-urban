@@ -324,7 +324,7 @@ plot_coef_sp_city <- function(r_output_dir, phe_type){
 #| warning: false
 #| eval: true
 
-city = "Atlanta"
+city = "Livingston"
 
 s_dir_path <- paste0("~/phenology-urban/data/proc/model_output/final_models/mcmc/spatial_mat/", city, "/canonicalname/")
 s_plot_obj_mcmc <- generate_mcmc_plot(s_dir_path,  coef = "temp", fixed_sp = F)
@@ -343,7 +343,7 @@ ny_sp <- wrap_plots(plots_coef, ncol = 2)
 (s_plot_obj_mcmc$coef_summary_plot +  ggtitle("MCMC")) + 
   (ny_sp) +
   # (s_plot_obj_mcmc$coef_density_plot +  ggtitle("Species")) +
-  plot_layout(ncol = 2)s
+  plot_layout(ncol = 2)
 ```
 
 Next, using Start of Season (SOS) for 10 species as an example, I updated the spatial field and covariance function fitted with `spBayes` in [@fig-ny-spbayes-plot_semi]. I consider the range of variation here to be reasonable: the spatial variation is relatively smooth, and no extreme values appear.
