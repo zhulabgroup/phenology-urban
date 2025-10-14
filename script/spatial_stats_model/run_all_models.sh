@@ -1,10 +1,10 @@
 #!/bin/bash
-#SBATCH --job-name=cities_MCMC_mat_NY_prior
+#SBATCH --job-name=cities_MCMC_mat_cities61_76
 #SBATCH --account=songyl0                   # Account name
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err
-#SBATCH --array=1
-#SBATCH --time=4:00:00
+#SBATCH --array=1-15
+#SBATCH --time=36:00:00
 #SBATCH --partition=standard
 #SBATCH --mem=90G
 #SBATCH --cpus-per-task=16
@@ -21,7 +21,7 @@
 
 
 # Define combinations of chains and iterations
-CITIES=("NewYork") # "ST" "TP" "DV" "HT"
+CITIES=("Rochester" "Sacramento" "SanDiego" "SanFrancisco" "SanJose" "SantaRosa" "Seattle" "SiouxFalls" "Spokane" "StAugustine" "StGeorge" "StLouis" "Stockton" "Tempe" "TP" "WashingtonDC")
 
 # Get the combination for this array job
 CHAIN_INDEX=$((SLURM_ARRAY_TASK_ID - 1))
