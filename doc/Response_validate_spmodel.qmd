@@ -324,11 +324,12 @@ plot_coef_sp_city <- function(r_output_dir, phe_type){
 #| warning: false
 #| eval: true
 
-s_dir_path <- "~/phenology-urban/data/proc/model_output/final_models_Grid_test/mcmc/spatial_mat/NewYork/canonicalname/"
-s_plot_obj_mcmc <- generate_mcmc_plot(s_dir_path,  coef = "factor(year)2020", fixed_sp = F)
+city = "Atlanta"
 
+s_dir_path <- paste0("~/phenology-urban/data/proc/model_output/final_models/mcmc/spatial_mat/", city, "/canonicalname/")
+s_plot_obj_mcmc <- generate_mcmc_plot(s_dir_path,  coef = "temp", fixed_sp = F)
 
-r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_Grid_test/inla/spatial_spde/NewYork/canonicalname/")
+r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_Grid/inla/spatial_spde/", city, "/canonicalname/")
 plots_coef <- list()
 
 for (phe_type in phe_types) {
@@ -342,7 +343,7 @@ ny_sp <- wrap_plots(plots_coef, ncol = 2)
 (s_plot_obj_mcmc$coef_summary_plot +  ggtitle("MCMC")) + 
   (ny_sp) +
   # (s_plot_obj_mcmc$coef_density_plot +  ggtitle("Species")) +
-  plot_layout(ncol = 2)
+  plot_layout(ncol = 2)s
 ```
 
 Next, using Start of Season (SOS) for 10 species as an example, I updated the spatial field and covariance function fitted with `spBayes` in [@fig-ny-spbayes-plot_semi]. I consider the range of variation here to be reasonable: the spatial variation is relatively smooth, and no extreme values appear.
@@ -358,7 +359,7 @@ Next, using Start of Season (SOS) for 10 species as an example, I updated the sp
 #| eval: true
 #| fig-cap: "The fitted Matern correlation functions and spatial fields for each genus in New York city, generated via spBayes."
 
-r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_Grid_test/mcmc/spatial_mat/NewYork/canonicalname/")
+r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models/mcmc/spatial_mat/NewYork/canonicalname/")
 p <- mcmc_semi_matern(r_output_dir, phe_type = "SOS")
 p$combined_plot_semi/p$combined_plot_mean
 ```
