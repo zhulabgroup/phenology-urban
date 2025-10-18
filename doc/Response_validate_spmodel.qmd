@@ -139,16 +139,18 @@ In terms of the coefficients shown in [@fig-sp-mcmc], the overall patterns are s
 
 generate_mcmc_plot <- function(dir_path, coef, fixed_sp){
   process_files <- function(file_list, phe_type_label) {
-    param_list <- map(file_list, function(file) {
-      model_data <- readRDS(file)
-      genus <- sub(paste0("(.*?)_", phe_type_label, "\\.rds"), "\\1", basename(file))
-      param_data <- ggs(model_data$samples) |>
-          filter(str_starts(Parameter, fixed(coef))) |>
-          rename(ParameterOriginal = Parameter) |>
-          mutate(Parameter = genus)|>
-          mutate(converge = model_data$converge)
-
-      return(param_data)
+    param_list <- purrr::map(file_list, function(file) {
+    model_data <- readRDS(file)
+    genus <- sub(paste0("(.*?)_", phe_type_label, "\\.rds"), "\\1", basename(file))
+    ggmcmc::ggs(model_data$samples) |>
+      dplyr::filter(stringr::str_starts(Parameter, stringr::fixed(coef))) |>
+      dplyr::rename(ParameterOriginal = Parameter) |>
+      dplyr::mutate(
+        Parameter = genus,
+        converge  = model_data$converge
+        # waic = model_data$WAIC$WAIC,
+        # milk = model_data$mean_logml
+      )
     })
     combined_param_data <- bind_rows(param_list) |>
       mutate(phe_type = phe_type_label)
@@ -324,7 +326,7 @@ plot_coef_sp_city <- function(r_output_dir, phe_type){
 #| warning: false
 #| eval: true
 
-city = "Livingston"
+city = "Seattle"
 
 s_dir_path <- paste0("~/phenology-urban/data/proc/model_output/final_models/mcmc/spatial_mat/", city, "/canonicalname/")
 s_plot_obj_mcmc <- generate_mcmc_plot(s_dir_path,  coef = "temp", fixed_sp = F)

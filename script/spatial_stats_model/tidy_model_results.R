@@ -88,34 +88,19 @@ cities <- gsub("\\.rds$", "", basename(rds_files))
 phe_types <- c("SOS", "EOS")
 
 prepare_coef_summary_mcmc <- function(r_output_dir, phe_type){
-  process_files <- function(file_list, phe_type_label) {
-    param_list <- map(file_list, function(file) {
-      model_data <- readRDS(file)
-      genus <- sub(paste0("(.*?)_", phe_type_label, "\\.rds"), "\\1", basename(file))
-        param_data <- ggs(model_data$samples) |>
-          filter(str_starts(Parameter, fixed(coef))) |>
-          rename(ParameterOriginal = Parameter) |>
-          mutate(Parameter = genus) |>
-          # mutate(waic = model_data$WAIC$WAIC,
-          mutate(converge = model_data$converge)
-        #        milk = model_data$mean_logml)
-      return(param_data)
-    })
-    combined_param_data <- bind_rows(param_list)
-    return(combined_param_data)
-  }
-  
   files <- list.files(r_output_dir, pattern = paste0(phe_type, "\\.rds$"), full.names = TRUE)
-  combined_param_data <- map(files, function(file) {
+  combined_param_data <- purrr::map(files, function(file) {
     model_data <- readRDS(file)
-    genus <- sub(paste0("(.*?)_", phe_type_label, "\\.rds"), "\\1", basename(file))
-    param_data <- ggs(model_data$samples) |>
-      filter(str_starts(Parameter, fixed(coef))) |>
-      rename(ParameterOriginal = Parameter) |>
-      mutate(Parameter = genus) |>
-      # mutate(waic = model_data$WAIC$WAIC,
-      mutate(converge = model_data$converge)
-    #        milk = model_data$mean_logml)
+    genus <- sub(paste0("(.*?)_", phe_type, "\\.rds"), "\\1", basename(file))
+    ggmcmc::ggs(model_data$samples) |>
+      dplyr::filter(stringr::str_starts(Parameter, stringr::fixed("temp"))) |>
+      dplyr::rename(ParameterOriginal = Parameter) |>
+      dplyr::mutate(
+        Parameter = genus,
+        converge  = model_data$converge
+        # waic = model_data$WAIC$WAIC,
+        # milk = model_data$mean_logml
+      )
   }) |>
     bind_rows()
   
@@ -126,6 +111,7 @@ prepare_coef_summary_mcmc <- function(r_output_dir, phe_type){
       median_value = median(value, na.rm = TRUE),
       lower_2_5 = quantile(value, 0.025, na.rm = TRUE),
       upper_97_5 = quantile(value, 0.975, na.rm = TRUE),
+      sd_value = sd(value, na.rm = TRUE),
       # waic = first(waic),
       converge = first(converge),
       # milk = first(milk),
@@ -137,9 +123,9 @@ prepare_coef_summary_mcmc <- function(r_output_dir, phe_type){
   write_rds(summary_data, paste0(r_output_dir, phe_type, "_summary.rds"))
 }
   
-for (city in cities[51]) { 
+for (city in cities) { 
   message(paste0("Processing city: ", city))
-  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_Grid_test/mcmc/random_group_sp/", city, "/canonicalname/")
+  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models/mcmc/spatial_mat/", city, "/canonicalname/")
   for (phe_type in phe_types){
     prepare_coef_summary_mcmc(r_output_dir, phe_type)
   }
