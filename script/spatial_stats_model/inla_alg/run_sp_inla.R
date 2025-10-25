@@ -598,14 +598,21 @@ run_inla_species = function(model_input_all, r_output_dir, phe_type, city){
       
       cat(sprintf("\n Running INLA for species: %s, phe_type: %s, city: %s\n", 
                   species, phe_type, city))
-      if (phe_type %in% c("SOS","EOS")) {
-        phe_metric <- "doy"
-      } else {
-        phe_metric <- "doy_diff"
-      }
+      phe_metric <- "doy"
       
       model_input_sf <- model_input_all %>%
-        filter(canonicalname == species) %>%
+        filter(canonicalname == species)
+      
+      x <- model_input_sf[[phe_metric]]
+      q <- stats::quantile(x, probs = c(0.25, 0.75), na.rm = TRUE)
+      iqr <- diff(q)
+      lo  <- q[1] - 1.5 * iqr
+      hi  <- q[2] + 1.5 * iqr
+      model_input_sf <- model_input_sf %>%
+        filter(is.na(.data[[phe_metric]]) |
+                 dplyr::between(.data[[phe_metric]], lo, hi))
+        
+      model_input_sf <- model_input_sf %>%
         st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
         st_transform(crs = 5070) %>%
         mutate(lon = st_coordinates(.)[,1], lat = st_coordinates(.)[,2],

@@ -76,7 +76,7 @@ prepare_data <- function(city, source, taxa_col, phe_type) {
       filter(site == !!city)
     file_list <- list.files(path = "~/lab-data/datasets/vegetation/PS/urban/doy", pattern = paste0("^doy_",city,"_.*\\.rds$"), full.names = TRUE)
     data_list <- file_list %>%
-      map(~ readRDS(.x))
+      purrr::map(~ readRDS(.x))
     all_doy <- bind_rows(data_list)
     tree_location <- metadata %>%
       mutate(genus = str_extract(taxa, "^[^ ]+")) %>%

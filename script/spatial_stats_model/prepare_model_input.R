@@ -60,7 +60,7 @@ prepare_data <- function(city, source, taxa_col, phe_type) {
     #Join to phenology data
     file_list <- list.files(path = "/scratch/zhukai_root/zhukai0/jializ/PS/CONUS_urban/doy/", pattern = paste0("^doy_",city,"_.*\\.rds$"), full.names = TRUE)
     data_list <- file_list %>%
-      map(~ read_rds(.x))
+      purrr::map(~ read_rds(.x))
     all_doy <- bind_rows(data_list)
     tree_climate_phe <- tree_climate_hex |>
       left_join(all_doy, by = c("id", "year"))
@@ -187,7 +187,7 @@ prepare_only_phe <- function(city, phe_type, taxon_col, summary = TRUE){
     filter(site == !!city)
   file_list <- list.files(path = "~/lab-data/datasets/vegetation/PS/urban/doy", pattern = paste0("^doy_",city,"_.*\\.rds$"), full.names = TRUE)
   data_list <- file_list %>%
-    map(~ readRDS(.x))
+    purrr::map(~ readRDS(.x))
   all_doy <- bind_rows(data_list)
   tree_location <- metadata %>%
     mutate(genus = str_extract(taxa, "^[^ ]+")) %>%

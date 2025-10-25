@@ -26,7 +26,7 @@ source(here("script/spatial_stats_model/prepare_model_input.R"))
 ################################## run spatial model ##################################
 source(here("script/spatial_stats_model/inla_alg/run_sp_inla.R"))
 
-for (phe_type in c("SOS", "EOS")) {
+for (phe_type in c("SOS")) {
   model_input_all <- prepare_data(city, source = "Grid", taxa_col= "canonicalname", phe_type = phe_type)
   run_inla_species(model_input_all, r_output_dir, phe_type, city)
   # model_input_all <- prepare_data(city, source = "WU", taxa_col= "genus", phe_type = phe_type)
