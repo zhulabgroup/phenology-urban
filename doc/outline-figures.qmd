@@ -214,8 +214,8 @@ p_geo + p_pca +
 one species across cities, raw DOY histogram -> IQR boxplot -> IQR scatterplot (within and scross)
 
 ```{r}
-species = "Acer saccharinum"
-phe_type = "SOS"
+species = "Acer rubrum"
+phe_type = "EOS"
 all_city_input <- read_rds(paste0("~/phenology-urban/data/proc/model_output/all_", phe_type, "_input.rds")) |>
   filter(year < 2024) |>
   mutate(year = as.factor(year))
@@ -239,7 +239,7 @@ sp_histgram_SOS <- ggplot() +
     name = "Density (by city)",
     sec.axis = sec_axis(~ . / 4, name = "Overall density")
   ) +
-  labs(x = "Start-of-season (DOY)") +
+  labs(x = "End-of-season (DOY)") +
   theme_classic() +
   theme(
     axis.text.x = element_text(size = 10),
@@ -248,7 +248,7 @@ sp_histgram_SOS <- ggplot() +
     legend.position = "none"
   ) +
   ggtitle(paste0( species))+
-  scale_x_continuous(limits = c(-100, 300))
+  scale_x_continuous(limits = c(100, 400))
 
 sp_boxplot_SOS <- ggplot() +
   geom_errorbar(data = all_city_input |>
@@ -279,8 +279,8 @@ sp_boxplot_SOS <- ggplot() +
     fill = "grey60", alpha = 0.5, inherit.aes = FALSE
   ) +
   scale_color_manual(values = color_palette) + 
-  coord_flip(ylim = c(-100, 300)) +
-  labs(x = "City", y = "Interquartile range of start-of-season (DOY)") +
+  coord_flip(ylim = c(100, 400)) +
+  labs(x = "City", y = "Interquartile range of end-of-season (DOY)") +
   theme_classic() +
   theme(
     axis.text.y = element_blank(),
@@ -309,8 +309,8 @@ IQR_scatter <- ggplot(summary_data,
               color = "black", linetype = "dashed", linewidth = 0.8) +
   # geom_smooth(method = "lm", se = FALSE, color = "black", linewidth = 0.8, linetype = "solid") +
   scale_color_manual(values = color_palette) + 
-  labs(x = "Interquartile range of start-of-season across cities (DOY)", 
-       y = "Interquartile range of start-of-season within city (DOY)") +
+  labs(x = "Interquartile range of end-of-season across cities (DOY)", 
+       y = "Interquartile range of end-of-season within city (DOY)") +
   theme_classic() +
   theme(
     axis.text.y = element_text(size = 10),
@@ -904,7 +904,7 @@ ny_sp = wrap_plots(plots_coef, ncol = 2)
 ny_sp
 ```
 
-### The distriution of effects
+### The spatial distriution of effects
 
 ```{r}
 coef_summary_all <- data.frame()
@@ -1134,6 +1134,7 @@ for (city in cities) {
   }
 }
 
+most_sp <- table(coef_summary_all$Parameter,coef_summary_all$phe_type) |> as.data.frame()
 # Gleditsia triacanthos
 # Acer platanoides
 # Acer saccharum
@@ -1153,7 +1154,7 @@ for (city in cities) {
 # Ulmus pumila
 # "Ulmus pumila"
 
-species = "Ulmus_americana"
+species = "Ginkgo_biloba"
 combine_feature <- coef_summary_all |>
   filter(Parameter == species) |>
   rename(sd = sd_value, Estimate = median_value,
@@ -1253,12 +1254,15 @@ p_sos + ggtitle(species) +
 
 ### Phylogeny
 
+Prepare tree
+
 ```{r}
 
 library(V.PhyloMaker2)
 library(ggtree)
 library(ggpubr)
-sp <- sort(unique(coef_summary_all$Factor))
+library(taxize)
+sp <- gsub("_", " ", sort(unique(coef_summary_all$Parameter)))
 sp_df_family <- tax_name(sp, get = "family", db = "ncbi")
 families <- sp_df_family %>%
   separate(query, into = c("genus", "species_ep"), sep = " ",remove=F) %>%
@@ -1282,47 +1286,6 @@ tr <- phylo.maker(families)
 phylo_tree <- tr[[1]]
 phylo_tree$tip.label <- phylo_tree$tip.label %>% gsub("_", " ", .)
 
-dat_ny <- coef_summary_all %>%
-  filter(city == "NewYork", phe_type == "EOS") %>%   # 或 "EOS"
-  select(Factor, Estimate) |>
-  mutate(species = Factor)
-
-dat_ny <- dat_ny %>% filter(species %in% phylo_tree$tip.label)
-tr_ny  <- drop.tip(phylo_tree, setdiff(phylo_tree$tip.label, dat_ny$species))
-dat_ny <- dat_ny %>% arrange(match(species, tr_ny$tip.label))
-
-ny_lab <- data.frame(label = tr_ny$tip.label) |>
-  mutate(newlabel = label_pad(label))   # or: mutate(newlabel = stringr::str_pad(label, width = max(nchar(label)), side = "right"))
-
-# 1) Build the tree and print aligned labels
-# ny_tree <- ggtree(tr_ny,layout = "circular") %<+% ny_lab + xlim(NA, 5)
-ny_tree <- ggtree(tr_ny, layout = "circular")+ 
-  geom_tiplab(offset = 55, size =3)
-df_ring <- dat_ny %>%
-  transmute(label = species, Estimate)
-p_ring <- ny_tree +
-  geom_fruit(
-    data  = df_ring,
-    geom  = geom_col,                               
-    mapping = aes(y = label, x = Estimate, fill = Estimate),
-    orientation = "y",
-    width  = 0.6,       
-    offset = 0.13,     
-    pwidth = 0.25,     
-    axis.params = list(axis="none", text=FALSE, line=FALSE, ticks=FALSE)
-  ) +
-  scale_fill_gradient2(low = "#FCA636FF", mid = "white", high = "#0D0887FF", midpoint = 0,
-                       name = "Estimate") +
-  theme_void()
-
-p_ring
-```
-
-pglmm
-
-```{r}
-library(phytools)
-library(phyr)
 
 D <- coef_summary_all %>%
   rename(species = Parameter)|>
@@ -1359,6 +1322,13 @@ D2 <- D2 %>%
          w = 1 / (sd^2)) %>%
   droplevels()
 A2 <- A2[levels(D2$species), levels(D2$species)]
+```
+
+pglmm
+
+```{r}
+library(phytools)
+library(phyr)
 
 m_city <- pglmm(
   Estimate ~ 1+ (1|species__) + (1|city) + bio12_s + bio1_s,
@@ -1369,9 +1339,32 @@ m_city <- pglmm(
 )
 
 plot_bayes(m_city, sort = TRUE)
-
 ```
 
+
+The residual
+
+```{r}
+library(lme4)
+library(phytools)
+m_city_nophyr <- lmer(Estimate ~ bio12_s+ bio1_s + (1|city),
+                      data = D2, weights = w)
+D2$resid <- residuals(m_city_nophyr)
+resid_species <- aggregate(resid ~ species, data = D2, mean)
+
+common_species <- intersect(tr2$tip.label, resid_species$species)
+phy <- drop.tip(tr2, setdiff(tr2$tip.label, common_species))
+resid_species <- resid_species[match(common_species, resid_species$species), ]
+resid_vec <- resid_species$resid
+names(resid_vec) <- resid_species$species
+
+phylosig(tr2, resid_vec, method = "K", test = TRUE)
+phylosig(phy, resid_vec, method = "lambda", test = TRUE)
+```
+
+
+
+The variance components
 
 ```{r}
 library(lme4)

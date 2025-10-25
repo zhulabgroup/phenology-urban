@@ -397,6 +397,10 @@ ggplot(npn_points, aes(n)) +
 # saveRDS(npn_points, here("data/raw/CONUS/NPN/NPN1624/npn_points.rds"))
 ```
 
+
+
+
+
 # Processing PlanetScope data
 
 PlanetScope, with a spatial resolution of 3 m and a daily revisit cycle, provides an excellent opportunity to capture plant phenology on a large scale and at an individual tree level. The workflow for downloading PlanetScope imagery, processing time-series data, and extracting phenological metrics follows the procedures outlined in the `batchplanet` package and @song_ps.
@@ -411,7 +415,7 @@ Due to the PS quota limit, I processed data for only 3 example cities: New Yorkâ
 
 [@fig-npn-sos-ps] compares the start of season (SOS) dates derived from NPN observations with those estimated from PlanetScope imagery across the first 2 cases (the third case has few smaples). 
 
-The red 1:1 line indicates perfect agreement, while the grey dashed line shows the fitted linear regression (fixed intercept) from NPN SOS to PS SOS. Each point represents the mean NPN SOS for a given location, and the horizontal line ranges show the 5th and 95th percentiles of NPN SOS. Point colors indicate the site (city).
+The grey dashed 1:1 line indicates perfect agreement. Each point represents the mean NPN SOS for a given location, and the horizontal line ranges show the 5th and 95th percentiles of NPN SOS. Point colors indicate the site (city).
 
 Generally, the trend suggests a consistency between PS-derived SOS and NPN-derived SOS. However, the plot shows that PS SOS tends to be consistently earlier than NPN SOS across locations, as most points fall below the 1:1 line.
 
@@ -419,22 +423,22 @@ Generally, the trend suggests a consistency between PS-derived SOS and NPN-deriv
 #| fig-height: 6
 #| fig-width: 10
 #| warning: false
-npn_points <- readRDS(here("data/raw/CONUS/NPN/NPN1624/npn_points.rds")) |>
-  left_join(
-    us_city |> select(NAME20, UACE20),
-    by = c("site" = "UACE20")
-  )
+
+
+npn_points <- readRDS("~/phenology-urban/data/raw/CONUS/StreetTrees/cleaned_ps_input/summary/matching_npn.rds")
 
 # read in all PS_doy_data.rds in the folder
-ps_doy_data <- lapply(list.files(here("data/raw/CONUS/NPN/NPN1624/doy"),
+ps_doy_data <- lapply(list.files(here("data/raw/CONUS/NPN/PS_valid/"),
                                  pattern = ".rds", full.names = TRUE), 
                       readRDS) |>
-  bind_rows()
+  bind_rows() |>
+  filter(doy != "NA") 
+
 
 npn_sos_ps <- npn_sos |>
   left_join(npn_points, by = c("Longitude" = "lon", "Latitude" = "lat")) |>
   left_join(ps_doy_data |>
-              filter(direction == "up"), by = c("id", "year")) |>
+              filter(direction == "up"), by = c("new_id" = "id", "year")) |>
   na.omit()
 
 
@@ -467,10 +471,9 @@ plot_weighted_fit <- function(df) {
   annot_label <- paste0("y = ", slope, "x", "\nRMSE = ", rmse)
 
   ggplot(df, aes(x = mean, y = doy)) +
-    geom_linerange(aes(xmin = p5, xmax = p95), width = 0.5, alpha = 0.3) +
+    geom_linerange(aes(xmin = p5, xmax = p95, color = site), width = 0.5, alpha = 0.3) +
     geom_point(aes(color = site)) +
-    geom_abline(slope = 1, intercept = 0, color = "red") +
-    geom_line(aes(y = fitted), color = "grey50", linetype = "dashed") +
+    geom_abline(slope = 1, intercept = 0, color = "grey50", linetype = "dashed") +
     annotate("text",
              x = min(df$mean, na.rm = TRUE),
              y = max(df$doy, na.rm = TRUE),
@@ -481,17 +484,17 @@ plot_weighted_fit <- function(df) {
       x = "NPN SOS",
       y = "PS SOS"
     ) +
-    theme_minimal()
+    theme_minimal() +
+    theme(legend.position = "none")
 }
 
 plots <- lapply(split_by_type, plot_weighted_fit)
 
 plots[[1]] + plots[[2]] +
-  plot_layout(guides = "collect") & 
-  theme(legend.position = "right")
+  plot_layout(guides = "collect")
 ```
 
-[@fig-npn-eos-ps] compares the EOS derived from NPN observations with those estimated from PlanetScope imagery across the two cases. In both cases, the agreement for EOS is better than that for SOS, particularly in case 2, where the metric is based on 'Falling leaves'. This may be because senescence-related phenophases produce more distinct signals that are easier to detect in both remote sensing and ground-based observations.
+[@fig-npn-eos-ps] compares the EOS derived from NPN observations with those estimated from PlanetScope imagery across the two cases. In terms of RMSE, there is a better agreement between PS-derived SOS and NPN-derived SOS compared to EOS. However, the scatter around the 1:1 line is more balanced for EOS, particularly in case 2, where the metric is based on 'Falling leaves'.
 
 ```{r fig-npn-eos-ps}
 #| fig-height: 6
@@ -501,7 +504,7 @@ plots[[1]] + plots[[2]] +
 npn_eos_ps <- npn_eos |>
   left_join(npn_points, by = c("Longitude" = "lon", "Latitude" = "lat")) |>
   left_join(ps_doy_data |>
-              filter(direction == "down"), by = c("id", "year")) |>
+             filter(direction == "down"), by = c("new_id" = "id", "year")) |>
   na.omit()
 
 summary_npn_eos_ps_all <- npn_eos_ps %>%
@@ -537,10 +540,9 @@ plot_weighted_fit <- function(df) {
   annot_label <- paste0("y = ", slope, "x", "\nRMSE = ", rmse)
 
   ggplot(df, aes(x = mean, y = doy)) +
-    geom_linerange(aes(xmin = p5, xmax = p95), width = 0.5, alpha = 0.3) +
+    geom_linerange(aes(xmin = p5, xmax = p95,color = site), width = 0.5, alpha = 0.3) +
     geom_point(aes(color = site)) +
-    geom_abline(slope = 1, intercept = 0, color = "red") +
-    geom_line(aes(y = fitted), color = "grey50", linetype = "dashed") +
+    geom_abline(slope = 1, intercept = 0, color = "grey50", linetype = "dashed") +
     annotate("text",
              x = min(df$mean, na.rm = TRUE),
              y = max(df$doy, na.rm = TRUE),
@@ -551,15 +553,19 @@ plot_weighted_fit <- function(df) {
       x = "NPN EOS",
       y = "PS EOS"
     ) +
-    theme_minimal()
+    theme_minimal() +
+    theme(legend.position = "none")
 }
 
 plots <- lapply(split_by_type, plot_weighted_fit)
 
 plots[[1]] + plots[[2]] +
-  plot_layout(guides = "collect") & 
-  theme(legend.position = "right")
+  plot_layout(guides = "collect")
 ```
+
+The comparison results are similar to those of @ps_npn_zhao, where the PS-derived MOS (middle of spring) is generally lower than the ground-observed MOS, while the MOF (middle of fall) shows a more balanced distribution.
+
+![Comparison of individual tree-scale phenological metrics respectively derived from PlanetScope and ground observations. The values plotted here include the dates for (b) MOS and (e) MOF in both 2018 (circles) and 2019 (triangles). Different colors indicate different study sites.](image/fig-zhao.png){#fig-zhao fig-align="center" width="40%"}
 
 # Discussion
 
