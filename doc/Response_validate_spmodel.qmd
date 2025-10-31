@@ -326,12 +326,12 @@ plot_coef_sp_city <- function(r_output_dir, phe_type){
 #| warning: false
 #| eval: true
 
-city = "Seattle"
+city = "SanJose"
 
 s_dir_path <- paste0("~/phenology-urban/data/proc/model_output/final_models/mcmc/spatial_mat/", city, "/canonicalname/")
 s_plot_obj_mcmc <- generate_mcmc_plot(s_dir_path,  coef = "temp", fixed_sp = F)
 
-r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_Grid/inla/spatial_spde/", city, "/canonicalname/")
+r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models/inla/spatial_spde/", city, "/canonicalname/")
 plots_coef <- list()
 
 for (phe_type in phe_types) {

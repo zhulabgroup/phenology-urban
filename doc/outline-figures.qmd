@@ -214,14 +214,19 @@ p_geo + p_pca +
 one species across cities, raw DOY histogram -> IQR boxplot -> IQR scatterplot (within and scross)
 
 ```{r}
+library(randomcoloR)
 species = "Acer rubrum"
-phe_type = "EOS"
+phe_type = "SOS"
 all_city_input <- read_rds(paste0("~/phenology-urban/data/proc/model_output/all_", phe_type, "_input.rds")) |>
   filter(year < 2024) |>
   mutate(year = as.factor(year))
 fixed_city <- unique(all_city_input$city) |>
       sort()
-color_palette <- setNames(viridis(length(fixed_city)), fixed_city)
+set.seed(123)
+color_palette <- setNames(
+  distinctColorPalette(length(fixed_city)),
+  fixed_city
+)
 
 sp_histgram_SOS <- ggplot() +
   geom_density(data = all_city_input|>
@@ -229,17 +234,14 @@ sp_histgram_SOS <- ggplot() +
                aes(x = doy, fill = city), 
                color = alpha("black", 0.3), 
                linewidth= 0.3, alpha = 0.5) +
-  geom_density(data = all_city_input|>
-                 filter(canonicalname == species), 
-               color = alpha("black"),
-               aes(x = doy, y = after_stat(density) * 4),
-               linewidth= 0.5, fill = "grey", alpha = 0.5) +
   scale_fill_manual(values = color_palette) + 
   scale_y_continuous(
-    name = "Density (by city)",
-    sec.axis = sec_axis(~ . / 4, name = "Overall density")
+    name = "Density"
   ) +
-  labs(x = "End-of-season (DOY)") +
+  labs(x = case_when(
+    phe_type == "SOS" ~ "Start-of-season (DOY)",
+    phe_type == "EOS" ~ "End-of-season (DOY)"
+  )) +
   theme_classic() +
   theme(
     axis.text.x = element_text(size = 10),
@@ -248,7 +250,13 @@ sp_histgram_SOS <- ggplot() +
     legend.position = "none"
   ) +
   ggtitle(paste0( species))+
-  scale_x_continuous(limits = c(100, 400))
+  scale_x_continuous(limits = case_when(
+    phe_type == "SOS" ~ c(-50, 250),
+    phe_type == "EOS" ~ c(150, 450)
+  ))+
+  theme(axis.title.x = element_blank(),
+        axis.text.x  = element_blank(),
+        axis.ticks.x = element_blank())
 
 sp_boxplot_SOS <- ggplot() +
   geom_errorbar(data = all_city_input |>
@@ -263,24 +271,24 @@ sp_boxplot_SOS <- ggplot() +
                     .groups = "drop"), 
                aes(x = city, ymin = lower_IQR_d, ymax = upper_IQR_d, color = city), 
                width = 0.2, linewidth = 1, alpha = 0.5) +
-  geom_rect(
-    data = all_city_input |>
-      filter(canonicalname == species) %>%
-      summarise(
-        lower_IQR = quantile(doy, 0.25, na.rm = TRUE),
-        upper_IQR = quantile(doy, 0.75, na.rm = TRUE),
-        .groups = "drop"
-      ),
-    aes(xmin = 0.5, xmax = length((all_city_input |>
-                                     filter(canonicalname == species) |> 
-                                     distinct(city) |>
-                                     pull())),
-        ymin = lower_IQR, ymax = upper_IQR),
-    fill = "grey60", alpha = 0.5, inherit.aes = FALSE
-  ) +
+  geom_point(data = all_city_input |>
+                  filter(canonicalname == species)|>
+                  dplyr::group_by(city) |>
+                  dplyr::summarise(
+                    median_doy = median(doy, na.rm = TRUE),
+                    .groups = "drop"), 
+               aes(x = city, y = median_doy, color = city), 
+               size = 2, alpha = 0.5) +
   scale_color_manual(values = color_palette) + 
-  coord_flip(ylim = c(100, 400)) +
-  labs(x = "City", y = "Interquartile range of end-of-season (DOY)") +
+  coord_flip(ylim = case_when(
+    phe_type == "SOS" ~ c(-50, 250),
+    phe_type == "EOS" ~ c(150, 450)
+  )) +
+  labs(x = "City") +
+  labs(y = case_when(
+    phe_type == "SOS" ~ "Start-of-season (DOY)",
+    phe_type == "EOS" ~ "End-of-season (DOY)"
+  )) +
   theme_classic() +
   theme(
     axis.text.y = element_blank(),
@@ -290,6 +298,122 @@ sp_boxplot_SOS <- ggplot() +
     legend.position = "none"
   )
 
+
+sum_histgram_SOS <- ggplot() +
+  geom_density(data = all_city_input |>
+                  filter(canonicalname == species)|>
+                  dplyr::group_by(city) |>
+                  dplyr::summarise(
+                    median_doy = median(doy, na.rm = TRUE),
+                    IQR_d = quantile(doy, 0.75, na.rm = TRUE) - quantile(doy, 0.25, na.rm = TRUE),
+                    lower_IQR_d = max(quantile(doy, 0.25, na.rm = TRUE), min(doy, na.rm = TRUE)),
+                    upper_IQR_d = min(quantile(doy, 0.75, na.rm = TRUE), max(doy, na.rm = TRUE)),
+                    .groups = "drop"),
+               color = alpha("black"),
+               aes(x = median_doy),
+               linewidth= 0.5, fill = "grey60", alpha = 0.5) +
+  scale_y_continuous(
+    name = "Density",
+    breaks = seq(0, 0.04, by = 0.02)
+  ) +
+  labs(x = case_when(
+    phe_type == "SOS" ~ "Median start-of-season by city (DOY)",
+    phe_type == "EOS" ~ "Median end-of-season by city (DOY)"
+  )) +
+  theme_classic() +
+  theme(
+    axis.text.x = element_text(size = 10),
+    axis.text.y = element_text(size = 10),
+    title = element_text(size = 14),
+    legend.position = "none"
+  ) +
+  scale_x_continuous(limits = case_when(
+    phe_type == "SOS" ~ c(-50, 250),
+    phe_type == "EOS" ~ c(150, 450)
+  )) +
+  theme(axis.title.x = element_blank(),
+        axis.text.x  = element_blank(),
+        axis.ticks.x = element_blank())
+
+sum_boxplot_SOS <- ggplot() +
+  geom_errorbar(data = all_city_input |>
+                  filter(canonicalname == species)|>
+                  dplyr::group_by(city) |>
+                  dplyr::summarise(
+                    median_doy = median(doy, na.rm = TRUE),
+                    .groups = "drop") |>
+                  summarise(
+                    median_doy_cities = median(median_doy, na.rm = TRUE),
+                    IQR_d = quantile(median_doy, 0.75, na.rm = TRUE) - quantile(median_doy, 0.25, na.rm = TRUE),
+                    lower_IQR_d = max(quantile(median_doy, 0.25, na.rm = TRUE), min(median_doy, na.rm = TRUE)),
+                    upper_IQR_d = min(quantile(median_doy, 0.75, na.rm = TRUE), max(median_doy, na.rm = TRUE)),
+                    .groups = "drop"), 
+               aes(x = "none", ymin = lower_IQR_d, ymax = upper_IQR_d), 
+               color = "grey60", width = 0.2, linewidth = 1, alpha = 0.5) +
+  geom_point(data = all_city_input |>
+                  filter(canonicalname == species)|>
+                  dplyr::group_by(city) |>
+                  dplyr::summarise(
+                    median_doy = median(doy, na.rm = TRUE),
+                    .groups = "drop") |>
+                  summarise(
+                    median_doy_cities = median(median_doy, na.rm = TRUE),
+                    IQR_d = quantile(median_doy, 0.75, na.rm = TRUE) - quantile(median_doy, 0.25, na.rm = TRUE),
+                    lower_IQR_d = max(quantile(median_doy, 0.25, na.rm = TRUE), min(median_doy, na.rm = TRUE)),
+                    upper_IQR_d = min(quantile(median_doy, 0.75, na.rm = TRUE), max(median_doy, na.rm = TRUE)),
+                    .groups = "drop"), 
+               aes(x = "none", y = median_doy_cities), 
+               color = "grey60", size = 2, alpha = 0.5) +
+  # geom_rect(
+  #   data = all_city_input |>
+  #     filter(canonicalname == species) %>%
+  #     summarise(
+  #       lower_IQR = quantile(doy, 0.25, na.rm = TRUE),
+  #       upper_IQR = quantile(doy, 0.75, na.rm = TRUE),
+  #       .groups = "drop"
+  #     ),
+  #   aes(xmin = 0.5, xmax = length((all_city_input |>
+  #                                    filter(canonicalname == species) |> 
+  #                                    distinct(city) |>
+  #                                    pull())),
+  #       ymin = lower_IQR, ymax = upper_IQR),
+  #   fill = "grey60", alpha = 0.5, inherit.aes = FALSE
+  # ) +
+  coord_flip(ylim = case_when(
+    phe_type == "SOS" ~ c(-50, 250),
+    phe_type == "EOS" ~ c(150, 450)
+  )) +
+  labs(y = case_when(
+    phe_type == "SOS" ~ "Median start-of-season by city (DOY)",
+    phe_type == "EOS" ~ "Median end-of-season by city (DOY)"
+  )) +
+  theme_classic() +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.x = element_text(size = 10),
+    title = element_text(size = 14),
+    legend.position = "none"
+  )
+
+top <- wrap_plots(
+  sp_histgram_SOS, sp_boxplot_SOS,
+  ncol = 1, heights = c(3, 3)
+)
+
+bottom <- wrap_plots(
+  sum_histgram_SOS, sum_boxplot_SOS,
+  ncol = 1, heights = c(1, 1)
+)
+
+final_plot <- wrap_plots(
+  top, bottom,
+  ncol = 1, heights = c(6, 2)
+)
+
+
+
 summary_data <- all_city_input |>
   dplyr::group_by(canonicalname, city, genus) |>
   dplyr::summarise(
@@ -297,20 +421,34 @@ summary_data <- all_city_input |>
     IQR_d = quantile(doy, 0.75, na.rm = TRUE) - quantile(doy, 0.25, na.rm = TRUE),
     .groups = "drop") |>
   left_join(all_city_input |>
+              dplyr::group_by(canonicalname, city, genus) |>
+              dplyr::summarise(
+                median_doy = median(doy, na.rm = TRUE),
+                IQR_d = quantile(doy, 0.75, na.rm = TRUE) - quantile(doy, 0.25, na.rm = TRUE),
+                .groups = "drop") |>
               dplyr::group_by(canonicalname, genus) |>
               dplyr::summarise(
-                IQR_d_all = quantile(doy, 0.75, na.rm = TRUE) - quantile(doy, 0.25, na.rm = TRUE),
-                .groups = "drop"), by = c("canonicalname", "genus"))
+                IQR_d_all = quantile(median_doy, 0.75, na.rm = TRUE) - quantile(median_doy, 0.25, na.rm = TRUE),
+                median_d_all = median(IQR_d, na.rm = TRUE),
+                upper_all = quantile(IQR_d, 0.75, na.rm = TRUE),
+                lower_all = quantile(IQR_d, 0.25, na.rm = TRUE),
+                .groups = "drop"),
+            by = c("canonicalname", "genus"))
 
 IQR_scatter <- ggplot(summary_data, 
        aes(x = IQR_d_all, y = IQR_d, color = city)) +
   geom_point(size = 2, alpha = 0.7) +
   geom_abline(slope = 1, intercept = 0, 
               color = "black", linetype = "dashed", linewidth = 0.8) +
-  # geom_smooth(method = "lm", se = FALSE, color = "black", linewidth = 0.8, linetype = "solid") +
   scale_color_manual(values = color_palette) + 
-  labs(x = "Interquartile range of end-of-season across cities (DOY)", 
-       y = "Interquartile range of end-of-season within city (DOY)") +
+  labs(x = case_when(
+         phe_type == "SOS" ~ "Interquartile range of start-of-season across cities (DOY)",
+         phe_type == "EOS" ~ "Interquartile range of end-of-season across cities (DOY)"
+  ), 
+       y = case_when(
+         phe_type == "SOS" ~ "Interquartile range of start-of-season within city (DOY)",
+         phe_type == "EOS" ~ "Interquartile range of end-of-season within city (DOY)"
+  )) +
   theme_classic() +
   theme(
     axis.text.y = element_text(size = 10),
@@ -318,6 +456,32 @@ IQR_scatter <- ggplot(summary_data,
     title = element_text(size = 14),
     legend.position = "none"
   )  
+
+IQR_boxplot <- ggplot() +
+  geom_errorbar(data = summary_data |> filter(IQR_d_all != 0), 
+               aes(x = IQR_d_all, ymin = lower_all, ymax = upper_all), 
+               width = 0.3, linewidth = 0.3, alpha = 0.5, color = "grey") +
+  geom_point(data = summary_data |> filter(IQR_d_all != 0), 
+               aes(x = IQR_d_all, y = median_d_all), 
+               size = 0.5, alpha = 0.5,  color = "grey") +
+  geom_abline(slope = 1, intercept = 0, 
+              color = "black", linetype = "dashed", linewidth = 0.8) +
+  labs(x = case_when(
+         phe_type == "SOS" ~ "Interquartile range of start-of-season across cities (DOY)",
+         phe_type == "EOS" ~ "Interquartile range of end-of-season across cities (DOY)"
+  ), 
+       y = case_when(
+         phe_type == "SOS" ~ "Interquartile range of start-of-season within city (DOY)",
+         phe_type == "EOS" ~ "Interquartile range of end-of-season within city (DOY)"
+  )) +
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(size = 10),
+    axis.text.x = element_text(size = 10),
+    title = element_text(size = 14),
+    legend.position = "none"
+  )
+
 IQR_scatter_with_hist <- ggMarginal(
   IQR_scatter,
   type = "density",     
@@ -328,9 +492,24 @@ IQR_scatter_with_hist <- ggMarginal(
   size = 10
 )
 
-sp_histgram_SOS + sp_boxplot_SOS +
-  plot_layout(ncol = 1) +
-  plot_annotation(title = paste0("Phenology variation of ", species, " across cities"))
+# New York / San Jose
+city_IQR_scatter <- ggplot(summary_data |>
+                             filter(city == "NewYork"), 
+       aes(x = IQR_d_all, y = IQR_d, color = city)) +
+  geom_point(size = 2, alpha = 0.7) +
+  geom_abline(slope = 1, intercept = 0, 
+              color = "black", linetype = "dashed", linewidth = 0.8) +
+  scale_color_manual(values = color_palette) +
+  theme_classic() +
+  theme(
+    axis.title = element_blank(),
+    axis.text.y = element_text(size = 10),
+    axis.text.x = element_text(size = 10),
+    title = element_text(size = 12),
+    legend.position = "none"
+  ) +
+  ggtitle("New York City")
+
 ```
 
 
@@ -678,7 +857,7 @@ ggplot() +
 coef_summary_all <- data.frame()
 
 for (city in cities) {
-  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_Grid/inla/spatial_spde/", city, "/canonicalname/")
+  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models/inla/spatial_spde/", city, "/canonicalname/")
   for (phe_type in phe_types){
     coef_summary <- read_rds(paste0(r_output_dir, phe_type, "_summary.rds")) |>
     mutate(phe_type = phe_type,
@@ -889,7 +1068,7 @@ plot_coef_sp_city <- function(r_output_dir, phe_type){
   ))
 }
 
-r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_Grid_test/inla/spatial_spde/NewYork/canonicalname/")
+r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_Grid/inla/spatial_spde/NewYork/canonicalname/")
 plots_coef <- list()
 assess_species <- data.frame()
 
@@ -910,7 +1089,7 @@ ny_sp
 coef_summary_all <- data.frame()
 
 for (city in cities) {
-  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models/mcmc/spatial_mat/", city, "/canonicalname/")
+  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_Grid_test/inla/spatial_spde/", city, "/canonicalname/")
   for (phe_type in phe_types) {
     file_path <- file.path(r_output_dir, paste0(phe_type, "_summary.rds"))
     if (file.exists(file_path)) {
@@ -1154,11 +1333,11 @@ most_sp <- table(coef_summary_all$Parameter,coef_summary_all$phe_type) |> as.dat
 # Ulmus pumila
 # "Ulmus pumila"
 
-species = "Ginkgo_biloba"
+species = "Acer saccharinum"
 combine_feature <- coef_summary_all |>
-  filter(Parameter == species) |>
-  rename(sd = sd_value, Estimate = median_value,
-         Lower = lower_2_5, Upper = upper_97_5) |>
+  filter(Factor == species) |>
+  # rename(sd = sd_value, Estimate = median_value,
+  #        Lower = lower_2_5, Upper = upper_97_5) |> # for MCMC
   mutate(w = 1/(sd^2)) |>
   left_join(city_feature |>
     mutate(city = gsub("[._]", "", site)) |>
@@ -1203,7 +1382,7 @@ p_sos <- ggplot(df_sos, aes(x = bio12, y = Estimate, alpha = SigAlpha, colour = 
   guides(alpha = "none") +
   theme_minimal() +
   labs(
-    x = "Annual temperature (°C)",
+    x = "Annual precipitation (mm)",
     y = "Estimated effect on SOS"
   )
 
@@ -1262,7 +1441,7 @@ library(V.PhyloMaker2)
 library(ggtree)
 library(ggpubr)
 library(taxize)
-sp <- gsub("_", " ", sort(unique(coef_summary_all$Parameter)))
+sp <- gsub("_", " ", sort(unique(coef_summary_all$Factor)))
 sp_df_family <- tax_name(sp, get = "family", db = "ncbi")
 families <- sp_df_family %>%
   separate(query, into = c("genus", "species_ep"), sep = " ",remove=F) %>%
@@ -1288,7 +1467,7 @@ phylo_tree$tip.label <- phylo_tree$tip.label %>% gsub("_", " ", .)
 
 
 D <- coef_summary_all %>%
-  rename(species = Parameter)|>
+  rename(species = Factor)|>
   mutate(species = gsub("_", " ", species),
          sd = sd_value,
          Estimate = median_value) |>
