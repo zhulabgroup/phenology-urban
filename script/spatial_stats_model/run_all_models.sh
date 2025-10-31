@@ -21,7 +21,7 @@
 
 
 # Define combinations of chains and iterations
-CITIES=("WashingtonDC")
+CITIES=("NewYork")
 
 # Get the combination for this array job
 CHAIN_INDEX=$((SLURM_ARRAY_TASK_ID - 1))
@@ -31,7 +31,7 @@ CITY=${CITIES[$CHAIN_INDEX]}
 WORKING_DIR=../phenology-urban/
 R_INPUT_DIR=../phenology-urban/data/
 R_SCRIPT_MCMC=../phenology-urban/script/spatial_stats_model/mcmc_alg/run_mcmc_all_models.R
-R_OUTPUT_DIR=../phenology-urban/data/proc/model_output/final_models/
+R_OUTPUT_DIR=../phenology-urban/data/proc/model_output/final_models_Grid_test/
 
 # Export variables to be used in the R script
 export R_INPUT_DIR

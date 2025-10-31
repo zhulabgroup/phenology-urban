@@ -42,11 +42,18 @@ run_mcmc_spatial_mat <- function(model_input_all, r_output_dir, phe_type, city, 
         lon_jitter = lon,
         lat_jitter = lat
       )
-    if (phe_type %in% c("SOS","EOS")) {
-      phe_metric <- "doy"
-    } else {
-      phe_metric <- "doy_diff"
-    }
+    
+    phe_metric <- "doy"
+    
+    x <- model_input_sf[[phe_metric]]
+    q <- stats::quantile(x, probs = c(0.25, 0.75), na.rm = TRUE)
+    iqr <- diff(q)
+    lo  <- q[1] - 1.5 * iqr
+    hi  <- q[2] + 1.5 * iqr
+    model_input_sf <- model_input_sf %>%
+      filter(is.na(.data[[phe_metric]]) |
+               dplyr::between(.data[[phe_metric]], lo, hi))
+    
     tavg_phe <- model_input_sf |> st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F) |>
       st_transform(crs = 5070) #jitter
     temp_col <- names(tavg_phe)[grepl("^temp", names(tavg_phe))]
