@@ -751,7 +751,7 @@ tree_location <- NY_city_input |>
   filter(!(lon == "NaN") & !(lat == "NaN")) |>
   st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F)
 
-file <- "~/lab-data/datasets/climate/UHAT/clean/NewYork_winter_2023.tif"
+file <- "~/lab-data/datasets/climate/UHAT/clean/NewYork_summer_2023.tif"
 temp_tif <- terra::rast(file)
 tifs <- list.files(
   "~/lab-data/datasets/climate/UHAT/grid",
@@ -771,13 +771,13 @@ bbox <- st_bbox(tree_location)
 
 temp <- ggplot() +
   geom_tile(data = temp_df, aes(x = x, y = y, fill = value)) +
-  geom_sf(data = tree_location, aes(color = doy), size = 0.5) +
+  geom_sf(data = tree_location, color = "black", size = 0.5) +
   scale_fill_gradient(
-    name = "Mean winter\ntemperature (°C)",  
-    low = "grey20", 
-    high = "grey90" 
+    name = "Mean summer\ntemperature (°C)",  
+    low = "yellow", 
+    high = "red" 
   ) +
-  scale_color_viridis_c(name = "Start-of-season\n(DOY)") + 
+  # scale_color_viridis_c(name = "Start-of-season\n(DOY)") + 
   labs(title = "Acer rubrum - 2023", x = "x", y = "y") +
   theme_minimal() +
   coord_sf(xlim = c(bbox["xmin"], bbox["xmax"]),
@@ -1089,7 +1089,7 @@ ny_sp
 coef_summary_all <- data.frame()
 
 for (city in cities) {
-  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_Grid_test/inla/spatial_spde/", city, "/canonicalname/")
+  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models/inla/spatial_spde/", city, "/canonicalname/")
   for (phe_type in phe_types) {
     file_path <- file.path(r_output_dir, paste0(phe_type, "_summary.rds"))
     if (file.exists(file_path)) {
@@ -1186,7 +1186,7 @@ plot_us_coef_sos <- ggplot() +
   ) +
   theme_minimal() +
   theme(
-    legend.position = "bottom",
+    legend.position = "right",
     legend.title = element_text(size = 10),
     legend.text = element_text(size = 8)
   )
@@ -1220,16 +1220,19 @@ plot_us_coef_eos <- ggplot() +
   ) +
   theme_minimal() +
   theme(
-    legend.position = "bottom",
+    legend.position = "right",
     legend.title = element_text(size = 10),
     legend.text = element_text(size = 8)
   )
 
-plot_us_coef_sos + plot_us_coef_eos +
-  plot_layout(ncol = 1, guides = "collect") +
+p <- plot_us_coef_sos + plot_us_coef_eos +
+  plot_layout(ncol = 2, guides = "collect") +
   plot_annotation(theme = theme(
-  legend.position = "bottom"
+  legend.position = "right"
 ))
+
+ggsave(p, filename = "~/Desktop/Chp2_map.png",
+       width = 15, height = 5, dpi = 300)
 
 # Pie for all
 summary_all <- coef_summary_all |>
@@ -1302,7 +1305,7 @@ ggplot(summary_all |> filter(phe_type == "SOS"), aes(x = "", y = prop, fill = ca
 coef_summary_all <- data.frame()
 
 for (city in cities) {
-  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models/mcmc/spatial_mat/", city, "/canonicalname/")
+  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models/inla/spatial_spde/", city, "/canonicalname/")
   for (phe_type in phe_types) {
     file_path <- file.path(r_output_dir, paste0(phe_type, "_summary.rds"))
     if (file.exists(file_path)) {
@@ -1591,6 +1594,56 @@ p_ring <- all_tree +
   theme_void()
 
 p_ring
+```
+
+
+```{r}
+m <- lmer(Estimate ~  (1|Factor) + (1|city), data = coef_summary_all %>%
+            filter(phe_type == "SOS"), weights = 1/(sd^2))
+summary(m)
+VarCorr(m)
+
+
+var_city <- coef_summary_all %>%
+  group_by(phe_type, city) %>%
+  summarise(var_city = var(Estimate, na.rm = TRUE), .groups = "drop")
+
+# 2) variance of the same species across cities (within phe_type)
+var_species <- coef_summary_all %>%
+  group_by(phe_type, Factor) %>%
+  summarise(var_species = var(Estimate, na.rm = TRUE), .groups = "drop")
+
+# 3) For each Factor-city pair, attach these two variances
+out <- coef_summary_all %>%
+  select(phe_type, Factor, city) %>%
+  distinct() %>%
+  left_join(var_city, by = c("phe_type", "city")) %>%
+  left_join(var_species, by = c("phe_type", "Factor"))
+
+line_data <- data.frame(
+  x = range(out$var_city, na.rm = TRUE)
+) |>
+  dplyr::mutate(y = x)  # 1:1 line
+
+ggplot(out, aes(x = var_city, y = var_species)) +
+  geom_point(size = 0.3, alpha = 0.6) +
+  
+  geom_line(data = line_data, aes(x = x, y = y, color = "1:1 line"),
+            linetype = "dashed", linewidth = 0.8) +
+
+  geom_smooth(aes(color = "Fitted regression"), method = "lm", se = FALSE, linewidth = 0.8) +
+  
+  facet_wrap(~ phe_type, scales = "free") +
+  theme_minimal() +
+  scale_color_manual(
+    name = "",
+    values = c("1:1 line" = "red", "Fitted regression" = "blue")
+  ) +
+  theme_classic() +
+  labs(
+  x = expression(paste("Var(", beta[temp], ") within one city, across species")),
+  y = expression(paste("Var(", beta[temp], ") within one species, across cities"))
+)
 ```
 
 

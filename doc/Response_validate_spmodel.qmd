@@ -287,9 +287,17 @@ mcmc_semi_matern <- function(r_output_dir, phe_type) {
   ))
 }
 
-plot_coef_sp_city <- function(r_output_dir, phe_type){
-  coef_summary <- read_rds(paste0(r_output_dir, phe_type, "_summary.rds"))
-  p_coef <-  ggplot(coef_summary, aes(x = factor(Factor, levels = rev(Factor)), 
+plot_coef_sp_city <- function(r_output_dir){
+  coef_summary <- map_dfr(
+      phe_types,
+      ~ read_rds(paste0(r_output_dir, .x, "_summary.rds")) %>%
+          mutate(phe_type = .x)
+    )
+  coef_summary$Factor2 <- factor(coef_summary$Factor,
+                               levels = unique(coef_summary$Factor))
+  coef_summary$phe_type <- factor(coef_summary$phe_type,
+                                levels = c("SOS", "EOS"))
+  p_coef <-  ggplot(coef_summary, aes(x = Factor2, 
                                y = Estimate,
                                colour = Color)) +
     geom_point(aes(alpha = SigAlpha), position = position_dodge(w = 0.5), size = 3) +
@@ -297,23 +305,22 @@ plot_coef_sp_city <- function(r_output_dir, phe_type){
                   position = position_dodge(w = 0.5), 
                   width = 0.2) +
     geom_hline(yintercept = 0, linetype = 2) +
-    labs(x = NULL, y = "Estimate",
-         subtitle = bquote(beta[Temp]~" for "~.(phe_type))) + 
-    theme(legend.position = "right",
-          plot.subtitle = element_text(hjust = 0.5, margin = margin(b = 6))) +
-    coord_flip() +
+    labs(x = "Species", y = bquote(beta[Temp]~" estimate")) + 
+    theme_minimal() +
+    theme(
+      axis.text.x = element_text(angle = 75, hjust = 1, size = 8),
+      axis.title = element_text(size = 14),
+      axis.text.y = element_text(size = 12),
+      strip.text = element_text(size = 14)) +
+    # coord_flip() +
+    facet_wrap(~ phe_type, ncol = 1, scales = "free_y") +
     scale_alpha_identity() +
     scale_color_identity() +
-    theme(legend.position = "right") +
-    geom_text(aes(label = Sig, y = Upper + 0.05  ), hjust = -0.5, show.legend = FALSE) +
-    geom_text(aes(label = Estimate, y = Estimate  ), vjust = -0.7, show.legend = FALSE, size = 3) +
-    guides(alpha = "none") +
-    # add title
-    theme_minimal()
+    # geom_text(aes(label = Sig, y = Upper + 0.05  ), hjust = -0.5, show.legend = FALSE) +
+    # geom_text(aes(label = Estimate, y = Estimate  ), vjust = -0.7, show.legend = FALSE, size = 3) +
+    guides(alpha = "none")
   
-  return(list(
-    coef_summary_plot = p_coef
-  ))
+  return(p_coef)
 }
 ```
 
@@ -326,21 +333,25 @@ plot_coef_sp_city <- function(r_output_dir, phe_type){
 #| warning: false
 #| eval: true
 
-city = "SanJose"
+city = "NewYork"
 
-s_dir_path <- paste0("~/phenology-urban/data/proc/model_output/final_models/mcmc/spatial_mat/", city, "/canonicalname/")
+# MCMC
+s_dir_path <- paste0("~/phenology-urban/data/proc/model_output/final_models_Grid_test//mcmc/spatial_mat/", city, "/canonicalname/")
 s_plot_obj_mcmc <- generate_mcmc_plot(s_dir_path,  coef = "temp", fixed_sp = F)
 
+
+#INLA
 r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models/inla/spatial_spde/", city, "/canonicalname/")
-plots_coef <- list()
 
-for (phe_type in phe_types) {
-  p1 <- plot_coef_sp_city(r_output_dir, phe_type)
-  plots_coef[[phe_type]] <- p1$coef_summary_plot
-}
+p1 <- plot_coef_sp_city(r_output_dir)
+ggsave(
+  filename = paste0("~/Desktop/Chp2_city.png"),
+  plot = p1,
+  width = 8,
+  height = 6.5,
+  dpi = 300
+)
 
-plots_coef[[1]] <- plots_coef[[1]] + ggtitle("INLA")
-ny_sp <- wrap_plots(plots_coef, ncol = 2)
 
 (s_plot_obj_mcmc$coef_summary_plot +  ggtitle("MCMC")) + 
   (ny_sp) +
