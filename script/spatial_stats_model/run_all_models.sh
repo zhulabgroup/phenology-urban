@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=cities_MCMC_mat_cities76
+#SBATCH --job-name=cities_MCMC_mat_NY_nooutlier
 #SBATCH --account=songyl0                   # Account name
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err

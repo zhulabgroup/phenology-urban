@@ -1,10 +1,10 @@
 #!/bin/bash
-#SBATCH --job-name=cities_INLA_formal_76
+#SBATCH --job-name=cities_INLA_nooutlier_52_60
 #SBATCH --account=zhukai0                   # Account name
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err
-#SBATCH --array=1
-#SBATCH --time=3:00:00
+#SBATCH --array=1-9
+#SBATCH --time=4:00:00
 #SBATCH --partition=standard
 #SBATCH --mem=30G
 #SBATCH --cpus-per-task=1
@@ -21,7 +21,7 @@
 
 
 # Define combinations of chains and iterations
-CITIES=("NewYork") # "ST" "TP" "DV" "HT"
+CITIES=("Norfolk"      "Oakland"      "OklahomaCity" "Philadelphia" "Pittsburgh"   "Portland"     "Providence"   "Reading"      "Riverside")
 
 # Get the combination for this array job
 CHAIN_INDEX=$((SLURM_ARRAY_TASK_ID - 1))
@@ -31,7 +31,7 @@ CITY=${CITIES[$CHAIN_INDEX]}
 WORKING_DIR=../phenology-urban/
 R_INPUT_DIR=../phenology-urban/data/
 R_SCRIPT_INLA=../phenology-urban/script/spatial_stats_model/inla_alg/run_inla_all_models.R
-R_OUTPUT_DIR=../phenology-urban/data/proc/model_output/final_models_Grid_test/
+R_OUTPUT_DIR=../phenology-urban/data/proc/model_output/final_models_clean_outlier/
 
 # Export variables to be used in the R script
 export R_INPUT_DIR
