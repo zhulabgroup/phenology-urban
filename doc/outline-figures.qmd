@@ -893,47 +893,28 @@ ggplot() +
   )
 ```
 
-
-### One city example
-
-(MCMC)
+### City example
 
 ```{r}
-#| label: fig-random-mcmc
-#| include: true
-#| fig-width: 14
-#| fig-height: 7
-#| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each taxon group in New York city."
-#| warning: false
-#| eval: true
-#| 
-generate_mcmc <- function(dir_path, coef, fixed_sp){
-  process_files <- function(file_list, phe_type_label) {
-    param_list <- map(file_list, function(file) {
-      model_data <- readRDS(file)
-      genus <- sub(paste0("(.*?)_", phe_type_label, "\\.rds"), "\\1", basename(file))
-      if (fixed_sp) {
-        param_data <- ggs(model_data$samples) |>
-          filter(str_starts(Parameter, fixed("beta["))) |>
-          mutate(beta_index = as.integer(str_extract(Parameter, "(?<=beta\\[)\\d+"))) |>
-          filter(beta_index >= 5)|>
-          rename(ParameterOriginal = Parameter) |>
-          mutate(Parameter = genus) |>
-          mutate(waic = model_data$WAIC$WAIC,
-                 converge = model_data$converge)
-      } else {
-        param_data <- ggs(model_data$samples) |>
-          filter(str_starts(Parameter, fixed(coef))) |>
-          rename(ParameterOriginal = Parameter) |>
-          mutate(Parameter = genus)|>
-          mutate(waic = model_data$WAIC$WAIC,
-                 converge = model_data$converge)
-      }
+#| include: false
+# Helper to process files by pattern
 
-      return(param_data)
+generate_mcmc_plot <- function(dir_path, coef, fixed_sp){
+  process_files <- function(file_list, phe_type_label) {
+    param_list <- purrr::map(file_list, function(file) {
+    model_data <- readRDS(file)
+    genus <- sub(paste0("(.*?)_", phe_type_label, "\\.rds"), "\\1", basename(file))
+    ggmcmc::ggs(model_data$samples) |>
+      dplyr::filter(stringr::str_starts(Parameter, stringr::fixed(coef))) |>
+      dplyr::rename(ParameterOriginal = Parameter) |>
+      dplyr::mutate(
+        Parameter = genus,
+        converge  = model_data$converge
+        # waic = model_data$WAIC$WAIC,
+        # milk = model_data$mean_logml
+      )
     })
     combined_param_data <- bind_rows(param_list) |>
-      filter(Parameter != "Alnus") |>
       mutate(phe_type = phe_type_label)
     return(combined_param_data)
 }
@@ -942,8 +923,16 @@ generate_mcmc <- function(dir_path, coef, fixed_sp){
   EOS_files <- list.files(dir_path, pattern = "EOS\\.rds$", full.names = TRUE)
 
   # Process each type
+  if (length(SOS_files) == 0) {
+    sos_data <- NULL
+  } else {
   sos_data <- process_files(SOS_files, "SOS")
-  eos_data <- process_files(EOS_files, "EOS")
+  }
+  if (length(EOS_files) == 0) {
+    eos_data <- NULL
+  } else {
+    eos_data <- process_files(EOS_files, "EOS")
+  }
 
   combined_param_data <- bind_rows(sos_data, eos_data)
   combined_param_data$phe_type <- factor(combined_param_data$phe_type, levels = c("SOS", "EOS"))
@@ -952,33 +941,41 @@ generate_mcmc <- function(dir_path, coef, fixed_sp){
   summary_data <- combined_param_data |>
     group_by(Parameter, phe_type) |>
     summarise(
-      mean_value = mean(value, na.rm = TRUE),
+      median_value = median(value, na.rm = TRUE),
       lower_2_5 = quantile(value, 0.025, na.rm = TRUE),
       upper_97_5 = quantile(value, 0.975, na.rm = TRUE),
-      waic = first(waic),
       converge = first(converge),
-      # milk = first(milk),
       .groups = "drop"
     ) |>
     mutate(Sig = ifelse(lower_2_5 * upper_97_5 > 0, "*", ""),
            SigAlpha = ifelse(Sig == "*", 1, 0.2),
-           Color = ifelse(mean_value >0, "#0D0887FF" , "#FCA636FF")) 
+           Color = ifelse(median_value >0, "#0D0887FF" , "#FCA636FF")) 
 
   param_levels <- rev(unique(summary_data$Parameter))
+  
+  summary_data <- summary_data %>% 
+    mutate(
+      phe_type = paste0("beta[Temp]~' for '~", phe_type),
+      phe_type = factor(phe_type, 
+                        levels = c("beta[Temp]~' for '~SOS", 
+                                   "beta[Temp]~' for '~EOS"))
+    )
 
   # Plot
   
-  p1 <- ggplot(summary_data, aes(x = factor(as.character(Parameter), levels = param_levels), y = mean_value,
+  p1 <- ggplot(summary_data, aes(x = factor(as.character(Parameter), levels = param_levels), y = median_value,
                                  colour = Color)) +
     geom_point(aes(alpha = SigAlpha), size=3) +
     geom_errorbar(aes(ymin = lower_2_5, ymax = upper_97_5, alpha = SigAlpha), width = 0.4) +
     geom_hline(yintercept = 0, linetype = 2) +
-    geom_text(aes(label = round(mean_value, 3)),
+    geom_text(aes(label = round(median_value, 3)),
               vjust = -0.7, size = 3) +
     scale_alpha_identity() +
     scale_color_identity() +
     guides(alpha = "none") +
-    facet_wrap(~ phe_type, scales = "free_x") +  # flip x/y means free_x
+    facet_grid( ~ phe_type,
+             scales = "free_x",
+             labeller = labeller(phe_type = label_parsed)) +
     theme_minimal() +
     labs(x = NULL, y = "Estimate") +
     theme(
@@ -987,664 +984,143 @@ generate_mcmc <- function(dir_path, coef, fixed_sp){
     ) +
       coord_flip()
   
-  p2 <- ggplot(summary_data, aes(x = mean_value)) +
-    geom_histogram(binwidth = 0.5, position = "identity", alpha = 0.5) +
-    geom_vline(xintercept = 0, linetype = "dashed", color = "red", linewidth = 0.8) +
-    # geom_density(alpha = 0.5) +
-    # scale_fill_manual(values = color_palette) + 
-    # labs(x = x_label) +
-    facet_wrap(~ phe_type, scales = "free_x") +  # flip x/y means free_x
-    theme_classic() +
-    theme(axis.text.x = element_text(size = 10),
-          axis.text.y = element_text(size = 10),
-          title = element_text(size = 14),
-          legend.position = "right")
+  p2 <- ggplot(combined_param_data, aes(x = value)) +
+    geom_density(fill = "skyblue", alpha = 0.5) +
+    facet_wrap(~ Parameter, ncol = 1, scales = "free_y") +
+    labs(
+      x = paste0("Posterior distribution of ", coef),
+      y = "Density"
+    ) +
+    facet_grid(Parameter ~ phe_type, scales = "free_y")+
+    # geom_text(data = summary_data, aes(x = median_value-3, y = 0, label = round(median_value, 3)), vjust = -1, size = 3) +
+    geom_text(data = summary_data, aes(x = median_value+3, y = 0, label = paste0("gelman.diag: ", round(converge, 4))), vjust = -1, color = "red", size = 2) +
+    theme_minimal(base_size = 9) +
+    theme(
+      axis.text.y = element_blank(),
+      strip.text.y = element_text(angle = 0),
+      panel.spacing = unit(0.4, "lines")
+    )
   
-  p <- list(coef_summary_plot = p1, coef_hist_plot = p2, summary_data = summary_data)
+  p <- list(coef_summary_plot = p1, coef_density_plot = p2, summary_data = summary_data)
   return(p)
 }
 
-
-g_dir_path <- "~/phenology-urban/data/proc/model_output/sp_model/fixed_preseason/mcmc_alg/random_sp/NY/genus/"
-s_dir_path <- "~/phenology-urban/data/proc/model_output/sp_model/fixed_preseason/mcmc_alg/random_sp_all_species/NY/"
-
-g_plot_obj <- generate_mcmc(g_dir_path, coef = "beta[2]", fixed_sp = F)
-s_plot_obj <- generate_mcmc(s_dir_path,  coef = "beta[2]", fixed_sp = F)
-
-p1 <- g_plot_obj$coef_summary_plot + ggtitle("Genus")
-p2 <- g_plot_obj$coef_hist_plot
-p3 <- s_plot_obj$coef_summary_plot + ggtitle("Species")
-p4 <- s_plot_obj$coef_hist_plot
-
-((p1 | p2) +
-  plot_layout(  
-    widths = c(2, 1)
-  ) )/
-((p3 | p4) +
-  plot_layout(  
-    widths = c(2, 1)
-  ) ) +
-  plot_layout(  
-    heights = c(1, 2))
-```
-
-(INLA)
-
-```{r fig-sp-inla}
-#| include: true
-#| fig-width: 6
-#| fig-height: 6
-#| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each taxon group in New York city."
-#| warning: false
-#| eval: true
-
-phe_types <- c("SOS", "EOS")
-city = "NewYork"
-
-plot_coef_sp_city <- function(r_output_dir, phe_type){
-  coef_summary <- read_rds(paste0(r_output_dir, phe_type, "_summary.rds"))
-  p_coef <-  ggplot(coef_summary, aes(x = factor(Factor, levels = rev(Factor)), 
-                               y = Estimate,
-                               colour = Color)) +
-    geom_point(aes(alpha = SigAlpha), position = position_dodge(w = 0.5), size = 3) +
-    geom_errorbar(aes(ymin = Lower, ymax = Upper, alpha = SigAlpha), 
-                  position = position_dodge(w = 0.5), 
-                  width = 0.2) +
-    geom_hline(yintercept = 0, linetype = 2) +
-    labs(x = NULL, y = "Estimate") +
-    coord_flip() +
-    scale_alpha_identity() +
-    scale_color_identity() +
-    theme(legend.position = "right") +
-    geom_text(aes(label = Sig, y = Upper + 0.05  ), hjust = -0.5, show.legend = FALSE) +
-    geom_text(aes(label = Estimate, y = Estimate  ), vjust = -0.7, show.legend = FALSE, size = 3) +
-    guides(alpha = "none") +
-    # add title
-    ggtitle(bquote(beta[Temp]~"for"~.(phe_type))) +
-    theme_minimal()
+mcmc_semi_matern <- function(r_output_dir, phe_type) {
+  plots_mean <- list()
+  plots_semi <- list()
+  # Load the data
+  r_files <- list.files(r_output_dir, pattern = paste0(phe_type, "\\.rds$"), full.names = TRUE)
+  for (file in r_files) {
+    model_data <- readRDS(file)
+    taxon <- sub(paste0("(.*?)_", phe_type, "\\.rds"), "\\1", basename(file))
+    surf_sf <- model_data$surf_sf
+    CorDF <- model_data$CorDF
+    r <- raster(extent(surf_sf), resolution = 1000)
+    raster_field <- rasterize(surf_sf, r, field = "w_mean")
+    raster_df <- as.data.frame(raster_field, xy = TRUE)
+    plot_spatial_field <- ggplot(raster_df) +
+      geom_raster(aes(x = x, y = y, fill = layer)) +
+      scale_fill_viridis(na.value = "transparent") +
+      coord_fixed(ratio = 0.8) +
+      ggtitle(paste(taxon)) +
+      labs(fill = "E[w|data]") +
+      theme_bw() +
+      theme(axis.text.x = element_text(size = 6, angle = 45, hjust = 1),
+            plot.title = element_text(size = 8))
+        
+    plot_cor <- ggplot(CorDF, aes(x = Distance, y = Median)) +
+      geom_ribbon(aes(ymin = Lower, ymax = Upper), fill = "grey", alpha = 0.4) +
+      geom_line(color = "blue", linewidth = 1) +
+      labs(x = "Distance (m)", y = "Correlation", title = "Matern Correlation Function") +
+      ggtitle(paste(taxon)) +
+      theme_minimal()+
+      theme(axis.text.x = element_text(size = 6, angle = 45, hjust = 1),
+            plot.title = element_text(size = 8))
+        
+    plots_mean[[taxon]] <- plot_spatial_field
+    plots_semi[[taxon]] <- plot_cor
+  }
+  combined_plot_mean <- wrap_plots(plots_mean, ncol = 5)
+  combined_plot_semi <- wrap_plots(plots_semi, ncol = 5)
   
-  return(list(
-    coef_summary_plot = p_coef
+   return(list(
+    combined_plot_semi = combined_plot_semi,
+    combined_plot_mean = combined_plot_mean
   ))
 }
 
-r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_Grid/inla/spatial_spde/NewYork/canonicalname/")
-plots_coef <- list()
-assess_species <- data.frame()
-
-for (phe_type in phe_types) {
-  p1 <- plot_coef_sp_city(r_output_dir, phe_type)
-  plots_coef[[phe_type]] <- p1$coef_summary_plot
-  assess_species <- rbind(assess_species, p1$assess)
-}
-
-ny_sp = wrap_plots(plots_coef, ncol = 2)
-
-ny_sp
-```
-
-### The spatial distriution of effects
-
-```{r}
-coef_summary_all <- data.frame()
-
-for (city in cities) {
-  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models/inla/spatial_spde/", city, "/canonicalname/")
-  for (phe_type in phe_types) {
-    file_path <- file.path(r_output_dir, paste0(phe_type, "_summary.rds"))
-    if (file.exists(file_path)) {
-      coef_summary <- readr::read_rds(file_path) |>
-        dplyr::mutate(phe_type = phe_type, city = city)
-      coef_summary_all <- dplyr::bind_rows(coef_summary_all, coef_summary)
-    }
-  }
-}
-# For MCMC
-coef_summary_all <- coef_summary_all |>
-  mutate(Estimate = median_value)
-
-plot_coef_cities <- function(coef_summary_all, phe_type){
-  coef_summary_all <- coef_summary_all |>
-    filter(phe_type == !!phe_type)
-  p_coef <-  ggplot() +
-    geom_histogram(data = coef_summary_all, 
-                   aes(x = Estimate, y = after_stat(count), fill = Estimate > 0), 
-                   binwidth = 1, color = NA, boundary = 0, alpha = 0.3) +
-    geom_histogram(data = coef_summary_all |> filter(Sig == "*"), 
-                   aes(x = Estimate, y = after_stat(count), fill = Estimate > 0), 
-                   binwidth = 1, color = NA, boundary = 0, alpha = 1) +
-    scale_fill_manual(values = c("FALSE" = "#FCA636FF", 
-                                 "TRUE"  = "#0D0887FF")) +
-    coord_cartesian(ylim = c(0, NA)) +
+plot_coef_sp_city <- function(r_output_dir){
+  coef_summary <- map_dfr(
+      phe_types,
+      ~ read_rds(paste0(r_output_dir, .x, "_summary.rds")) %>%
+          mutate(phe_type = .x)
+    )
+  coef_summary$Factor2 <- factor(coef_summary$Factor,
+                               levels = unique(coef_summary$Factor))
+  coef_summary$phe_type <- factor(coef_summary$phe_type,
+                                levels = c("SOS", "EOS"))
+  p_coef <-  ggplot(coef_summary, aes(x = Factor2, 
+                               y = Estimate
+                               ), color = "grey30") +
+    geom_point(aes(alpha = SigAlpha), color = "grey30", position = position_dodge(w = 0.5), size = 3) +
+    geom_errorbar(aes(ymin = Lower, ymax = Upper, alpha = SigAlpha), color = "grey30", 
+                  position = position_dodge(w = 0.5), 
+                  width = 0.2) +
+    geom_hline(yintercept = 0, linetype = 2) +
+    labs(x = "Species", y = bquote(beta[Temp]~" estimate")) + 
     theme_minimal() +
-    theme(panel.grid = element_blank(),
-          axis.line.y = element_line(color = "grey85", linewidth = 0.3),
-          axis.ticks.y = element_line(color = "grey85", linewidth = 0.3)) +
-    guides(fill = "none") +
-    ggtitle(bquote(beta[Temp]~"for"~.(phe_type)))
+    theme(
+      axis.text.x = element_text(angle = 75, hjust = 1, size = 8),
+      axis.title = element_text(size = 14),
+      axis.text.y = element_text(size = 12),
+      strip.text = element_text(size = 14)) +
+    # coord_flip() +
+    facet_wrap(~ phe_type, ncol = 1, scales = "free_y") +
+    scale_alpha_identity() +
+    # scale_color_identity() +
+    # geom_text(aes(label = Sig, y = Upper + 0.05  ), hjust = -0.5, show.legend = FALSE) +
+    # geom_text(aes(label = Estimate, y = Estimate  ), vjust = -0.7, show.legend = FALSE, size = 3) +
+    guides(alpha = "none")
+  
   return(p_coef)
 }
-
-plots_coef_cities <- list()
-for (phe_type in phe_types) {
-  plots_coef_cities[[phe_type]] <- plot_coef_cities(coef_summary_all, phe_type)
-}
-
-wrap_plots(plots_coef_cities, ncol = 2)
-
-## map
-
-summary_per_city <- coef_summary_all |>
-  group_by(city, phe_type) |>
-  summarise(
-    n_sig_neg = sum(Sig == "*" & Estimate < 0, na.rm = TRUE),
-    n_sig_pos = sum(Sig == "*" & Estimate > 0, na.rm = TRUE),
-    n_insig_neg = sum(Sig == "" & Estimate < 0, na.rm = TRUE),
-    n_insig_pos = sum(Sig == "" & Estimate > 0, na.rm = TRUE),
-    n_total = n(),
-    .groups = "drop"
-  )|>
-  mutate(
-    prop_sig_neg = n_sig_neg / n_total,
-    prop_sig_pos = n_sig_pos / n_total,
-    prop_insig_neg = n_insig_neg / n_total,
-    prop_insig_pos = n_insig_pos / n_total
-  )
-
-summary_per_city_loc <- summary_per_city |>
-  left_join(inventory_centroids, by = c("city" ="site")) |>
-  mutate(lon = st_coordinates(x)[, 1],
-         lat = st_coordinates(x)[, 2])
-  
-
-
-plot_us_coef_sos <- ggplot() +
-  geom_sf(data = boundary_us, fill = "grey95", color = "grey85") +
-  geom_scatterpie(
-    data = summary_per_city_loc |> filter(phe_type == "SOS"),
-    aes(x = lon, y = lat),
-    cols = c("n_sig_neg", "n_insig_neg", "n_sig_pos", "n_insig_pos"),
-    color = NA,          
-    alpha = 0.9,
-    pie_scale = 1
-  ) +
-  coord_sf(expand = FALSE) +
-  scale_fill_manual(
-    values = c(
-      n_sig_neg   = "#FCA636FF", 
-      n_insig_neg = "#FBEED9",
-      n_sig_pos   = "#0D0887FF", 
-      n_insig_pos = "#D0CFE6"  
-    ),
-    name = "Effect type",
-    labels = c(
-      "Significant (-)",
-      "Non-significant (-)", 
-      "Significant (+)", 
-      "Non-significant (+)"
-    )
-  ) +
-  theme_minimal() +
-  theme(
-    legend.position = "right",
-    legend.title = element_text(size = 10),
-    legend.text = element_text(size = 8)
-  )
-
-
-plot_us_coef_eos <- ggplot() +
-  geom_sf(data = boundary_us, fill = "grey95", color = "grey85") +
-  geom_scatterpie(
-    data = summary_per_city_loc |> filter(phe_type == "EOS"),
-    aes(x = lon, y = lat),
-    cols = c("n_sig_neg", "n_insig_neg", "n_sig_pos", "n_insig_pos"),
-    color = NA,          
-    alpha = 0.9,
-    pie_scale = 1
-  ) +
-  coord_sf(expand = FALSE) +
-  scale_fill_manual(
-    values = c(
-      n_sig_neg   = "#FCA636FF", 
-      n_insig_neg = "#FBEED9",
-      n_sig_pos   = "#0D0887FF", 
-      n_insig_pos = "#D0CFE6"  
-    ),
-    name = "Effect type",
-    labels = c(
-      "Significant (-)",
-      "Non-significant (-)", 
-      "Significant (+)", 
-      "Non-significant (+)"
-    )
-  ) +
-  theme_minimal() +
-  theme(
-    legend.position = "right",
-    legend.title = element_text(size = 10),
-    legend.text = element_text(size = 8)
-  )
-
-p <- plot_us_coef_sos + plot_us_coef_eos +
-  plot_layout(ncol = 2, guides = "collect") +
-  plot_annotation(theme = theme(
-  legend.position = "right"
-))
-
-ggsave(p, filename = "~/Desktop/Chp2_map.png",
-       width = 15, height = 5, dpi = 300)
-
-# Pie for all
-summary_all <- coef_summary_all |>
-  group_by(phe_type) |>
-  summarise(
-    n_sig_neg = sum(Sig == "*" & Estimate < 0, na.rm = TRUE),
-    n_sig_pos = sum(Sig == "*" & Estimate > 0, na.rm = TRUE),
-    n_insig_neg = sum(Sig == "" & Estimate < 0, na.rm = TRUE),
-    n_insig_pos = sum(Sig == "" & Estimate > 0, na.rm = TRUE),
-    n_total = n(),
-    .groups = "drop"
-  ) |>
-  pivot_longer(
-    cols = c(n_sig_neg, n_sig_pos, n_insig_neg, n_insig_pos),
-    names_to = "category",
-    values_to = "count"
-  ) |>
-  mutate(
-    prop = count / n_total, 
-    label = scales::percent(prop, accuracy = 0.1),
-    category = factor(category,
-                      levels = c("n_sig_neg", "n_insig_neg","n_sig_pos", "n_insig_pos"),
-                      labels = c("Significant (-)", 
-                                 "Non-significant (-)", 
-                                 "Significant (+)",
-                                 "Non-significant (+)"))
-  )
-
-ggplot(summary_all |> filter(phe_type == "SOS"), aes(x = "", y = prop, fill = category)) +
-  geom_bar(stat = "identity", width = 1, color = "white") +
-  coord_polar(theta = "y") +
-  geom_text(aes(label = label, color = category),
-            position = position_stack(vjust = 0.5),
-            size = 3) +
-  scale_fill_manual(
-    values = c(
-      "Significant (-)"      = "#FCA636FF",
-      "Non-significant (-)"  = "#FBEED9",
-      "Significant (+)"      = "#0D0887FF", 
-      "Non-significant (+)"  = "#D0CFE6"  
-    ),
-    name = "Effect type"
-  ) +
-  scale_color_manual(
-    values = c(
-      "Significant (-)"      = "white",
-      "Non-significant (-)"  = "black",
-      "Significant (+)"      = "white", 
-      "Non-significant (+)"  = "black"  
-    ),
-    name = "Effect type"
-  ) +
-  theme_void() +
-  theme(
-    legend.position = "none",
-    plot.title = element_text(hjust = 0.5),
-    panel.background = element_rect(fill = NA, color = NA),  # 去除面板背景
-    plot.background = element_rect(fill = NA, color = NA)    # 去除整个绘图背景
-  )
-
 ```
 
-
-## The effects' relastionship with urban variables (climate, urbanization, population, etc.)
-
-### Climate
-
-
 ```{r}
-coef_summary_all <- data.frame()
+#| label: fig-sp-mcmc
+#| include: true
+#| fig-width: 14
+#| fig-height: 7
+#| fig-cap: "The distribution of the posterior of regression coefficients for `Temp~avg~` for each species in New York city. Left panel: MCMC algorithm (spBayes); Right panel: INLA algorithm."
+#| warning: false
+#| eval: true
 
-for (city in cities) {
-  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models/inla/spatial_spde/", city, "/canonicalname/")
-  for (phe_type in phe_types) {
-    file_path <- file.path(r_output_dir, paste0(phe_type, "_summary.rds"))
-    if (file.exists(file_path)) {
-      coef_summary <- readr::read_rds(file_path) |>
-        dplyr::mutate(phe_type = phe_type, city = city)
-      coef_summary_all <- dplyr::bind_rows(coef_summary_all, coef_summary)
-    }
-  }
-}
+city = "NewYork"
 
-most_sp <- table(coef_summary_all$Parameter,coef_summary_all$phe_type) |> as.data.frame()
-# Gleditsia triacanthos
-# Acer platanoides
-# Acer saccharum
-# Celtis occidentalis
-# Cercis canadensis
-# Fraxinus americana
-# Fraxinus pennsylvanica
-# Ginkgo biloba
-# Liquidambar styraciflua
-# Liriodendron tulipifera
-# Platanus hispanica
-# Quercus bicolor
-# Quercus palustris
-# Robinia pseudoacacia
-# Tilia cordata
-# Ulmus parvifolia
-# Ulmus pumila
-# "Ulmus pumila"
+# MCMC
+s_dir_path <- paste0("~/phenology-urban/data/proc/model_output/final_models_Grid_test//mcmc/spatial_mat/", city, "/canonicalname/")
+s_plot_obj_mcmc <- generate_mcmc_plot(s_dir_path,  coef = "temp", fixed_sp = F)
 
-species = "Acer saccharinum"
-combine_feature <- coef_summary_all |>
-  filter(Factor == species) |>
-  # rename(sd = sd_value, Estimate = median_value,
-  #        Lower = lower_2_5, Upper = upper_97_5) |> # for MCMC
-  mutate(w = 1/(sd^2)) |>
-  left_join(city_feature |>
-    mutate(city = gsub("[._]", "", site)) |>
-    select(lon, lat, city, pop_density, bio1, bio12, build_sd, build_median, pop_density) |>
-      st_drop_geometry(), 
-    by = "city")
 
-library(ggpubr)
+#INLA
+r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/", city, "/canonicalname/")
 
-df_sos <- combine_feature |>
-  filter(phe_type == "SOS")
-fit_w <- lm(Estimate ~ bio12, data = df_sos, weights = w)
-summary_fit <- summary(fit_w)
-R2 <- summary_fit$r.squared
-pval <- summary_fit$coefficients[2, 4]
-label_text <- sprintf("italic(R)^2 == %.2f *','~~italic(p) == %.3f", R2, pval)
-
-newdat <- data.frame(
-  bio12 = seq(min(df_sos$bio12, na.rm = TRUE),
-              max(df_sos$bio12, na.rm = TRUE),
-              length.out = 200)
+p1 <- plot_coef_sp_city(r_output_dir)
+ggsave(
+  filename = paste0("~/Desktop/Chp2_city.png"),
+  plot = p1,
+  width = 8,
+  height = 6.5,
+  dpi = 300
 )
 
-pred <- predict(fit_w, newdata = newdat, se.fit = TRUE)
-newdat$y_pred <- pred$fit
-newdat$y_lwr  <- pred$fit - 1.96 * pred$se.fit
-newdat$y_upr  <- pred$fit + 1.96 * pred$se.fit
 
-p_sos <- ggplot(df_sos, aes(x = bio12, y = Estimate, alpha = SigAlpha, colour = Color)) +
-  geom_pointrange(aes(ymin = Lower, ymax = Upper)) +
-  geom_ribbon(data = newdat,
-              aes(x = bio12, ymin = y_lwr, ymax = y_upr),
-              inherit.aes = FALSE,
-              fill = "grey80", alpha = 0.4) +
-  geom_line(data = newdat, aes(x = bio12,y = y_pred),
-            inherit.aes = FALSE,
-            colour = "grey40", linewidth = 0.8) +
-  annotate("text", x = Inf, y = Inf, label = label_text, parse = TRUE,
-           hjust = 1.1, vjust = 1.5, size = 4) +
-  scale_color_identity() +
-  scale_alpha_identity() +
-  guides(alpha = "none") +
-  theme_minimal() +
-  labs(
-    x = "Annual precipitation (mm)",
-    y = "Estimated effect on SOS"
-  )
-
-df_eos <- combine_feature |>
-  filter(phe_type == "EOS")
-fit_w <- lm(Estimate ~ bio12, data = df_eos, weights = w)
-summary_fit <- summary(fit_w)
-R2 <- summary_fit$r.squared
-pval <- summary_fit$coefficients[2, 4]
-label_text <- sprintf("italic(R)^2 == %.2f *','~~italic(p) == %.3f", R2, pval)
-
-newdat <- data.frame(
-  bio12 = seq(min(df_eos$bio12, na.rm = TRUE),
-              max(df_eos$bio12, na.rm = TRUE),
-              length.out = 200)
-)
-
-pred <- predict(fit_w, newdata = newdat, se.fit = TRUE)
-newdat$y_pred <- pred$fit
-newdat$y_lwr  <- pred$fit - 1.96 * pred$se.fit
-newdat$y_upr  <- pred$fit + 1.96 * pred$se.fit
-
-p_eos <- ggplot(df_eos, aes(x = bio12, y = Estimate, alpha = SigAlpha, colour = Color)) +
-  geom_pointrange(aes(ymin = Lower, ymax = Upper)) +
-  geom_ribbon(data = newdat,
-              aes(x = bio12, ymin = y_lwr, ymax = y_upr),
-              inherit.aes = FALSE,
-              fill = "grey80", alpha = 0.4) +
-  geom_line(data = newdat, aes(x = bio12,y = y_pred),
-            inherit.aes = FALSE,
-            colour = "grey40", linewidth = 0.8) +
-  annotate("text", x = Inf, y = Inf, label = label_text, parse = TRUE,
-           hjust = 1.1, vjust = 1.5, size = 4) +
-  scale_color_identity() +
-  scale_alpha_identity() +
-  guides(alpha = "none") +
-  theme_minimal() +
-  labs(
-    x = "Annual precipitation (mm)",
-    y = "Estimated effect on EOS"
-  )
-
-
-p_sos + ggtitle(species) +
-  p_eos
+(s_plot_obj_mcmc$coef_summary_plot +  ggtitle("MCMC")) + 
+  (ny_sp) +
+  # (s_plot_obj_mcmc$coef_density_plot +  ggtitle("Species")) +
+  plot_layout(ncol = 2)
 ```
 
-
-### Phylogeny
-
-Prepare tree
-
-```{r}
-
-library(V.PhyloMaker2)
-library(ggtree)
-library(ggpubr)
-library(taxize)
-sp <- gsub("_", " ", sort(unique(coef_summary_all$Factor)))
-sp_df_family <- tax_name(sp, get = "family", db = "ncbi")
-families <- sp_df_family %>%
-  separate(query, into = c("genus", "species_ep"), sep = " ",remove=F) %>%
-  rename(species = query) %>%
-  dplyr::select(species,genus,family) |>
-  filter(!is.na(family)) |>
-  rbind(tibble::tribble(
-  ~species,                 ~genus,        ~family,
-    "Handroanthus impetiginosus", "Handroanthus", "Bignoniaceae",
-    "Magnolia loebneri",          "Magnolia",     "Magnoliaceae",
-    "Mariosousa heterophylla",    "Mariosousa",   "Fabaceae",
-    "Populus acuminata",          "Populus",      "Salicaceae",
-    "Populus hybrida",            "Populus",      "Salicaceae",
-    "Prunus glandulifolia",       "Prunus",       "Rosaceae",
-    "Prunus incam",               "Prunus",       "Rosaceae",
-    "Quercus undulata",           "Quercus",      "Fagaceae",
-    "Sambucus caerulea",          "Sambucus",     "Adoxaceae",
-    "Tilia euchlora",             "Tilia",        "Malvaceae"
-))
-tr <- phylo.maker(families)
-phylo_tree <- tr[[1]]
-phylo_tree$tip.label <- phylo_tree$tip.label %>% gsub("_", " ", .)
-
-
-D <- coef_summary_all %>%
-  rename(species = Factor)|>
-  mutate(species = gsub("_", " ", species),
-         sd = sd_value,
-         Estimate = median_value) |>
-  filter(phe_type == "SOS", species %in% phylo_tree$tip.label) |>
-
-  left_join(city_feature |>
-    mutate(city = gsub("[._]", "", site)) |>
-    select(lon, lat, city, pop_density, bio1, bio12, build_sd, build_median, pop_density) |>
-      st_drop_geometry(), 
-    by = "city")
-
-sp_data <- sort(unique(na.omit(D$species)))
-sp_tree <- sort(phylo_tree$tip.label)
-keep_sp <- intersect(sp_data, sp_tree)
-
-D2 <- D %>%
-  filter(species %in% keep_sp) %>%
-  droplevels() %>%
-  mutate(
-    species = factor(species, levels = keep_sp),  # ensure order matches A subsetting below
-    city = factor(city)
-  )
-tr2 <- drop.tip(phylo_tree, setdiff(phylo_tree$tip.label, keep_sp))
-A2 <- ape::vcv(tr2, corr = TRUE)
-
-D2 <- D2 %>%
-  filter(species %in% rownames(A2)) %>%
-  mutate(species = factor(species),
-         bio12_s = as.numeric(scale(bio12, center = TRUE, scale = TRUE)),
-         bio1_s = as.numeric(scale(bio1, center = TRUE, scale = TRUE)),
-         w = 1 / (sd^2)) %>%
-  droplevels()
-A2 <- A2[levels(D2$species), levels(D2$species)]
-```
-
-pglmm
-
-```{r}
-library(phytools)
-library(phyr)
-
-m_city <- pglmm(
-  Estimate ~ 1+ (1|species__) + (1|city) + bio12_s + bio1_s,
-  data = D2,
-  family = "gaussian",
-  cov_ranef = list(species = A2),
-  bayes = TRUE
-)
-
-plot_bayes(m_city, sort = TRUE)
-```
-
-
-The residual
-
-```{r}
-library(lme4)
-library(phytools)
-m_city_nophyr <- lmer(Estimate ~ bio12_s+ bio1_s + (1|city),
-                      data = D2, weights = w)
-D2$resid <- residuals(m_city_nophyr)
-resid_species <- aggregate(resid ~ species, data = D2, mean)
-
-common_species <- intersect(tr2$tip.label, resid_species$species)
-phy <- drop.tip(tr2, setdiff(tr2$tip.label, common_species))
-resid_species <- resid_species[match(common_species, resid_species$species), ]
-resid_vec <- resid_species$resid
-names(resid_vec) <- resid_species$species
-
-phylosig(tr2, resid_vec, method = "K", test = TRUE)
-phylosig(phy, resid_vec, method = "lambda", test = TRUE)
-```
-
-
-
-The variance components
-
-```{r}
-library(lme4)
-m_city_nophyr <- lmer(Estimate ~ (1|species) + bio12_s+ bio1_s + (1|city),
-                      data = D2, weights = w)
-
-###### Random
-re_df <- ranef(m_city_nophyr, condVar = TRUE)$species
-
-blup <- as.numeric(re_df[, 1])
-sp_df <- tibble(
-  species = rownames(re_df),
-  blup = blup
-)
-postVar <- attr(ranef(m_city_nophyr, condVar = TRUE)$species, "postVar")
-se_blup <- sqrt(sapply(1:dim(postVar)[3], function(i) postVar[1, 1, i]))
-sp_df$blup_se <- se_blup
-
-all_tree <- ggtree(tr2, layout = "circular")+
-  geom_tiplab(offset = 55, size =2)
-all_ring <- sp_df %>%
-  transmute(label = species, blup)
-
-###### Fixed
-all_tree <- ggtree(tr2, layout = "circular")+
-  geom_tiplab(offset = 55, size =2)
-all_ring <- as.data.frame(summary(m_city_nophyr)$coefficients) |>
-  rownames_to_column("label") |>
-  mutate(label = str_remove(label, "^species")) |>
-  filter(label != "(Intercept)")
-
-p_ring <- all_tree +
-  geom_fruit(
-    data  = all_ring,
-    geom  = geom_col,                               
-    mapping = aes(y = label, x = blup, fill = blup),
-    orientation = "y",
-    width  = 0.6,       
-    offset = 0.13,     
-    pwidth = 0.25,     
-    axis.params = list(axis="none", text=FALSE, line=FALSE, ticks=FALSE)
-  ) +
-  scale_fill_gradient2(low = "#FCA636FF", mid = "white", high = "#0D0887FF", midpoint = 0,
-                       name = "Estimate") +
-  theme_void()
-
-p_ring
-```
-
-
-```{r}
-m <- lmer(Estimate ~  (1|Factor) + (1|city), data = coef_summary_all %>%
-            filter(phe_type == "SOS"), weights = 1/(sd^2))
-summary(m)
-VarCorr(m)
-
-
-var_city <- coef_summary_all %>%
-  group_by(phe_type, city) %>%
-  summarise(var_city = var(Estimate, na.rm = TRUE), .groups = "drop")
-
-# 2) variance of the same species across cities (within phe_type)
-var_species <- coef_summary_all %>%
-  group_by(phe_type, Factor) %>%
-  summarise(var_species = var(Estimate, na.rm = TRUE), .groups = "drop")
-
-# 3) For each Factor-city pair, attach these two variances
-out <- coef_summary_all %>%
-  select(phe_type, Factor, city) %>%
-  distinct() %>%
-  left_join(var_city, by = c("phe_type", "city")) %>%
-  left_join(var_species, by = c("phe_type", "Factor"))
-
-line_data <- data.frame(
-  x = range(out$var_city, na.rm = TRUE)
-) |>
-  dplyr::mutate(y = x)  # 1:1 line
-
-ggplot(out, aes(x = var_city, y = var_species)) +
-  geom_point(size = 0.3, alpha = 0.6) +
-  
-  geom_line(data = line_data, aes(x = x, y = y, color = "1:1 line"),
-            linetype = "dashed", linewidth = 0.8) +
-
-  geom_smooth(aes(color = "Fitted regression"), method = "lm", se = FALSE, linewidth = 0.8) +
-  
-  facet_wrap(~ phe_type, scales = "free") +
-  theme_minimal() +
-  scale_color_manual(
-    name = "",
-    values = c("1:1 line" = "red", "Fitted regression" = "blue")
-  ) +
-  theme_classic() +
-  labs(
-  x = expression(paste("Var(", beta[temp], ") within one city, across species")),
-  y = expression(paste("Var(", beta[temp], ") within one species, across cities"))
-)
-```
 
 
 

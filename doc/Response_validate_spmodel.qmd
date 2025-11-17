@@ -298,10 +298,10 @@ plot_coef_sp_city <- function(r_output_dir){
   coef_summary$phe_type <- factor(coef_summary$phe_type,
                                 levels = c("SOS", "EOS"))
   p_coef <-  ggplot(coef_summary, aes(x = Factor2, 
-                               y = Estimate,
-                               colour = Color)) +
-    geom_point(aes(alpha = SigAlpha), position = position_dodge(w = 0.5), size = 3) +
-    geom_errorbar(aes(ymin = Lower, ymax = Upper, alpha = SigAlpha), 
+                               y = Estimate
+                               ), color = "grey30") +
+    geom_point(aes(alpha = SigAlpha), color = "grey30", position = position_dodge(w = 0.5), size = 3) +
+    geom_errorbar(aes(ymin = Lower, ymax = Upper, alpha = SigAlpha), color = "grey30", 
                   position = position_dodge(w = 0.5), 
                   width = 0.2) +
     geom_hline(yintercept = 0, linetype = 2) +
@@ -315,7 +315,7 @@ plot_coef_sp_city <- function(r_output_dir){
     # coord_flip() +
     facet_wrap(~ phe_type, ncol = 1, scales = "free_y") +
     scale_alpha_identity() +
-    scale_color_identity() +
+    # scale_color_identity() +
     # geom_text(aes(label = Sig, y = Upper + 0.05  ), hjust = -0.5, show.legend = FALSE) +
     # geom_text(aes(label = Estimate, y = Estimate  ), vjust = -0.7, show.legend = FALSE, size = 3) +
     guides(alpha = "none")
@@ -341,7 +341,7 @@ s_plot_obj_mcmc <- generate_mcmc_plot(s_dir_path,  coef = "temp", fixed_sp = F)
 
 
 #INLA
-r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models/inla/spatial_spde/", city, "/canonicalname/")
+r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/", city, "/canonicalname/")
 
 p1 <- plot_coef_sp_city(r_output_dir)
 ggsave(
@@ -358,6 +358,8 @@ ggsave(
   # (s_plot_obj_mcmc$coef_density_plot +  ggtitle("Species")) +
   plot_layout(ncol = 2)
 ```
+
+
 
 Next, using Start of Season (SOS) for 10 species as an example, I updated the spatial field and covariance function fitted with `spBayes` in [@fig-ny-spbayes-plot_semi]. I consider the range of variation here to be reasonable: the spatial variation is relatively smooth, and no extreme values appear.
 
