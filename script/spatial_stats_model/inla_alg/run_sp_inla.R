@@ -561,7 +561,7 @@ plot_coef_genus_cities <- function(r_output_dir, phe_type){
 #   geom_point(alpha = 0.6) 
 #   theme_minimal()
 
-run_inla_species = function(model_input_all, r_output_dir, phe_type, city){
+run_inla_species = function(model_input_all, r_output_dir, phe_type, city, fitting_type = "doy"){
 # options(repos = c(
 #   INLA = "https://inla.r-inla-download.org/R/testing",
 #   getOption("repos")
@@ -598,8 +598,12 @@ run_inla_species = function(model_input_all, r_output_dir, phe_type, city){
       
       cat(sprintf("\n Running INLA for species: %s, phe_type: %s, city: %s\n", 
                   species, phe_type, city))
-      phe_metric <- "doy"
       
+      if (phe_type %in% c("SOS","EOS")) {
+        phe_metric <- "doy"
+      } else {
+        phe_metric <- "doy_diff"
+      }
       model_input_sf <- model_input_all %>%
         filter(canonicalname == species)
       
@@ -611,7 +615,16 @@ run_inla_species = function(model_input_all, r_output_dir, phe_type, city){
       model_input_sf <- model_input_sf %>%
         filter(is.na(.data[[phe_metric]]) |
                  dplyr::between(.data[[phe_metric]], lo, hi))
-        
+      
+      if (fitting_type == "start"){
+        phe_metric = "start"
+      } else if (fitting_type == "end"){
+        phe_metric = "end"
+      } else {
+        phe_metric = "doy"
+      }
+      
+      
       model_input_sf <- model_input_sf %>%
         st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
         st_transform(crs = 5070) %>%

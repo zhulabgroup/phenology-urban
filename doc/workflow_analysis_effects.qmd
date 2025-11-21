@@ -8,8 +8,6 @@ editor_options:
 
 ## Summarize the effects across cities
 
-
-
 ```{r}
 tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
@@ -290,10 +288,10 @@ range_vals <- range(plot_df$mu, na.rm = TRUE)
 tau_vals <- unique(plot_df$tau2)
 tau_breaks <- pretty(range(sqrt(tau_vals)), n = 5)
 
-ggplot() +
+p = ggplot() +
   geom_sf(data = boundary_us , fill = "grey95", color = "grey85") +
   geom_point(data = plot_df,
-             aes(x = lon, y = lat,
+             aes(x = lon, y = lat, text = site,
                  size   = (sqrt(tau2) )),
              shape  = 21,
              stroke = 1, # acts as the thickness of the boundary line
@@ -301,7 +299,7 @@ ggplot() +
              ) +
   geom_point(
     data = plot_df,
-    aes(x = lon, y = lat, color = mu, size = sqrt(tau2)), alpha =0.7
+    aes(x = lon, y = lat,  text = site, color = mu, size = sqrt(tau2)), alpha =0.7
   ) +
   scale_color_gradientn(
     name = expression(hat(mu[c])~"(mean estimated effect)"),
@@ -329,6 +327,8 @@ ggplot() +
     legend.text = element_text(size = 14)
   ) +
   coord_sf(expand = FALSE)
+
+plotly::ggplotly(p)
 ```
 
 
@@ -482,7 +482,7 @@ ggplot() +
   )
 ```
 
-#### Group by species, shown on phylogeny tree
+#### Group by genus, shown on phylogeny tree
 
 ```{r}
 meta_results_phy <- coef_summary_all %>%
@@ -702,16 +702,21 @@ most_sp <- table(coef_summary_all$Parameter,coef_summary_all$phe_type) |> as.dat
 
 library(ggpubr)
 
-plot_marginal_precp <- function(species_name, clim = "bio12", phe_type = "EOS") {
+plot_marginal_precp <- function(species_name, clim = "mean_temp", phe_type = "EOS") {
+  new_city_feature <-  read_rds(paste0("~/phenology-urban/data/proc/model_output/nooutlier_", phe_type, "_input.rds")) |>
+    filter(year < 2024) |>
+    mutate(year = as.factor(year))|>
+    filter(canonicalname == species_name) |>
+    group_by(city) |>
+    summarise(
+      across(starts_with("temp"), ~ mean(.x, na.rm = TRUE), .names = "mean_temp"),
+      across(starts_with("prcp"), ~ mean(.x, na.rm = TRUE), .names = "mean_prcp"))
+  
   combine_feature <- coef_summary_all |>
     filter(Factor == species_name) |>
     mutate(w = 1/(sd^2)) |>
     left_join(
-      city_feature |>
-        mutate(city = gsub("[._]", "", site)) |>
-        select(lon, lat, city, pop_density,
-               bio1, bio12, build_sd, build_median, pop_density) |>
-        st_drop_geometry(),
+      new_city_feature,
       by = "city"
     )
 
@@ -762,8 +767,8 @@ plot_marginal_precp <- function(species_name, clim = "bio12", phe_type = "EOS") 
     labs(
       title = species_name,
       x = case_when(
-        rlang::as_name(clim) == "bio12" ~ "Mean Annual Precipitation (mm)",
-        rlang::as_name(clim) == "bio1" ~ "Mean Annual Temperature (°C)"
+        rlang::as_name(clim) == "mean_prcp" ~ "Mean Annual Precipitation (mm)",
+        rlang::as_name(clim) == "mean_temp" ~ "Mean Annual Temperature (°C)"
       ),
       y = paste0("Estimated effect on ", phe_type)
     )
@@ -780,7 +785,7 @@ species_vec <- c(
   "Gleditsia triacanthos",
   "Ulmus americana"
 )
-plot_list <- lapply(species_vec, plot_marginal_precp, clim = "bio12",phe_type = "EOS")
+plot_list <- lapply(species_vec, plot_marginal_precp, clim = "mean_temp",phe_type = "EOS")
 names(plot_list) <- species_vec
 cowplot::plot_grid(plotlist = plot_list, ncol = 3)
 ```
@@ -995,3 +1000,116 @@ ggplot(out, aes(x = var_city, y = var_species)) +
   y = expression(paste("Var(", beta[temp], ") within one species, across cities"))
 )
 ```
+
+
+## Diognize the pattern
+
+Select the species in the unique cities
+
+```{r}
+library(randomcoloR)
+
+unique_cities <- c("CapeCoral", "TP", "StAugustine", "Sacramento", 
+                   "SanJose", "Berkeley", "Anaheim", "Austin", "LosAngeles")
+
+normal_cities <- c("Albuquerque", "Moab", "Mesa", "Charlottesville", "Stockton", "Houston")
+
+# make sure where are the unique values from, common sp or single ones?
+summary_unique_cities <- coef_summary_all |> 
+  left_join(coef_summary_all |> 
+    group_by(Factor) |> 
+    summarise(
+      n_city = n_distinct(city),
+      .groups = "drop"
+    ), 
+    by = "Factor") |>
+  filter(city %in% unique_cities)
+
+p <- ggplot(
+  summary_unique_cities,
+  aes(
+    x = reorder_within(Factor, Estimate, interaction(city, phe_type), decreasing = TRUE),
+    y = Estimate,
+    color = Color,
+    size = n_city
+  )
+) +
+  geom_point(alpha= 0.5) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
+  geom_text(aes(label = n_city), vjust = -0.3, size = 2) +
+  facet_grid(city ~ phe_type, scales = "free_x") +
+  scale_x_reordered() +
+  scale_color_identity() +
+  scale_size_continuous(name = "Number of cities") +
+  labs(x = "Species", y = "Estimate") +
+  theme_classic() +
+  theme(
+    axis.text.x = element_blank(),
+    strip.text = element_text(size = 10)
+  )
+
+ggsave(
+  filename = paste0("~/Desktop/Unique_cities.png"),
+  plot = p,
+  width = 20,
+  height = 20,
+  dpi = 300
+)
+```
+
+Plot the temp histogram of species
+
+```{r}
+diog_species <- coef_summary_all |> 
+  filter(
+    Factor %in% (
+      coef_summary_all |> 
+        filter(city %in% unique_cities) |>
+        distinct(Factor) |> 
+        pull()
+    )
+  )
+
+top10_species <- diog_species |> 
+  group_by(Factor) |> 
+  summarise(n_city = n_distinct(city)) |> 
+  arrange(desc(n_city)) |> 
+  slice_head(n = 10) |> 
+  pull(Factor)
+
+
+species = "Acer rubrum"
+phe_type = "SOS"
+all_city_input <- read_rds(paste0("~/phenology-urban/data/proc/model_output/nooutlier_", phe_type, "_input.rds")) |>
+  filter(year < 2024) |>
+  mutate(year = as.factor(year))|>
+  filter(canonicalname == species) |>
+  mutate(unique_city = if_else(city %in% unique_cities, "Unique_city", "Normal_city"))
+
+ggplot() +
+  geom_density(data = all_city_input, 
+               aes(x = temp_winter, group = city, color = unique_city),
+               fill = "grey80",
+               linewidth = 0.4, alpha = 0.5) +
+  scale_color_manual(
+    values = c("Unique_city" = "red", "Normal_city" = "grey40"),
+    name = "City Type",
+    labels = c("Normal City", "Unique City")
+  ) +
+  scale_y_continuous(name = "Density") +
+  labs(
+    x = case_when(
+      phe_type == "SOS" ~ "Start-of-season (DOY)",
+      phe_type == "EOS" ~ "End-of-season (DOY)"
+    )
+  ) +
+  theme_classic() +
+  theme(
+    axis.text.x = element_text(size = 10),
+    axis.text.y = element_text(size = 10),
+    title = element_text(size = 14)
+  ) +
+  ggtitle(paste0(species))
+
+```
+

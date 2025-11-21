@@ -38,7 +38,7 @@ boundary_us <- st_read(("~/lab-data/datasets/boundary/USAdministrative/US/us_bou
 
 p_geo <- ggplot() +
   geom_sf(data = boundary_us, fill = "grey85", color = "white") +
-  geom_sf(data = inventory_centroids, aes(size = num_tree), color = "darkblue", alpha = 0.6) +
+  geom_sf(data = inventory_centroids, aes(size = num_tree, text = site), color = "darkblue", alpha = 0.6) +
   coord_sf(expand = FALSE) +
   scale_size_continuous(name = "Number of Trees", range = c(1, 8),labels = label_comma()) +
   theme_minimal() +
@@ -53,6 +53,8 @@ p_geo <- ggplot() +
     panel.grid.major = element_line(color = "grey90", linetype = "solid", linewidth = 0.2),
     panel.grid.minor = element_line(color = "grey90", linetype = "solid", linewidth = 0.15)
   )
+
+plotly::ggplotly(p_geo)
 ```
 
 ```{r fig-pca}
@@ -217,7 +219,7 @@ one species across cities, raw DOY histogram -> IQR boxplot -> IQR scatterplot (
 library(randomcoloR)
 species = "Acer rubrum"
 phe_type = "SOS"
-all_city_input <- read_rds(paste0("~/phenology-urban/data/proc/model_output/all_", phe_type, "_input.rds")) |>
+all_city_input <- read_rds(paste0("~/phenology-urban/data/proc/model_output/nooutlier_", phe_type, "_input.rds")) |>
   filter(year < 2024) |>
   mutate(year = as.factor(year))
 fixed_city <- unique(all_city_input$city) |>
@@ -672,15 +674,6 @@ source(here("script/spatial_stats_model/prepare_model_input.R"))
 
 plot_phe_temp_cities <- function(cities, taxon_col, color_col = "city"){
   plots <- lapply(c("SOS", "EOS"), function(phe_type) {
-    # all_city_input <- lapply(cities, function(city) {
-    #   message(paste0("Reading data in ", city))
-    #   prepare_data(city, source = "Grid", taxa_col= taxon_col, phe_type = phe_type) |>
-    #     mutate(city = city)
-    # })|> 
-    #   bind_rows()|>
-    #   mutate(genus = str_extract(.data[[taxon_col]], "^[^ ]+"))
-    # 
-    # write_rds(all_city_input, "~/phenology-urban/data/proc/model_output/all_EOS_input.rds", compress = "gz")
     all_city_input <- read_rds(paste0("~/phenology-urban/data/proc/model_output/all_", phe_type, "_input.rds")) |>
       filter(year < 2024) |>
       mutate(year = as.factor(year))
@@ -739,11 +732,10 @@ plot_phe_temp_cities(cities, taxon_col = "canonicalname", color_col = "year")
 ### Step by step
 
 ```{r}
-"NewYork"
+source(here("script/spatial_stats_model/prepare_model_input.R"))
 species = "Acer rubrum"
 phe_type = "SOS"
-NY_city_input <-  read_rds(paste0("~/phenology-urban/data/proc/model_output/all_", phe_type, "_input.rds")) |>
-  filter(city == "NewYork") |>
+NY_city_input <-  prepare_data("NewYork", source = "Grid", taxa_col= "canonicalname", phe_type = phe_type)|>
   filter(canonicalname == species)
   
 tree_location <- NY_city_input |>
@@ -751,7 +743,7 @@ tree_location <- NY_city_input |>
   filter(!(lon == "NaN") & !(lat == "NaN")) |>
   st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F)
 
-file <- "~/lab-data/datasets/climate/UHAT/clean/NewYork_summer_2023.tif"
+file <- "~/lab-data/datasets/climate/UHAT/clean/NewYork_winter_2023.tif"
 temp_tif <- terra::rast(file)
 tifs <- list.files(
   "~/lab-data/datasets/climate/UHAT/grid",
@@ -791,26 +783,63 @@ temp <- ggplot() +
     legend.spacing.y = unit(0.1, "cm")     # 图例项之间距离
   )
 
+## change to model fit and point density
 
-lm_fit <- lm(doy ~ temp_winter, data = NY_city_input)
-coef_summary <- summary(lm_fit)$coefficients
+Acer_rubrum_SOS <- readRDS("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/NewYork/canonicalname/Acer_rubrum_SOS.rds")
 
-slope <- coef_summary["temp_winter", "Estimate"]
-pval  <- coef_summary["temp_winter", "Pr(>|t|)"]
+b0     <- Acer_rubrum_SOS$res$summary.fixed["Intercept", "mean"]
+b_temp <- Acer_rubrum_SOS$res$summary.fixed["temp",      "mean"]
+b_prcp <- Acer_rubrum_SOS$res$summary.fixed["prcp",      "mean"]
+b_srad <- Acer_rubrum_SOS$res$summary.fixed["srad",      "mean"]
+u_2023 <- Acer_rubrum_SOS$res$summary.random$year[
+           Acer_rubrum_SOS$res$summary.random$year$ID=="2023","mean"]
+sd_b0     <- Acer_rubrum_SOS$res$summary.fixed["Intercept", "sd"]
+sd_b_temp <- Acer_rubrum_SOS$res$summary.fixed["temp",      "sd"]
+sd_b_prcp <- Acer_rubrum_SOS$res$summary.fixed["prcp",      "sd"]
+sd_b_srad <- Acer_rubrum_SOS$res$summary.fixed["srad",      "sd"]
+u_2023_sd <- Acer_rubrum_SOS$res$summary.random$year[
+  Acer_rubrum_SOS$res$summary.random$year$ID == "2023", "sd"
+]
 
-sig_label <- ifelse(pval < 0.001, "***",
-                    ifelse(pval < 0.01, "**",
-                           ifelse(pval < 0.05, "*", "ns")))
+mean_prcp <- mean(NY_city_input$prcp_winter, na.rm = TRUE)
+mean_srad <- mean(NY_city_input$srad_winter, na.rm = TRUE)
+temp_seq <- seq(
+  min(NY_city_input$temp_winter, na.rm = TRUE),
+  max(NY_city_input$temp_winter, na.rm = TRUE),
+  length.out = 200
+)
 
-label_text <- sprintf("Slope = %.2f\np = %.3f %s", slope, pval, sig_label)
+# 5. Predicted y for year=2023
+y_mean_2023 <- b0 + b_temp * temp_seq +
+               b_prcp * mean_prcp +
+               b_srad * mean_srad +
+               u_2023   # <-- add random effect
+eta_var <- sd_b0^2 +
+  (temp_seq^2)       * sd_b_temp^2 +
+  (mean_prcp^2)      * sd_b_prcp^2 +
+  (mean_srad^2)      * sd_b_srad^2 +
+  u_2023_sd^2
+
+eta_sd <- sqrt(eta_var)
+
+# 95% CI
+z_975 <- qnorm(0.975)
+y_lower_2023 <- y_mean_2023 - z_975 * eta_sd
+y_upper_2023 <- y_mean_2023 + z_975 * eta_sd
+
+plot_data <- data.frame(
+  temp   = temp_seq,
+  y_mean = y_mean_2023,
+  y_low  = y_lower_2023,
+  y_high = y_upper_2023
+)
+
 sp_ny_scatter_plot <- ggplot() +
-  geom_point(data =NY_city_input, aes(x = temp_winter, y = doy), size = 1, alpha = 0.3, color = "grey50") +
-  geom_smooth(data =NY_city_input,  aes(x = temp_winter, y = doy), method = "lm", se = TRUE, color = "#FCA636FF", linewidth = 0.8, linetype = "solid") +
-  annotate("text", 
-           x = Inf, y = -Inf, 
-           label = label_text,
-           hjust = 1.1, vjust = -0.5, 
-           size = 3.5, color = "black") +
+  geom_hex(data = NY_city_input,aes(x = temp_winter, y = doy), bins = 80, alpha = 0.5, color = "NA") +
+  scale_fill_viridis_c(option = "C") +
+  geom_ribbon(data = plot_data, aes(x = temp, y = y_mean, ymin = y_low, ymax = y_high), alpha = 0.2) +
+  geom_line(data = plot_data, aes(x = temp, y = y_mean), color = "black", linewidth = 1) +
+  theme_bw(base_size = 14)+
   labs(x = "Mean winter temperature (°C)", 
        y = "Start-of-season (DOY)") +
   theme_classic() +
@@ -820,29 +849,6 @@ sp_ny_scatter_plot <- ggplot() +
     title = element_text(size = 14),
     legend.position = "none"
   )
-
-# fitted -INLA
-X <- model.matrix(~ temp_winter + prcp_winter + srad_winter, data = NY_city_input)
-beta_hat <- Acer_rubrum_SOS[["res"]][["summary.fixed"]][["mean"]]
-
-yhat <- as.numeric(X %*% beta_hat)
-
-newdat <- data.frame(temp = seq(min(NY_city_input$temp_winter), max(NY_city_input$temp_winter), length = 100))
-newdat$y_pred <- beta_hat[1] + beta_hat[2] * newdat$temp  # 固定效应预测
-
-# 绘图
-ggplot() +
-  geom_line(data = newdat, aes(x = temp, y = y_pred),
-            color = "#FCA636FF", linewidth = 1.2) +
-  labs(x = "Mean winter temperature (°C)",
-       y = "Fixed-effect prediction of start-of-season (DOY)") +
-  theme_classic() +
-  annotate("text", 
-           x = Inf, y = -Inf, 
-           label = sprintf("Mean slope = %.2f %s", beta_hat[2], Acer_rubrum_SOS[["fix_effect"]][["Sig"]]),
-           hjust = 1.1, vjust = -1, 
-           size = 3.5, color = "black") +
-  scale_y_continuous(limits = c(min(NY_city_input$doy), max(NY_city_input$doy)))
 
 
 

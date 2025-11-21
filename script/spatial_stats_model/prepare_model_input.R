@@ -83,7 +83,7 @@ prepare_species_data <- function(phe_type, tree_climate_phe) {
     thres <- 0.5
     model_input <- tree_climate_phe %>%
       filter(direction == !!direction & thres == !!thres) %>%
-      select(id, canonicalname = taxa, lon, lat, year, doy, hex_id, ends_with("winter")) %>%
+      select(id, canonicalname = taxa, lon, lat, year, start, end, doy, hex_id, ends_with("winter")) %>%
       drop_na()
   } else if (phe_type == "EOS") {
     phe_metric <- "doy"
@@ -91,7 +91,7 @@ prepare_species_data <- function(phe_type, tree_climate_phe) {
     thres <- 0.5
     model_input <- tree_climate_phe %>%
       filter(direction == !!direction & thres == !!thres) %>%
-      select(id, canonicalname = taxa, lon, lat, year, doy, hex_id, ends_with("summer")) %>%
+      select(id, canonicalname = taxa, lon, lat, year, start, end, doy, hex_id, ends_with("summer")) %>%
       drop_na()
   } else if (phe_type == "GreenUp") {
     phe_metric <- "doy_diff"
@@ -108,7 +108,6 @@ prepare_species_data <- function(phe_type, tree_climate_phe) {
       left_join(diff, by = c("year", "id")) %>%
       select(id, canonicalname = taxa, lon, lat, year, doy_diff, hex_id, ends_with("spring")) %>%
       drop_na()
-    
   } else {
     direction <- "down"
     diff <- tree_climate_phe %>%
@@ -135,7 +134,7 @@ prepare_genus_data <- function(phe_type, tree_climate_phe) {
     model_input <- tree_climate_phe %>%
       filter(direction == !!direction & thres == !!thres) %>%
       mutate(genus = str_extract(taxa, "^[^ ]+")) %>%
-      select(id, taxa, genus, lon, lat, year, doy, hex_id,  ends_with("winter")) %>%
+      select(id, taxa, genus, lon, lat, year, start, end, doy, hex_id,  ends_with("winter")) %>%
       drop_na()
   } else if (phe_type == "EOS") {
     phe_metric <- "doy"
@@ -144,7 +143,7 @@ prepare_genus_data <- function(phe_type, tree_climate_phe) {
     model_input <- tree_climate_phe %>%
       filter(direction == !!direction & thres == !!thres) %>%
       mutate(genus = str_extract(taxa, "^[^ ]+")) %>%
-      select(id, taxa, genus, lon, lat, year, doy, hex_id,  ends_with("summer")) %>%
+      select(id, taxa, genus, lon, lat, year, start, end, doy, hex_id,  ends_with("summer")) %>%
       drop_na()
   } else if (phe_type == "GreenUp") {
     phe_metric <- "doy_diff"

@@ -32,10 +32,10 @@ prepare_coef_summary <- function(r_output_dir, phe_type){
   write_rds(coef_summary, paste0(r_output_dir, phe_type, "_summary.rds"))
 }
 
-for (city in cities[c(67:70,73:76)]) { 
+for (city in cities) { 
   message(paste0("Processing city: ", city))
-  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/", city, "/canonicalname/")
-  for (phe_type in phe_types){
+  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla_start/spatial_spde/", city, "/canonicalname/")
+  for (phe_type in c("EOS")){
     prepare_coef_summary(r_output_dir, phe_type)
   }
 }
