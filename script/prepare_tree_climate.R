@@ -333,3 +333,70 @@ for (city in cities){
       message("Skipping ", city, ": ", e$message)
     }
   )}
+
+################################ Daily UHAT ##################################
+
+prepare_tree_Grid_climate_daily <- function(out_dir, city){
+  
+  ################## Input tree ##################
+  message(paste0("Processing example city: ", city, "..."))
+  
+  tree_dir <- paste0("~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/", city, ".rds")
+  tree_location <- read_rds(tree_dir) |>
+    filter(!(lon == "NaN") & !(lat == "NaN")) |>
+    st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F)
+  
+  ###### UHAT temperature #######
+  
+  uhat_files <- list.files(
+    path = paste0("~/lab-data/datasets/climate/UHAT/clean_daily/"),
+    pattern = paste0(city, ".*\\.nc$"),
+    full.names = TRUE
+  )
+  missing_files <- uhat_files[!file.exists(uhat_files)]
+  if (length(missing_files) > 0) {
+    stop("The following CHELSA TIF file(s) do not exist: {str_c(missing_files, collapse = ', ')}")
+  }
+  tifs <- list.files(
+    "~/lab-data/datasets/climate/UHAT/grid",
+    pattern = "^MYD11A1\\..*LST_Day_1km\\.tif$",
+    full.names = TRUE
+  )
+  r_template <- terra::rast(tifs[1])
+  
+  for (uhat_file_nc in uhat_files) {
+    
+    bn <- basename(uhat_file_nc)
+    type <- str_match(bn, "t2m_(day|night)\\.nc$")[, 2]
+    out_path <- paste0(out_dir, city, "_", type, ".rds")
+    
+    r_nc <- rast(uhat_file_nc)
+    crs(r_nc) <- crs(r_template)  # ensure correct CRS
+    tree_location <- tree_location|>
+      st_transform(crs(r_nc))
+    vals <- terra::extract(r_nc, tree_location, ID = FALSE)
+    tvec <- format(time(r_nc), "%Y_%m_%d")
+    colnames(vals) <- tvec
+    uhat_climate <- bind_cols(
+      tibble(id = tree_location$id, type = type),
+      vals
+    )
+    points_surface <- tree_location |>
+      left_join(uhat_climate, by = c("id"))
+    write_rds(points_surface, out_path, compress = "gz")
+  }
+}
+
+out_dir <- paste0("~/phenology-urban/data/proc/tree_climate/Grid_daily/")
+tree_dir <- "~/phenology-urban/data/raw/CONUS/StreetTrees/cleaned_ps_input/"
+rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
+cities <- gsub("\\.rds$", "", basename(rds_files))
+for (city in cities){
+  tryCatch(
+    {
+      prepare_tree_Grid_climate_daily(out_dir, city)
+    },
+    error = function(e) {
+      message("Skipping ", city, ": ", e$message)
+    }
+  )}

@@ -18,21 +18,20 @@ r_template <- terra::rast(tifs[1])
 
 # helper that builds one raster for each date
 build_UHAT_tif <- function(date, out_dir, type) {
-  
-  # 0) check location
-  city_out_dir <- paste0(out_dir, "/", city, "/")
-  if (!dir.exists(city_out_dir)) {
-    dir.create(city_out_dir, recursive = TRUE)
-  }
-  fname <- file.path(
-    city_out_dir,
-    paste0(sprintf("%s_%s.tif", date, type))
-  )
-  if (file.exists(fname)) {
-    cat(sprintf("\n File already exists for city: %s, date: %s, type: %s. Skipping.\n", 
-                city, date, type))
-    return(FALSE)  # Skip the current iteration of the loop
-  }
+  # # 0) check location
+  # city_out_dir <- paste0(out_dir, "/", city, "/")
+  # if (!dir.exists(city_out_dir)) {
+  #   dir.create(city_out_dir, recursive = TRUE)
+  # }
+  # fname <- file.path(
+  #   city_out_dir,
+  #   paste0(sprintf("%s_%s.tif", date, type))
+  # )
+  # if (file.exists(fname)) {
+  #   cat(sprintf("\n File already exists for city: %s, date: %s, type: %s. Skipping.\n", 
+  #               city, date, type))
+  #   return(FALSE)  # Skip the current iteration of the loop
+  # }
   
   # 1) slice data
   df <- UHAT_climate %>%
@@ -88,19 +87,21 @@ build_UHAT_tif <- function(date, out_dir, type) {
   
   # 6) write GeoTIFF
   
-  writeRaster(
-    r_aligned, fname,
-    overwrite = TRUE, NAflag = -9999,
-    gdal = c("COMPRESS=LZW"), datatype = "FLT4S"
-  )
-  message(sprintf("[ok] wrote %s", fname))
-  invisible(fname)
-  return(TRUE)
+  # writeRaster(
+  #   r_aligned, fname,
+  #   overwrite = TRUE, NAflag = -9999,
+  #   gdal = c("COMPRESS=LZW"), datatype = "FLT4S"
+  # )
+  # message(sprintf("[ok] extracted %s", date))
+  # invisible(fname)
+  # return(TRUE)
+  
+  return(r_aligned)
 }
 
 ################## Save the seasonal file #################
 
-for (city in cities[7:76]) {
+for (city in cities[2:76]) {
   message(paste0("Processing city: ", city))
   uhat_file <- paste0("~/lab-data/datasets/climate/UHAT/raw/", city, ".csv")
   if (!file.exists(uhat_file)) {
@@ -130,20 +131,41 @@ for (city in cities[7:76]) {
     pull()
   
   # run for all dates
+  # day
+  nc_fname_day <- file.path(out_dir, paste0(city, "_UHAT_t2m_day.nc"))
+  day_list <- list()
   for (date in day_dates_to_do) {
     message(paste0("Processing date", date))
-    result <- build_UHAT_tif(date, out_dir, type = "day")
-    if (!result) {
-      next   # skip this iteration
-    }
+    day_list[[date]] <-  build_UHAT_tif(date, out_dir, type = "day")
   }
+  ext_list <- lapply(day_list, ext)
+  union_ext <- ext(min(sapply(ext_list, function(e) e$xmin)), 
+                   max(sapply(ext_list, function(e) e$xmax)),
+                   min(sapply(ext_list, function(e) e$ymin)),
+                   max(sapply(ext_list, function(e) e$ymax)))
+  r_all_day <- lapply(day_list, function(r) {
+    extend(r, union_ext)
+  }) |> rast()
+  time(r_all_day) <- as.Date(names(day_list), format = "%Y_%m_%d")
+  terra::writeCDF(r_all_day, filename = nc_fname_day, overwrite = TRUE)
+  
+  # night
+  nc_fname_night <- file.path(out_dir,paste0(city, "_UHAT_t2m_night.nc"))
+  night_list <- list()
   for (date in night_dates_to_do) {
     message(paste0("Processing date", date))
-    result <- build_UHAT_tif(date, out_dir, type = "night")
-    if (!result) {
-      next   # skip this iteration
-    }
+    night_list[[date]] <- build_UHAT_tif(date, out_dir, type = "night")
   }
+  ext_list <- lapply(night_list, ext)
+  union_ext <- ext(min(sapply(ext_list, function(e) e$xmin)), 
+                   max(sapply(ext_list, function(e) e$xmax)),
+                   min(sapply(ext_list, function(e) e$ymin)),
+                   max(sapply(ext_list, function(e) e$ymax)))
+  r_all_night <- lapply(night_list, function(r) {
+    extend(r, union_ext)
+    }) |> rast()
+  time(r_all_night) <- as.Date(names(night_list), format = "%Y_%m_%d")
+  terra::writeCDF(r_all_night, filename = nc_fname_night, overwrite = TRUE)
 }
 
 
