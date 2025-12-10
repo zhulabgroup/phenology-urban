@@ -12,6 +12,7 @@ editor_options:
 tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
 cities <- gsub("\\.rds$", "", basename(rds_files))
+phe_types <- c("SOS", "EOS")
 
 coef_summary_all <- data.frame()
 
@@ -222,9 +223,7 @@ ggplot(summary_all |> filter(phe_type == "SOS"), aes(x = "", y = prop, fill = ca
 
 ```
 
-
 ## The effects' relastionship with urban variables (climate, urbanization, population, etc.)
-
 
 ### Input
 
@@ -232,7 +231,7 @@ ggplot(summary_all |> filter(phe_type == "SOS"), aes(x = "", y = prop, fill = ca
 coef_summary_all <- data.frame()
 
 for (city in cities) {
-  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/", city, "/canonicalname/")
+  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla_min/spatial_spde/", city, "/canonicalname/")
   for (phe_type in phe_types) {
     file_path <- file.path(r_output_dir, paste0(phe_type, "_summary.rds"))
     if (file.exists(file_path)) {
@@ -245,7 +244,67 @@ for (city in cities) {
 coef_summary_all$phe_type <- factor(coef_summary_all$phe_type, levels = c("SOS", "EOS"))
 ```
 
-### Meta-analysis
+## Hierarchical model for species slopes within cities
+
+We consider species indexed by $s$ and cities indexed by $c$.\
+Each first–stage estimate $\hat{\beta}_{1,s,c}$ has a known sampling variance $v_{s,c}$.
+
+### Level 1: Observation model
+
+$$
+\hat{\beta}_{1,s,c} = \beta_{1,s,c} + \epsilon_{s,c},
+$$ 
+
+where the sampling error satisfies 
+
+$$
+\epsilon_{s,c} \text{ has distribution } \mathcal{N}(0,\, v_{s,c}).
+$$
+
+### Level 2: Species effects within each city
+
+$$
+\beta_{1,s,c} = \mu_c + \eta_{s,c},
+$$ 
+
+where the deviation term satisfies 
+
+$$
+\eta_{s,c} \text{ has distribution } \mathcal{N}(0,\, \tau_c^2).
+$$
+
+### Implied marginal model for the observed estimates
+
+Combining the two levels gives 
+
+$$
+\hat{\beta}_{1,s,c} 
+ = \mu_c + (\eta_{s,c} + \epsilon_{s,c}),
+$$ 
+
+and because $\eta_{s,c}$ and $\epsilon_{s,c}$ are independent normal errors, we have 
+
+$$
+\eta_{s,c} + \epsilon_{s,c} 
+\text{ has distribution } \mathcal{N}(0,\, \tau_c^2 + v_{s,c}).
+$$
+
+Thus the marginal form is
+
+$$
+\hat{\beta}_{1,s,c}
+ = \mu_c + \zeta_{s,c},
+$$
+
+where
+
+$$
+\zeta_{s,c} \text{ has distribution } \mathcal{N}(0,\, \tau_c^2 + v_{s,c}).
+$$
+
+-   $\mu_c$: city–level mean response (average slope across species).\
+-   $\tau_c^2$: between–species variance within city $c$.\
+-   $v_{s,c}$: known sampling variance of $\hat{\beta}_{1,s,c}$.
 
 #### Group by city, shown on map
 
@@ -331,7 +390,6 @@ p = ggplot() +
 plotly::ggplotly(p)
 ```
 
-
 ```{r}
 city = "NewYork"
 agg_city <- meta_results |> filter(city == "NewYork")
@@ -384,9 +442,7 @@ ggsave(
 
 ```
 
-
 ```{r}
-
 meta_results_climate <- meta_results |>
   left_join(city_feature |> 
     select(site, bio1, bio12, build_median, pop_density), by = c("city" = "site")) |>
@@ -510,6 +566,8 @@ meta_results_phy <- coef_summary_all %>%
   })
 ```
 
+Tree
+
 ```{r}
 library(V.PhyloMaker2)
 library(ggtree)
@@ -596,6 +654,9 @@ p_ring <- all_tree +
 p_ring
 ```
 
+
+Get genus tree
+
 ```{r}
 genus <- sapply(strsplit(sp, " "), `[`, 1) |> unique() |> vec()
 genus_chunks <- split(genus, ceiling(seq_along(genus) / 1))
@@ -675,12 +736,10 @@ p_ring <- all_tree +
 p_ring
 ```
 
-
-
 ### Marginal Climate
 
 ```{r}
-most_sp <- table(coef_summary_all$Parameter,coef_summary_all$phe_type) |> as.data.frame()
+# most_sp <- table(coef_summary_all$Parameter,coef_summary_all$phe_type) |> as.data.frame()
 # Gleditsia triacanthos
 # Acer platanoides
 # Acer saccharum
@@ -702,8 +761,9 @@ most_sp <- table(coef_summary_all$Parameter,coef_summary_all$phe_type) |> as.dat
 
 library(ggpubr)
 
-plot_marginal_precp <- function(species_name, clim = "mean_temp", phe_type = "EOS") {
-  new_city_feature <-  read_rds(paste0("~/phenology-urban/data/proc/model_output/nooutlier_", phe_type, "_input.rds")) |>
+plot_marginal <- function(species_name, coef_summary_all, clim = "mean_temp", phe_type = "EOS") {
+  if(clim %in% c("mean_prcp", "mean_temp")) {
+    new_city_feature <-  read_rds(paste0("~/phenology-urban/data/proc/model_output/nooutlier_", phe_type, "_input.rds")) |>
     filter(year < 2024) |>
     mutate(year = as.factor(year))|>
     filter(canonicalname == species_name) |>
@@ -711,6 +771,14 @@ plot_marginal_precp <- function(species_name, clim = "mean_temp", phe_type = "EO
     summarise(
       across(starts_with("temp"), ~ mean(.x, na.rm = TRUE), .names = "mean_temp"),
       across(starts_with("prcp"), ~ mean(.x, na.rm = TRUE), .names = "mean_prcp"))
+  } else if (clim %in% c("bio1", "bio12")) {
+    new_city_feature <- readRDS(here("~/phenology-urban/data/raw/CONUS/StreetTrees/cleaned_ps_input/summary/city_feature.rds")) |>
+      select(site, all_of(clim)) |>
+      rename(city = site)
+  } else {
+    stop("clim variable not recognized")
+  }
+  
   
   combine_feature <- coef_summary_all |>
     filter(Factor == species_name) |>
@@ -749,7 +817,7 @@ plot_marginal_precp <- function(species_name, clim = "mean_temp", phe_type = "EO
 
   # plot
   p <- ggplot(df_eos, aes(x = .data[[clim]], y = Estimate, alpha = SigAlpha)) +
-    geom_pointrange(aes(ymin = Lower, ymax = Upper), colour = "grey30") +
+    geom_pointrange(aes(ymin = Lower, ymax = Upper, colour = Color)) +
     geom_ribbon(data = newdat,
                 aes(x = .data[[clim]], ymin = y_lwr, ymax = y_upr),
                 inherit.aes = FALSE,
@@ -760,21 +828,29 @@ plot_marginal_precp <- function(species_name, clim = "mean_temp", phe_type = "EO
               colour = "grey40", linewidth = 0.8) +
     annotate("text", x = Inf, y = Inf,
              label = label_text, parse = TRUE,
-             hjust = 1.1, vjust = 1.5, size = 4) +
+             hjust = 1.1, vjust = 1.5, size = 6) +
     scale_alpha_identity() +
+    scale_colour_identity() +
     guides(alpha = "none") +
     theme_minimal() +
     labs(
       title = species_name,
       x = case_when(
-        rlang::as_name(clim) == "mean_prcp" ~ "Mean Annual Precipitation (mm)",
-        rlang::as_name(clim) == "mean_temp" ~ "Mean Annual Temperature (°C)"
+        (rlang::as_name(clim) %in% c("mean_prcp", "bio12")) ~ "Mean Annual Precipitation (mm)",
+        (rlang::as_name(clim) %in% c("mean_temp", "bio1")) ~ "Mean Annual Temperature (°C)"
       ),
       y = paste0("Estimated effect on ", phe_type)
+    ) +
+    theme(
+      plot.title = element_text(hjust = 0.5, size = 22),
+      axis.text = element_text(size = 16),
+      axis.title = element_blank(),
+      title = element_text(face = "italic")
     )
 
   return(p)
 }
+
 
 
 species_vec <- c(
@@ -785,11 +861,22 @@ species_vec <- c(
   "Gleditsia triacanthos",
   "Ulmus americana"
 )
-plot_list <- lapply(species_vec, plot_marginal_precp, clim = "mean_temp",phe_type = "EOS")
+library(cowplot)
+plot_list <- lapply(species_vec, plot_marginal,coef_summary_all, clim = "bio12", phe_type = "EOS")
 names(plot_list) <- species_vec
-cowplot::plot_grid(plotlist = plot_list, ncol = 3)
-```
+p_marg <- cowplot::plot_grid(plotlist = plot_list, ncol = 2) + 
+  theme(plot.margin = margin(b = 30, l = 30, r = 20),
+        panel.background = element_rect(fill = "white", color = NA),
+        plot.background  = element_rect(fill = "white", color = NA))
+p_marg_xy <- ggdraw() +
+  draw_plot(p_marg) +
+  draw_label("Mean annual precipitation (mm)",
+             x = 0.5, y = 0.03, size = 22) +
+  draw_label(bquote("Estimated mean "~beta[Temp]~" estimate"),
+             x = 0.02, y = 0.5, angle = 90, size = 22)
 
+ggsave("~/phenology-urban/temp/figure_agu/marginal_effects2.png", p_marg_xy, width = 9, height = 10, dpi = 500)
+```
 
 ### Phylogeny
 
@@ -825,21 +912,29 @@ tr <- phylo.maker(families)
 phylo_tree <- tr[[1]]
 phylo_tree$tip.label <- phylo_tree$tip.label %>% gsub("_", " ", .)
 
+# Test SOS
+
+# new_city_feature <-  read_rds(paste0("~/phenology-urban/data/proc/model_output/nooutlier_EOS_input.rds")) |>
+#     filter(year < 2024) |>
+#     mutate(year = as.factor(year))|>
+#     group_by(city, canonicalname) |>
+#     summarise(
+#       across(starts_with("temp"), ~ mean(.x, na.rm = TRUE), .names = "mean_temp"),
+#       across(starts_with("prcp"), ~ mean(.x, na.rm = TRUE), .names = "mean_prcp"))
+
+new_city_feature <- readRDS(here("~/phenology-urban/data/raw/CONUS/StreetTrees/cleaned_ps_input/summary/city_feature.rds")) |>
+  select(site, bio1, bio12) |>
+  rename(city = site)
 
 D <- coef_summary_all %>%
   rename(species = Factor)|>
-  mutate(species = gsub("_", " ", species),
-         sd = sd_value,
-         Estimate = median_value) |>
+  mutate(species = gsub("_", " ", species)) |>
   filter(phe_type == "EOS", species %in% phylo_tree$tip.label) |>
-
-  left_join(city_feature |>
-    mutate(city = gsub("[._]", "", site)) |>
-    select(lon, lat, city, pop_density, bio1, bio12, build_sd, build_median, pop_density) |>
-      st_drop_geometry(), 
-    by = "city")
+  left_join(new_city_feature, 
+    by = c("city"))
 
 sp_data <- sort(unique(na.omit(D$species)))
+
 sp_tree <- sort(phylo_tree$tip.label)
 keep_sp <- intersect(sp_data, sp_tree)
 
@@ -870,7 +965,7 @@ library(phytools)
 library(phyr)
 
 m_city <- pglmm(
-  Estimate ~ 1+ (1|species__) + (1|city) + bio12_s + bio1_s,
+  Estimate ~ 1+ (1|species__) + bio1_s + bio12_s,
   data = D2,
   family = "gaussian",
   cov_ranef = list(species = A2),
@@ -879,7 +974,6 @@ m_city <- pglmm(
 
 plot_bayes(m_city, sort = TRUE)
 ```
-
 
 The residual
 
@@ -951,7 +1045,6 @@ p_ring <- all_tree +
 p_ring
 ```
 
-
 ```{r}
 m <- lmer(Estimate ~  (1|Factor) + (1|city), data = coef_summary_all %>%
             filter(phe_type == "SOS"), weights = 1/(sd^2))
@@ -1000,7 +1093,6 @@ ggplot(out, aes(x = var_city, y = var_species)) +
   y = expression(paste("Var(", beta[temp], ") within one species, across cities"))
 )
 ```
-
 
 ## Diognize the pattern
 
@@ -1112,4 +1204,3 @@ ggplot() +
   ggtitle(paste0(species))
 
 ```
-

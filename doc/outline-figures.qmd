@@ -42,13 +42,10 @@ p_geo <- ggplot() +
   coord_sf(expand = FALSE) +
   scale_size_continuous(name = "Number of Trees", range = c(1, 8),labels = label_comma()) +
   theme_minimal() +
-  theme(axis.text.x = element_blank(),
-        axis.text.y = element_blank(),
-        axis.ticks = element_blank(),
-        panel.grid.major = element_line(color = "transparent")) +
+  labs(x = "lon", y = "lat") +
   theme(
-    axis.text.x  = element_text(size = 8),
-    axis.text.y  = element_text(size = 8),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 15),
     axis.ticks   = element_line(linewidth = 0.2),
     panel.grid.major = element_line(color = "grey90", linetype = "solid", linewidth = 0.2),
     panel.grid.minor = element_line(color = "grey90", linetype = "solid", linewidth = 0.15)
@@ -197,12 +194,15 @@ p_pca <- ggplot(pca_scores, aes(x = PC1, y = PC2)) +
     ) +
     theme_classic() +
   labs(x = "PC1", y = "PC2")+
-  theme(aspect.ratio = 0.8)
+  theme(aspect.ratio = 0.8,
+        axis.text = element_text(size = 12),
+        axis.title = element_text(size = 15))
 
-p_geo + p_pca +
+p_area <- p_geo + p_pca +
   plot_layout(ncol = 2, 
               guides = "collect",
-              widths = c(2, 1))
+              widths = c(2, 1.2))
+ggsave("~/phenology-urban/temp/figure_agu/conus.png", p_area, width = 12, height = 4, dpi = 500)
 ```
 
 ## Remote sensing data processing
@@ -763,19 +763,25 @@ bbox <- st_bbox(tree_location)
 
 temp <- ggplot() +
   geom_tile(data = temp_df, aes(x = x, y = y, fill = value)) +
-  geom_sf(data = tree_location, color = "black", size = 0.5) +
+  geom_sf(data = tree_location, aes(color = doy), size = 0.5) +
   scale_fill_gradient(
     name = "Mean summer\ntemperature (°C)",  
-    low = "yellow", 
-    high = "red" 
+    low = "grey10", 
+    high = "grey90" 
   ) +
-  # scale_color_viridis_c(name = "Start-of-season\n(DOY)") + 
-  labs(title = "Acer rubrum - 2023", x = "x", y = "y") +
+  scale_color_viridis_c(name = "Start-of-season\n(DOY)") +
+    scale_y_continuous(
+    n.breaks = 5 
+  ) +
+  labs(title = expression(italic("Acer rubrum") ~ "in 2023"), x = "x", y = "y") +
+  labs(x = "lon", y = "lat") +
   theme_minimal() +
   coord_sf(xlim = c(bbox["xmin"], bbox["xmax"]),
            ylim = c(bbox["ymin"], bbox["ymax"]),
            expand = FALSE) +
   theme(
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 20),
     legend.key.height = unit(0.3, "cm"),   # 图例条高度
     legend.key.width  = unit(0.4, "cm"),   # 图例条宽度
     legend.title = element_text(size = 8), # 图例标题字体
@@ -835,22 +841,50 @@ plot_data <- data.frame(
 )
 
 sp_ny_scatter_plot <- ggplot() +
-  geom_hex(data = NY_city_input,aes(x = temp_winter, y = doy), bins = 80, alpha = 0.5, color = "NA") +
-  scale_fill_viridis_c(option = "C") +
-  geom_ribbon(data = plot_data, aes(x = temp, y = y_mean, ymin = y_low, ymax = y_high), alpha = 0.2) +
-  geom_line(data = plot_data, aes(x = temp, y = y_mean), color = "black", linewidth = 1) +
+  geom_hex(data = NY_city_input, aes(x = temp_winter, y = doy), bins = 60, alpha = 0.5, color = "NA") +
+  scale_fill_gradient(
+    low = "grey70", 
+    high = "grey10" 
+  ) +
+  geom_ribbon(data = plot_data, aes(x = temp, y = y_mean, ymin = y_low, ymax = y_high), fill = "#FCA636FF", alpha = 0.2) +
+  geom_line(data = plot_data, aes(x = temp, y = y_mean), color = "#FCA636FF", linewidth = 1) +
   theme_bw(base_size = 14)+
   labs(x = "Mean winter temperature (°C)", 
        y = "Start-of-season (DOY)") +
   theme_classic() +
+  annotate(
+    "text",
+    x = -Inf, y = -Inf,     
+    label = paste0("hat(beta)[temp] == ", round(b_temp, 2)),
+    hjust = -0.5, vjust = -0.6, 
+    size  = 6,
+    color = "#FCA636FF",
+    parse = TRUE
+  )+
   theme(
-    axis.text.x = element_text(size = 10),
-    axis.text.y = element_text(size = 10),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 20),
     title = element_text(size = 14),
     legend.position = "none"
   )
 
+ggsave(
+  sp_ny_scatter_plot,
+  filename = here("temp/figure_agu/acer_rubrum_ny_scatter_plot.png"),
+  width = 6,
+  height = 4,
+  units = "in",
+  dpi = 500
+)
 
+ggsave(
+  temp,
+  filename = here("temp/figure_agu/acer_rubrum_ny_map.png"),
+  width = 6,
+  height = 4,
+  units = "in",
+  dpi = 500
+)
 
 ```
 
@@ -1056,6 +1090,7 @@ mcmc_semi_matern <- function(r_output_dir, phe_type) {
 }
 
 plot_coef_sp_city <- function(r_output_dir){
+  coef_summary <- data.frame()
   coef_summary <- map_dfr(
       phe_types,
       ~ read_rds(paste0(r_output_dir, .x, "_summary.rds")) %>%
@@ -1066,24 +1101,25 @@ plot_coef_sp_city <- function(r_output_dir){
   coef_summary$phe_type <- factor(coef_summary$phe_type,
                                 levels = c("SOS", "EOS"))
   p_coef <-  ggplot(coef_summary, aes(x = Factor2, 
-                               y = Estimate
-                               ), color = "grey30") +
-    geom_point(aes(alpha = SigAlpha), color = "grey30", position = position_dodge(w = 0.5), size = 3) +
-    geom_errorbar(aes(ymin = Lower, ymax = Upper, alpha = SigAlpha), color = "grey30", 
+                               y = Estimate,
+                               color = Color
+                               )) +
+    geom_point(aes(alpha = SigAlpha, color = Color), position = position_dodge(w = 0.5), size = 3) +
+    geom_errorbar(aes(ymin = Lower, ymax = Upper, alpha = SigAlpha, color = Color), 
                   position = position_dodge(w = 0.5), 
                   width = 0.2) +
     geom_hline(yintercept = 0, linetype = 2) +
     labs(x = "Species", y = bquote(beta[Temp]~" estimate")) + 
     theme_minimal() +
     theme(
-      axis.text.x = element_text(angle = 75, hjust = 1, size = 8),
+      axis.text.x = element_text(angle = 75, hjust = 1, size = 8, face = "italic"),
       axis.title = element_text(size = 14),
       axis.text.y = element_text(size = 12),
       strip.text = element_text(size = 14)) +
     # coord_flip() +
     facet_wrap(~ phe_type, ncol = 1, scales = "free_y") +
     scale_alpha_identity() +
-    # scale_color_identity() +
+    scale_color_identity() +
     # geom_text(aes(label = Sig, y = Upper + 0.05  ), hjust = -0.5, show.legend = FALSE) +
     # geom_text(aes(label = Estimate, y = Estimate  ), vjust = -0.7, show.legend = FALSE, size = 3) +
     guides(alpha = "none")
@@ -1109,15 +1145,15 @@ s_plot_obj_mcmc <- generate_mcmc_plot(s_dir_path,  coef = "temp", fixed_sp = F)
 
 
 #INLA
-r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/", city, "/canonicalname/")
+r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/NewYork/canonicalname/")
 
 p1 <- plot_coef_sp_city(r_output_dir)
 ggsave(
-  filename = paste0("~/Desktop/Chp2_city.png"),
+  filename = paste0("~/phenology-urban/temp/figure_agu/example_city.png"),
   plot = p1,
-  width = 8,
-  height = 6.5,
-  dpi = 300
+  width = 9.5,
+  height = 7.5,
+  dpi = 500
 )
 
 
@@ -1129,4 +1165,55 @@ ggsave(
 
 
 
+## Display the PS processing
+
+```{r}
+# NY acer rubrum
+doy <- read_rds("~/lab-data/datasets/vegetation/PS/CONUS_urban/doy/doy_NewYork_Acerrubrum.rds")|>
+  filter(id == 7639) |>
+  filter(year == 2023)
+clean_ts <- read_rds("~/lab-data/datasets/vegetation/PS/CONUS_urban/clean/clean_NewYork_Acerrubrum.rds") |>
+  filter(id == 7639) |>
+  filter(date >= as.Date("2022-10-01") & date <= as.Date("2024-3-31"))
+
+df_ts <- clean_ts %>% dplyr::mutate(value_smooth = whittaker_smoothing_filling(evi, lambda = 50))
+df_doy <- doy %>% 
+  dplyr::mutate(date_doy = as.Date(stringr::str_c(year, "-01-01")) + doy - 1, 
+                date_start = as.Date(stringr::str_c(year, "-01-01")) + start - 1,
+                date_end = as.Date(stringr::str_c(year, "-01-01")) + end - 1)
+y_min <- min(df_ts$evi, na.rm = TRUE)
+y_max <- max(df_ts$evi, na.rm = TRUE)
+
+evi <- ggplot() +
+  geom_point(data = df_ts, aes(x = date, y = evi), color = "grey", size = 2, alpha = 0.8) +
+  labs(x = "Time", y = "Enhanced Vegetation Index (EVI)") +
+  theme_classic() +
+  theme(
+    axis.text = element_text(size = 14),
+    axis.title = element_text(size = 16)
+  ) +
+  geom_line(data = df_ts, aes(x = date, y = value_smooth), color = "grey40", linewidth = 1.2)+ 
+  geom_segment(data = df_doy |> filter(direction == "up"), 
+               aes(x = date_doy, xend = date_doy, y = y_min, yend = y_max), 
+               linewidth = 1.5, col = "dark green", inherit.aes = F) + 
+  geom_rect(data = df_doy |> filter(direction == "up"), 
+            aes(xmin = date_start, xmax = date_end, ymin = y_min, ymax = y_max),
+            alpha = 0.1,fill = "dark green", inherit.aes = F) +
+  geom_segment(data = df_doy |> filter(direction == "down"), 
+               aes(x = date_doy, xend = date_doy, y = y_min, yend = y_max), 
+               linewidth = 1.5, col = "orange", inherit.aes = F) + 
+  geom_rect(data = df_doy |> filter(direction == "down"), 
+            aes(xmin = date_start, xmax = date_end, ymin = y_min, ymax = y_max),
+            alpha = 0.1,fill = "orange", inherit.aes = F)
+
+ggsave(
+  evi,
+  filename = here("temp/figure_agu/acer_rubrum_ny_evi.png"),
+  width = 8,
+  height = 3.5,
+  units = "in",
+  dpi = 600
+)
+
+```
 

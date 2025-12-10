@@ -1,0 +1,291 @@
+---
+title: "Aggregating effects within cities and genera using hierarchical models"
+author: "Jiali Zhu"
+date: "today"
+editor_options:
+  chunk_output_type: console
+---
+
+```{r}
+#| label: load-packages
+#| include: false
+#| warning: false
+
+# Install and load 'zhulabtools' package
+library(zhulabtools)
+# Check and  load required packages
+load_packages(c("sf","viridis", "terra","patchwork","tidyverse", "ggnewscale", "plotbiomes","patchwork", "terra",  "taxize","metafor", "V.PhyloMaker2", "ggtree", "ggpubr", "ggtreeExtra", "brms", "ggridges", "tidybayes"))
+```
+
+## Visualize the patterns of species-city coefficients
+
+### Input species-city model coefficients
+
+```{r input}
+
+### Group by city and phe_type
+tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
+rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
+cities <- gsub("\\.rds$", "", basename(rds_files))
+phe_types <- c("SOS", "EOS")
+
+coef_summary_all <- data.frame()
+
+for (city in cities) {
+  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/", city, "/canonicalname/")
+  for (phe_type in phe_types) {
+    file_path <- file.path(r_output_dir, paste0(phe_type, "_summary.rds"))
+    if (file.exists(file_path)) {
+      coef_summary <- readr::read_rds(file_path) |>
+        dplyr::mutate(phe_type = phe_type, city = city)
+      coef_summary_all <- dplyr::bind_rows(coef_summary_all, coef_summary)
+    }
+  }
+}
+coef_summary_all <- coef_summary_all |>
+  mutate(phe_type = factor(phe_type, levels = c("SOS", "EOS")),
+         genus = sub(" .*", "", Factor),
+         species = Factor) |>
+  left_join(
+    readr::read_rds("~/phenology-urban/temp/tree_genus_family.rds"),
+    by = "genus")
+
+inventory_centroids <- readRDS(("~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/summary/inventory_centroids.rds"))
+boundary_us <- st_read(("~/lab-data/datasets/boundary/USAdministrative/US/us_boundarydissolve.shp"), quiet = T) |>
+  st_transform(4326)
+
+load("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/tree_species.RData") # phylo_tree
+load("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/tree_genus.RData") # tree_genus
+load("~/phenology-urban/temp/tree_family.RData") # tree_family
+
+city_feature <- readRDS("~/phenology-urban/data/raw/CONUS/StreetTrees/cleaned_ps_input/summary/city_feature.rds") |>
+  select(site, bio1, bio12) |>
+  rename(city = site)
+```
+
+### Plot the mean effects of species-city models
+
+#### City
+
+```{r fig-aggcity-plot}
+#| include: true
+#| fig-cap: "Spatial distribution of city-level aggregated effects"
+#| fig-width: 16
+#| fig-height: 5
+#| warning: false
+
+city_mean <- coef_summary_all |>
+  group_by(city, phe_type) |>
+  summarise(
+    avg = mean(Estimate, na.rm = TRUE),
+    sd  = sd(Estimate, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+model_results_loc <- inventory_centroids |>
+  left_join(city_mean, by = c("site" ="city")) |>
+  # left_join(city_feature, by = c("site" ="city")) |>
+  mutate(lon = st_coordinates(x)[, 1],
+         lat = st_coordinates(x)[, 2],
+         phe_type = factor(phe_type, levels = c("SOS", "EOS")))
+
+range_vals <- range(model_results_loc$avg, na.rm = TRUE)
+tau_vals <- unique(model_results_loc$sd) |> na.omit()
+tau_breaks <- pretty(range(tau_vals), n = 5)
+
+p = ggplot() +
+  geom_sf(data = boundary_us , fill = "grey95", color = "grey85") +
+  geom_point(data = model_results_loc,
+             aes(x = lon, y = lat, text = site,
+                 size   = (sd)),
+             shape  = 21,
+             stroke = 1, # acts as the thickness of the boundary line
+             colour = "grey20" # acts as the color of the boundary line
+             ) +
+  geom_point(
+    data = model_results_loc,
+    aes(x = lon, y = lat,  text = site, color = avg, size = sd), alpha =0.7
+  ) +
+  scale_color_gradientn(
+    name = "Mean estimated effect",
+    colors = c("#FCA636FF", "white", "#0D0887FF"),
+    values = scales::rescale(c(ceiling(range_vals[1] * 10) / 10, 0, floor(range_vals[2] * 10) / 10)),
+    breaks = c(ceiling(range_vals[1] * 10) / 10, 0, floor(range_vals[2] * 10) / 10)
+  )+
+  facet_wrap(~ phe_type, ncol = 1) +
+  scale_size_continuous(
+    name = "Among-species variance",
+    breaks = (tau_breaks),
+    labels = (tau_breaks)^2,
+    range = c(3, 12)
+  ) +
+  guides(
+    color = guide_colorbar(order = 1),
+    size  = guide_legend(order = 2)
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text = element_text(size = 16),
+    axis.title = element_text(size = 20),
+    strip.text = element_text(size = 22, face = "bold"),
+    legend.title = element_text(size = 16),
+    legend.text = element_text(size = 14)
+  ) +
+  coord_sf(expand = FALSE)
+ggsave("~/phenology-urban/temp/figure_agu/city_level_effects2.png", p, width = 10.5, height = 12, dpi = 500)
+```
+
+### Heatmap (species + city, no agg)
+
+```{r fig-sp-heatmap}
+#| include: true
+#| fig-width: 20
+#| fig-height: 9
+#| warning: false
+
+source("~/phenology-urban/script/plot_heatmap.R")
+sp_bio1_SOS <- plot_heatmap(coef_summary_all, level = "species", city_order_bio = "bio1", phe_type = "SOS")
+sp_bio1_EOS <- plot_heatmap(coef_summary_all, level = "species", city_order_bio = "bio1", phe_type = "EOS")
+wrap_plots(sp_bio1_SOS, sp_bio1_EOS, ncol = 2)+ plot_annotation(title ="Species-level temperature sensitivities ordered by bio1") &
+  theme(
+    plot.title = element_text(size = 20)
+  )
+
+
+sp_bio12_SOS <- plot_heatmap(coef_summary_all, level = "species", city_order_bio = "bio12", phe_type = "SOS")
+sp_bio12_EOS <- plot_heatmap(coef_summary_all, level = "species", city_order_bio = "bio12", phe_type = "EOS")
+wrap_plots(sp_bio12_SOS, sp_bio12_EOS, ncol = 2)+ plot_annotation(title ="Species-level temperature sensitivities ordered by bio12") &
+  theme(
+    plot.title = element_text(size = 20)
+  )
+
+
+sp_bio12_SOS <- plot_heatmap_sig(coef_summary_all, level = "species", city_order_bio = "bio12", phe_type = "SOS")
+sp_bio12_EOS <- plot_heatmap_sig(coef_summary_all, level = "species", city_order_bio = "bio12", phe_type = "EOS")
+combine_heat <- wrap_plots(sp_bio12_SOS, sp_bio12_EOS, ncol = 2) &
+  theme(
+    plot.title = element_text(size = 20)
+  )+ 
+  theme(plot.margin = margin(b = 20, l = 20, r =5),
+        panel.background = element_rect(fill = "white", color = NA),
+        plot.background  = element_rect(fill = "white", color = NA))
+
+p_heat_xy <- ggdraw() +
+  draw_plot(combine_heat) +
+  draw_label("Species",
+             x = 0.5, y = 0.03, size = 22) +
+  draw_label("City",
+             x = 0.02, y = 0.5, angle = 90, size = 22)
+
+ggsave("~/phenology-urban/temp/figure_agu/species_level_heatmap.png", p_heat_xy, width = 21.5, height = 11.5, dpi = 500)
+
+```
+
+
+### Heatmap (genus + city, median as genus effect)
+
+```{r fig-ge-heatmap}
+#| include: true
+#| fig-width: 20
+#| fig-height: 9
+#| warning: false
+genus_bio1_SOS <- plot_heatmap(coef_summary_all, level = "genus", city_order_bio = "bio1", phe_type = "SOS")
+genus_bio1_EOS <- plot_heatmap(coef_summary_all, level = "genus", city_order_bio = "bio1", phe_type = "EOS")
+wrap_plots(genus_bio1_SOS, genus_bio1_EOS, ncol = 2)+ plot_annotation(title ="Genus-level temperature sensitivities ordered by bio1") &
+  theme(
+    plot.title = element_text(size = 20)
+  )
+
+
+
+genus_bio12_SOS <- plot_heatmap(coef_summary_all, level = "genus", city_order_bio = "bio12", phe_type = "SOS")
+genus_bio12_EOS <- plot_heatmap(coef_summary_all, level = "genus", city_order_bio = "bio12", phe_type = "EOS")
+wrap_plots(genus_bio12_SOS, genus_bio12_EOS, ncol = 2)+ plot_annotation(title = "Genus-level temperature sensitivities ordered by bio12") &
+  theme(
+    plot.title = element_text(size = 20)
+  )
+
+```
+
+### Heatmap (family + city, median as family effect)
+
+```{r fig-fa-heatmap}
+#| include: true
+#| fig-width: 20
+#| fig-height: 9
+#| warning: false
+family_bio1_SOS <- plot_heatmap(coef_summary_all, level = "family", city_order_bio = "bio1", phe_type = "SOS")
+family_bio1_EOS <- plot_heatmap(coef_summary_all, level = "family", city_order_bio = "bio1", phe_type = "EOS")
+wrap_plots(family_bio1_SOS, family_bio1_EOS, ncol = 2) + plot_annotation(title ="Family-level temperature sensitivities ordered by bio1") &
+  theme(
+    plot.title = element_text(size = 20)
+  )
+
+
+family_bio12_SOS <- plot_heatmap(coef_summary_all, level = "family", city_order_bio = "bio12", phe_type = "SOS")
+family_bio12_EOS <- plot_heatmap(coef_summary_all, level = "family", city_order_bio = "bio12", phe_type = "EOS")
+wrap_plots(family_bio12_SOS, family_bio12_EOS, ncol = 2) + plot_annotation(title ="Family-level temperature sensitivities ordered by bio12") &
+  theme(
+    plot.title = element_text(size = 20)
+  )
+
+save(tree_family, file = "~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/tree_family.RData")
+```
+
+
+<!-- ## Explore min and max temperature models -->
+
+<!-- I also fitted the species-city models using minimum and maximum temperature as predictors, respectively. Here, I assume that chilling at night and warming at daytime may have different effects on phenology. -->
+
+<!-- ```{r results='hide'} -->
+<!-- #| label: fig-pglmm-min -->
+<!-- #| include: true -->
+<!-- #| warning: false -->
+<!-- #| message: false -->
+<!-- #| fig-cap: "Fixed effects of climate variables on species minimum temperature sensitivities." -->
+<!-- #| fig-width: 9 -->
+<!-- #| fig-height: 4 -->
+
+<!-- coef_summary_min <- data.frame() -->
+<!-- for (city in cities) { -->
+<!--   r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla_min/spatial_spde/", city, "/canonicalname/") -->
+<!--   for (phe_type in phe_types) { -->
+<!--     file_path <- file.path(r_output_dir, paste0(phe_type, "_summary.rds")) -->
+<!--     if (file.exists(file_path)) { -->
+<!--       coef_summary <- readr::read_rds(file_path) |> -->
+<!--         dplyr::mutate(phe_type = phe_type, city = city) -->
+<!--       coef_summary_min <- dplyr::bind_rows(coef_summary_min, coef_summary) -->
+<!--     } -->
+<!--   } -->
+<!-- } -->
+<!-- coef_summary_min <- coef_summary_min |> -->
+<!--   mutate(phe_type = factor(phe_type, levels = c("SOS", "EOS")), -->
+<!--          genus = sub(" .*", "", Factor), -->
+<!--          species = Factor) |> -->
+<!--   left_join( -->
+<!--     readr::read_rds("~/phenology-urban/temp/tree_genus_family.rds"), -->
+<!--     by = "genus") -->
+
+<!-- coef_summary_max <- data.frame() -->
+<!-- for (city in cities) { -->
+<!--   r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla_max/spatial_spde/", city, "/canonicalname/") -->
+<!--   for (phe_type in phe_types) { -->
+<!--     file_path <- file.path(r_output_dir, paste0(phe_type, "_summary.rds")) -->
+<!--     if (file.exists(file_path)) { -->
+<!--       coef_summary <- readr::read_rds(file_path) |> -->
+<!--         dplyr::mutate(phe_type = phe_type, city = city) -->
+<!--       coef_summary_max <- dplyr::bind_rows(coef_summary_max, coef_summary) -->
+<!--     } -->
+<!--   } -->
+<!-- } -->
+<!-- coef_summary_max <- coef_summary_max |> -->
+<!--   mutate(phe_type = factor(phe_type, levels = c("SOS", "EOS")), -->
+<!--          genus = sub(" .*", "", Factor), -->
+<!--          species = Factor) |> -->
+<!--   left_join( -->
+<!--     readr::read_rds("~/phenology-urban/temp/tree_genus_family.rds"), -->
+<!--     by = "genus") -->
+<!-- ``` -->
+
+
+
