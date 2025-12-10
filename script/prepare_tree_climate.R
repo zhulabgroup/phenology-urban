@@ -249,7 +249,7 @@ for (city in sub_folders[53]){
 ################################ GRID ##################################
 
 prepare_tree_Grid_climate <- function(city){
-  out_path <- paste0("~/phenology-urban/data/proc/tree_climate/Grid/", city, ".rds")
+  out_path <- paste0("~/phenology-urban/data/proc/tree_climate/Grid_max/", city, ".rds")
   
   ################## Calculate seasonal climate ##################
   message(paste0("Processing example city: ", city, "..."))
@@ -266,8 +266,8 @@ prepare_tree_Grid_climate <- function(city){
   ###### UHAT temperature #######
     
   uhat_files <- list.files(
-    path = "~/lab-data/datasets/climate/UHAT/clean/",
-    pattern = paste0(city, ".*\\.tif$"),
+    path = "~/lab-data/datasets/climate/UHAT/clean_minmax/",
+    pattern = paste0("^", city, ".*tmax\\.tif$"),
     full.names = TRUE
   )
   missing_files <- uhat_files[!file.exists(uhat_files)]

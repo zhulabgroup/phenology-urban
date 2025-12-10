@@ -2,7 +2,7 @@ library(zhulabtools)
 load_packages(c("tidyverse", "ggplot2", "sf", "lubridate", "terra", "patchwork", "scales", "viridis", "leaflet"))
 select <- dplyr::select
 # output directory
-out_dir <- "~/lab-data/datasets/climate/UHAT/clean_daily"
+out_dir <- "~/phenology-urban/temp/"
 tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
 cities <- gsub("\\.rds$", "", basename(rds_files))
@@ -101,7 +101,7 @@ build_UHAT_tif <- function(date, out_dir, type) {
 
 ################## Save the seasonal file #################
 
-for (city in cities[2:76]) {
+for (city in cities[20:29]) {
   message(paste0("Processing city: ", city))
   uhat_file <- paste0("~/lab-data/datasets/climate/UHAT/raw/", city, ".csv")
   if (!file.exists(uhat_file)) {
