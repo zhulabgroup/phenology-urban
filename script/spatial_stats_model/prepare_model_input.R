@@ -21,9 +21,9 @@ prepare_data <- function(city, source, taxa_col, phe_type) {
       tree_climate <- read_rds(input_dir) |>
         st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F) |>
         st_transform(crs = 5070)
-    } else if (source == "Grid") { # UHAT and Daymet
+    } else if (grepl("Grid", source)) { # UHAT and Daymet
        input_dir <- list.files(,
-        path = paste0("~/phenology-urban/data/proc/tree_climate/Grid/"), # For example NY
+        path = paste0("~/phenology-urban/data/proc/tree_climate/", source, "/"), # For example NY
         pattern = paste0("^", city, ".*\\.rds$"),
         full.names = TRUE)
        tree_climate <- read_rds(input_dir) |>

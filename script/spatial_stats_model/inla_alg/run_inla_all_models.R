@@ -14,14 +14,13 @@ library(INLA)
 r_input_dir <- Sys.getenv("R_INPUT_DIR")
 r_output_dir <- Sys.getenv("R_OUTPUT_DIR")
 city <- Sys.getenv("CITY")
-
+# 
 # r_input_dir <- "~/phenology-urban/data/"
 # r_output_dir <- "~/phenology-urban/data/proc/model_output/final_models_clean_outlier/"
-# city = "Albuquerque"
-
-tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
-rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
-cities <- gsub("\\.rds$", "", basename(rds_files))
+# 
+# tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
+# rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
+# cities <- gsub("\\.rds$", "", basename(rds_files))
 
 source(here("script/spatial_stats_model/prepare_model_input.R"))
 
@@ -31,11 +30,13 @@ source(here("script/spatial_stats_model/inla_alg/run_sp_inla.R"))
 
 r_output_dir <- paste0(r_output_dir, "inla_start/")
 r_output_dir <- paste0(r_output_dir, "inla_end/")
+r_output_dir_min <- paste0(r_output_dir, "inla_min/")
+r_output_dir_max <- paste0(r_output_dir, "inla_max/")
 
 for (city in cities) {
   for (phe_type in c("SOS", "EOS")) {
-    model_input_all <- prepare_data(city, source = "Grid", taxa_col= "canonicalname", phe_type = phe_type)
-    run_inla_species(model_input_all, r_output_dir, phe_type, city, fitting_type = "end")
+    model_input_all <- prepare_data(city, source = "Grid_min", taxa_col= "canonicalname", phe_type = phe_type)
+    run_inla_species(model_input_all, r_output_dir_min, phe_type, city, fitting_type = "doy")
   }
 }
 

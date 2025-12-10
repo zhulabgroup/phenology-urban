@@ -32,10 +32,10 @@ prepare_coef_summary <- function(r_output_dir, phe_type){
   write_rds(coef_summary, paste0(r_output_dir, phe_type, "_summary.rds"))
 }
 
-for (city in cities) { 
+for (city in cities[74:76]) { 
   message(paste0("Processing city: ", city))
-  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla_start/spatial_spde/", city, "/canonicalname/")
-  for (phe_type in c("EOS")){
+  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla_max/spatial_spde/", city, "/canonicalname/")
+  for (phe_type in c("SOS", "EOS")){
     prepare_coef_summary(r_output_dir, phe_type)
   }
 }
@@ -68,8 +68,8 @@ plot_coef_sp_city <- function(r_output_dir, phe_type){
 }
 
 
-city = "Champaign"
-r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_Grid/inla/spatial_spde/", city, "/canonicalname/")
+city = "Albuquerque"
+r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/", city, "/canonicalname/")
 plots_coef <- list()
 assess_species <- data.frame()
 for (phe_type in phe_types) {
