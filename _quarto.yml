@@ -16,4 +16,5 @@ format:
 embed-resources: true
 dpi: 300
 
+csl: https://www.zotero.org/styles/nature
 bibliography: references.bib

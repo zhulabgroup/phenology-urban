@@ -4,6 +4,8 @@ author: "Jiali Zhu"
 date: "today"
 editor_options:
   chunk_output_type: console
+execute:
+  cache: true
 ---
 
 ```{r}
@@ -14,7 +16,7 @@ editor_options:
 # Install and load 'zhulabtools' package
 library(zhulabtools)
 # Check and  load required packages
-load_packages(c("sf","viridis", "terra","patchwork","tidyverse", "ggnewscale", "plotbiomes","patchwork", "terra",  "taxize","metafor", "V.PhyloMaker2", "ggtree", "ggpubr", "ggtreeExtra", "brms", "ggridges", "tidybayes"))
+load_packages(c("sf","viridis", "terra","patchwork","tidyverse", "ggnewscale", "plotbiomes","patchwork", "terra",  "taxize","metafor", "V.PhyloMaker2", "ggtree", "ggpubr", "ggtreeExtra", "brms", "ggridges", "tidybayes", "readr", "cowplot", "rgbif", "zhulabgbif", "cli", "tidyverse", "broom"))
 ```
 
 ## Visualize the patterns of species-city coefficients
@@ -58,7 +60,7 @@ load("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/s
 load("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/tree_genus.RData") # tree_genus
 load("~/phenology-urban/temp/tree_family.RData") # tree_family
 
-city_feature <- readRDS("~/phenology-urban/data/raw/CONUS/StreetTrees/cleaned_ps_input/summary/city_feature.rds") |>
+city_feature <- readRDS("~/phenology-urban/data/raw/CONUS/StreetTrees/cleaned_ps_input/summary/city_bioclimate.rds") |>
   select(site, bio1, bio12) |>
   rename(city = site)
 ```
@@ -112,7 +114,7 @@ p = ggplot() +
     values = scales::rescale(c(ceiling(range_vals[1] * 10) / 10, 0, floor(range_vals[2] * 10) / 10)),
     breaks = c(ceiling(range_vals[1] * 10) / 10, 0, floor(range_vals[2] * 10) / 10)
   )+
-  facet_wrap(~ phe_type, ncol = 1) +
+  facet_wrap(~ phe_type, ncol = 2) +
   scale_size_continuous(
     name = "Among-species variance",
     breaks = (tau_breaks),
@@ -131,8 +133,10 @@ p = ggplot() +
     legend.title = element_text(size = 16),
     legend.text = element_text(size = 14)
   ) +
-  coord_sf(expand = FALSE)
-ggsave("~/phenology-urban/temp/figure_agu/city_level_effects2.png", p, width = 10.5, height = 12, dpi = 500)
+  labs(x = "Longitude", y = "Latitude") +
+  coord_sf(expand = FALSE) 
+
+ggsave("~/phenology-urban/temp/figure_agu/city_level_effects.png", p, width = 15, height = 4.5, dpi = 500)
 ```
 
 ### Heatmap (species + city, no agg)
@@ -177,7 +181,9 @@ p_heat_xy <- ggdraw() +
   draw_label("City",
              x = 0.02, y = 0.5, angle = 90, size = 22)
 
-ggsave("~/phenology-urban/temp/figure_agu/species_level_heatmap.png", p_heat_xy, width = 21.5, height = 11.5, dpi = 500)
+p_heat_xy
+
+# ggsave("~/phenology-urban/temp/figure_agu/species_level_heatmap.png", p_heat_xy, width = 21.5, height = 11.5, dpi = 500)
 
 ```
 
@@ -287,5 +293,883 @@ save(tree_family, file = "~/phenology-urban/data/proc/model_output/final_models_
 <!--     by = "genus") -->
 <!-- ``` -->
 
+## Discussion
+
+### Native vs. Non-native species effects
+
+#### GUBIC data (only naturalized/invasive sp in 45 cities)
+
+GUBIC database contains species naturalization status based on GLONAF databases. 45 urban centres in the US are included in GUBIC urban centres shapefile. I matched these urban centres to the street tree inventory centroids to identify overlapping cities. Then I extracted species naturalized status information from GUBIC species list per city data for the overlapping cities. 
+
+Here, I classify species into "naturalized" vs. "non-naturalized" groups based on the status information. It should be noted that species not classified as naturalized may include both native and casual taxa. That is maybe why I do not see significant differences here.
+
+SOS:
+
+```{r fig-gubic-sos}
+gubic_urban_centres <- st_read("~/Downloads/daijiang-GUBIC_data-0b7e58b/urban_centres/gubic_urban_centres.shp", quiet = T) |>
+  dplyr::filter(nam_lng == "United States")
+inventory_centroids <- readRDS(("~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/summary/inventory_centroids.rds"))
+overlap_cities <- st_join(st_transform(inventory_centroids, st_crs(gubic_urban_centres)),
+                                   gubic_urban_centres, join = st_within, left = FALSE) |>
+  select(site, ID_HDC_) |>
+  st_drop_geometry()
+
+gubic_dir <- "~/Downloads/daijiang-GUBIC_data-0b7e58b/gubic_list_per_city.txt"
+gubic_data <- read.csv(gubic_dir, header = TRUE, stringsAsFactors = FALSE) |>
+  dplyr::filter(ID_HDC_G0_2 %in% overlap_cities$ID_HDC_) |>
+  select(ID_HDC_G0_2, accepted_taxon_name_binomial, status_glonaf_gbif)
+
+overlap_city_species <- coef_summary_all |>
+  inner_join(overlap_cities, by = c("city" = "site")) |>
+  inner_join(gubic_data, by = c("ID_HDC_" = "ID_HDC_G0_2" ,"Factor" = "accepted_taxon_name_binomial")) |>
+  mutate(
+    status_group = ifelse(
+      !is.na(status_glonaf_gbif),
+      "Naturalized",
+      "Non-naturalized"
+    ))
+
+df_valid <- overlap_city_species %>%
+  filter(phe_type == "SOS") |>
+  group_by(city, status_group) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  filter(n >= 2) %>%
+  group_by(city) %>%
+  filter(n_distinct(status_group) == 2) %>%
+  pull(city) |>
+  unique()
+
+df_plot <- overlap_city_species |>
+  filter(phe_type == "SOS") |>
+  dplyr::filter(city %in% df_valid)
+   
+ggplot(df_plot,
+  aes(x = status_group, y = Estimate, fill = status_group)
+) +
+  geom_boxplot(
+    outlier.shape = NA,
+    alpha = 0.6,
+    width = 0.6
+  ) +
+  stat_compare_means(
+    method = "t.test",
+    label = "p.signif",
+    vjust = 1.2
+  ) +
+  facet_wrap(
+    ~ city,
+    ncol = 9
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Naturalized" = "#D55E00",
+      "Non-naturalized" = "#0072B2"
+    )
+  ) +
+  labs(
+    x = NULL,
+    y = "SOS temperature sensitivity (Estimate)",
+    fill = "Species status"
+  ) +
+  theme_classic(base_size = 12) +
+  theme(
+    legend.position = "bottom",
+    axis.text.x = element_blank()
+  ) 
+```
+
+EOS:
+
+```{r fig-gubic-eos}
+df_valid <- overlap_city_species %>%
+  filter(phe_type == "EOS") |>
+  group_by(city, status_group) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  filter(n >= 2) %>%
+  group_by(city) %>%
+  filter(n_distinct(status_group) == 2) %>%
+  pull(city) |>
+  unique()
+
+df_plot <- overlap_city_species |>
+  filter(phe_type == "EOS") |>
+  dplyr::filter(city %in% df_valid)
+   
+ggplot(df_plot,
+  aes(x = status_group, y = Estimate, fill = status_group)
+) +
+  geom_boxplot(
+    outlier.shape = NA,
+    alpha = 0.6,
+    width = 0.6
+  ) +
+  stat_compare_means(
+    method = "t.test",
+    label = "p.signif",
+    vjust = 1.2
+  ) +
+  facet_wrap(
+    ~ city,
+    ncol = 9
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Naturalized" = "#D55E00",
+      "Non-naturalized" = "#0072B2"
+    )
+  ) +
+  labs(
+    x = NULL,
+    y = "EOS temperature sensitivity (Estimate)",
+    fill = "Species status"
+  ) +
+  theme_classic(base_size = 12) +
+  theme(
+    legend.position = "bottom",
+    axis.text.x = element_blank()
+  ) 
+```
+
+#### SPCIS data (match to buffering plots)
+
+SPCIS database contains 14,056 unique taxa identified either "native" or "invasive" within 83,391 sampling units (plots) across the US. Each plot has a latitude and longitude coordinate, with some coordinates intentionally "fuzzed" (i.e., randomly shifted, especially from FIA sourced plots).
+
+```{r fig-spcis-map}
+boundary_us <- st_read(("~/lab-data/datasets/boundary/USAdministrative/US/us_boundarydissolve.shp"), quiet = T) |> 
+  st_transform(4326)
+SPCIS_plots <- read_csv("~/Downloads/daijiang-GUBIC_data-0b7e58b/19593373/SPCIS_plots.csv", show_col_types = F) |>
+  filter(!is.na(Long) & !is.na(Lat)) |>
+  filter(Zone == "L48") |>
+  st_as_sf(coords = c("Long", "Lat"), crs = 4326)
+
+ggplot() +
+  geom_sf(data = boundary_us , fill = "grey95", color = "grey85") +
+  geom_sf(data = SPCIS_plots, aes(color = as.factor(FuzzedCoord)), size = 1, alpha = 0.7) +
+  geom_sf(data = inventory_centroids, shape = 3, size = 2, color = "black") +
+  scale_color_manual(values = c("N" = "#D55E00", "Y" = "#0072B2")) +
+  theme_minimal() +
+  theme(
+    axis.text = element_text(size = 16),
+    axis.title = element_text(size = 20),
+    legend.title = element_text(size = 16),
+    legend.text = element_text(size = 14)
+  ) +
+  labs(x = "Longitude", y = "Latitude", color = "Fuzzed Coord") +
+  coord_sf(expand = FALSE)
+```
+
+In order to match SPCIS plots to urban centres with street tree inventory data, I buffer the inventory centroids by 50 km and extract all SPCIS plots within the buffers. The species recorded in these plots are then matched to the species-city model coefficients. The "native" and "invasive" status information from SPCIS is used to classify species into native vs. non-native groups. The missing status are treated as non-native species here.
+
+```{r match-spcis}
+buffer_inventory <- st_buffer(inventory_centroids, dist = 50000) # 50 km buffer
+
+spcis_invent_overlap <- st_join(st_transform(SPCIS_plots, st_crs(buffer_inventory)),
+                                 buffer_inventory, join = st_within, left = FALSE) |>
+  select(Plot, Year, FuzzedCoord, site) |>
+  left_join(read_csv("~/Downloads/daijiang-GUBIC_data-0b7e58b/19593373/SPCIS_plant_taxa.csv", show_col_types = F) |>
+              select(Plot, Year, SpCode, AcceptedTaxonName, Original.TaxonName, NativeStatus, GrowthHabit),
+            by = c("Plot", "Year"), relationship ="many-to-many") |>
+  mutate(AcceptedTaxonName = if_else(is.na(AcceptedTaxonName), Original.TaxonName, AcceptedTaxonName)) |>
+  select(site, FuzzedCoord, AcceptedTaxonName, NativeStatus, GrowthHabit) |>
+  filter(grepl("tree", GrowthHabit, ignore.case = TRUE)) |>
+  filter(!is.na(AcceptedTaxonName)) |> # extract genus and species
+  mutate(AcceptedTaxonName = str_extract(AcceptedTaxonName, "^[^ ]+ [^ ]+")) |>
+  st_drop_geometry() |>
+  distinct()
+
+x <- unique(spcis_invent_overlap$AcceptedTaxonName)
+chunks <- split(x, ceiling(seq_along(x) / 100))
+out <- NULL
+for (i in seq_along(chunks)) {
+  tmp <- try(
+    name_backbone_checklist(chunks[[i]], kingdom = "Plantae", phylum = "Tracheophyta") |>
+      filter(kingdom == "Plantae", phylum == "Tracheophyta") |>
+      mutate(canonicalName = if_else(status %in% c("ACCEPTED","SYNONYM") & rank == "SPECIES",
+                                     species, NA_character_)) |>
+      select(canonicalName, verbatim_name),
+    silent = TRUE
+  )
+  if (!inherits(tmp, "try-error")) out <- bind_rows(out, tmp)
+  Sys.sleep(0.3)
+}
+
+gbif_taxon_keys <- out |>
+  mutate(canonicalName = if_else(verbatim_name == "Malus pumila", "Malus domestica", canonicalName)) |>
+  right_join(spcis_invent_overlap, by = c("verbatim_name" = "AcceptedTaxonName")) |>
+  select(-verbatim_name) |>
+  filter(!is.na(canonicalName))
+
+overlap_city_species_SPCIS <- coef_summary_all |>
+  left_join(gbif_taxon_keys |>
+              select(canonicalName, site, NativeStatus) |>
+              distinct(),
+             by = c("city" = "site" ,"Factor" = "canonicalName")) |>
+  mutate(status_group = ifelse(is.na(NativeStatus), "Non-native", NativeStatus)) |>
+  mutate(status_group = ifelse(status_group == "I", "Non-native", status_group)) |>
+  mutate(status_group = ifelse(status_group == "N", "Native", status_group))
+```
+
+But I still do not see significant differences between native vs. non-native species here.
+
+The lack of significant differences between native and non-native species may reflect limitations of a binary classification scheme. In particular, grouping species simply as native versus non-native may be overly coarse to capture biologically meaningful differences in phenological sensitivity. Many non-native species included here are naturalized and may exhibit ecological strategies and environmental responses similar to native species.
+
+SOS:
+
+```{r fig-spcis-sos}
+df_valid <- overlap_city_species_SPCIS %>%
+  filter(phe_type == "SOS") |>
+  group_by(city, status_group) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  filter(n >= 2) %>%
+  group_by(city) %>%
+  filter(n_distinct(status_group) == 2) %>%
+  pull(city) |>
+  unique()
+
+df_plot <- overlap_city_species_SPCIS |>
+  filter(phe_type == "SOS") |>
+  dplyr::filter(city %in% df_valid)
+
+ggplot(df_plot,
+  aes(x = status_group, y = Estimate, fill = status_group)
+) +
+  geom_boxplot(
+    outlier.shape = NA,
+    alpha = 0.6,
+    width = 0.6
+  ) +
+  stat_compare_means(
+    method = "t.test",
+    label = "p.signif",
+    vjust = 1.2
+  ) +
+  facet_wrap(
+    ~ city,
+    ncol = 9
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Native" = "#D55E00",
+      "Non-native" = "#0072B2"
+    )
+  ) +
+  labs(
+    x = NULL,
+    y = "SOS temperature sensitivity (Estimate)",
+    fill = "Species status"
+  ) +
+  theme_classic(base_size = 12) +
+  theme(
+    legend.position = "bottom",
+    axis.text.x = element_blank()
+  )
+```
+
+EOS:
+
+```{r fig-spcis-eos}
+df_valid <- overlap_city_species_SPCIS %>%
+  filter(phe_type == "EOS") |>
+  group_by(city, status_group) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  filter(n >= 2) %>%
+  group_by(city) %>%
+  filter(n_distinct(status_group) == 2) %>%
+  pull(city) |>
+  unique()
+
+df_plot <- overlap_city_species_SPCIS |>
+  filter(phe_type == "EOS") |>
+  dplyr::filter(city %in% df_valid)
+
+ggplot(df_plot,
+  aes(x = status_group, y = Estimate, fill = status_group)
+) +
+  geom_boxplot(
+    outlier.shape = NA,
+    alpha = 0.6,
+    width = 0.6
+  ) +
+  stat_compare_means(
+    method = "t.test",
+    label = "p.signif",
+    vjust = 1.2
+  ) +
+  facet_wrap(
+    ~ city,
+    ncol = 9
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Native" = "#D55E00",
+      "Non-native" = "#0072B2"
+    )
+  ) +
+  labs(
+    x = NULL,
+    y = "EOS temperature sensitivity (Estimate)",
+    fill = "Species status"
+  ) +
+  theme_classic(base_size = 12) +
+  theme(
+    legend.position = "bottom",
+    axis.text.x = element_blank()
+  )
+```
+
+### Speices climate origin
+
+To further examine whether species’ climatic origins influence their phenological sensitivity in urban environments, I will assess whether species originating from warmer or colder climates exhibit systematically different phenological responses to urban temperature variation. Using the species list, I will first extract global occurrence records from GBIF to characterize each species’ native climatic niche. Following a safety-margin framework, I will then quantify the climatic distance between species’ native conditions and the urban environments in which they occur.
+
+Specifically, I will calculate:
+
+-   Distance from the hot edge: city-level `bio1` - 95th percentile of species’ occurrence `bio1`;
+-   Distance from the dry edge: 5th percentile of species’ occurrence `bio12` - city-level `bio12`.
+
+Larger values indicate that urban conditions are further from the hot or dry limits of a species’ native climatic range.
+
+```{r gbif-occurrence}
+city_inven_backbone <- coef_summary_all |>
+  distinct(Factor) |>
+  pull(Factor) |>
+  name_backbone_checklist(kingdom = "Plantae", phylum = "Tracheophyta")
+
+city_inven_backbone_filtered <- city_inven_backbone |>
+  filter(
+    kingdom == "Plantae", phylum == "Tracheophyta",
+    rank %in% c("GENUS", "SPECIES"),
+    status %in% c("ACCEPTED", "SYNONYM")
+  )
+
+city_inven_backbone_filtered_consolidated <- city_inven_backbone_filtered |>
+  mutate(usageKey = if_else(status == "SYNONYM", acceptedUsageKey, usageKey))
+```
+
+```{r retrive-range}
+#| eval: false
+#| include: false 
+
+#  Functions for chelsa
+load_chelsa <- function(chelsa_vars = c("bio1"), chelsa_dir) {
+  chelsa_files <- chelsa_vars |>
+    map(~ file.path(chelsa_dir, str_c("CHELSA_", .x, "_1981-2010_V.2.1.tif"))) |>
+    unlist()
+
+  missing_files <- chelsa_files[!file.exists(chelsa_files)]
+  if (length(missing_files) > 0) {
+    stop("The following CHELSA TIF file(s) do not exist: {str_c(missing_files, collapse = ', ')}")
+  }
+
+  chelsa_ras <- terra::rast(chelsa_files)
+  names(chelsa_ras) <- chelsa_vars
+  return(chelsa_ras)
+}
+
+process_gbif_chelsa <- function(chelsa_ras, gbif_dir, gbif_chelsa_dir, overwrite = FALSE) {
+  gbif_rds_files <- list.files(gbif_dir, pattern = "\\.rds$", full.names = TRUE)
+
+  walk(gbif_rds_files, function(gbif_rds_path) {
+    gbif_rds <- basename(gbif_rds_path)
+    output_rds <- file.path(gbif_chelsa_dir, gbif_rds)
+
+    if (!overwrite && file.exists(output_rds)) {
+      cli_alert_info("File '{output_rds}' already exists. Skipping. Set overwrite = TRUE to regenerate.")
+      return(NULL)
+    }
+
+    gbif_data <- read_rds(gbif_rds_path)
+    combined_data <- extract_chelsa_occ(chelsa_ras, gbif_data, lon_col = "decimallongitude", lat_col = "decimallatitude")
+
+    if (!is.null(combined_data)) {
+      write_rds(combined_data, file = output_rds, compress = "gz")
+      cli_alert_success("Combined data saved to '{output_rds}'.")
+    }
+  })
+}
+
+extract_chelsa_occ <- function(chelsa_ras, occ_data, lon_col = "longitude", lat_col = "latitude") {
+  if (!all(c(lon_col, lat_col) %in% colnames(occ_data))) {
+    cli_alert_warning("The data lacks required longitude/latitude columns.")
+    return(NULL)
+  }
+
+  chelsa_values <- terra::extract(chelsa_ras, occ_data[, c(lon_col, lat_col)], ID = FALSE)
+  colnames(chelsa_values) <- names(chelsa_ras)
+
+  combined_data <- bind_cols(occ_data, chelsa_values)
+  return(combined_data)
+}
+
+# Define file paths
+save_path <- "~/phenology-urban/data/proc/tree_origin/occ"
+gbif_snapshot_path <- "~/lab-data/datasets/vegetation/GBIF/Vascular-Plants-2025-05-01"
+taxonomy_list <- city_inven_backbone_filtered_consolidated
+
+# Execute retrieving function
+gbif_snapshot_retrieve(
+  save_path = save_path,
+  gbif_snapshot_path = gbif_snapshot_path,
+  taxonomy_list = taxonomy_list
+)
+
+input_dir <- save_path
+output_dir <- "~/phenology-urban/data/proc/tree_origin/clean"
+clean_occ_files(input_dir, output_dir)
+
+chelsa_dir <- "~/lab-data/datasets/climate/CHELSA/bioclim"
+gbif_dir <- "~/phenology-urban/data/proc/tree_origin/clean"
+gbif_chelsa_dir <- "~/phenology-urban/data/proc/tree_origin/chelsa"
+chelsa_ras <- load_chelsa(chelsa_vars = c("bio1", "bio12"), chelsa_dir = chelsa_dir)
+process_gbif_chelsa(chelsa_ras, gbif_dir, gbif_chelsa_dir, overwrite = FALSE)
+
+cli_alert_success("CHELSA data extraction completed for all GBIF files in the directory.")
+
+gbif_chelsa_dir <- "~/phenology-urban/data/proc/tree_origin/chelsa_occ"
+
+sp_chelsa_files <- list.files(gbif_chelsa_dir, pattern = "\\.rds$", full.names = TRUE)
+sp_chelsa_summary_all <- map_dfr(sp_chelsa_files, function(sp_chelsa) {
+  read_rds(sp_chelsa) |>
+    group_by(specieskey) |>
+    summarise(
+      bio1_mean   = mean(bio1, na.rm = TRUE),
+      bio1_median = median(bio1, na.rm = TRUE),
+      bio1_p95    = quantile(bio1, 0.95, na.rm = TRUE),
+      bio1_p5     = quantile(bio1, 0.05, na.rm = TRUE),
+      bio12_mean   = mean(bio12, na.rm = TRUE),
+      bio12_median = median(bio12, na.rm = TRUE),
+      bio12_p95    = quantile(bio12, 0.95, na.rm = TRUE),
+      bio12_p5     = quantile(bio12, 0.05, na.rm = TRUE),
+      n_records   = n(),
+      .groups = "drop"
+    )
+})
+write_rds(sp_chelsa_summary_all, "~/phenology-urban/data/proc/tree_origin/chelsa_occ/sp_chelsa_summary.rds", compress = "gz")
+```
+
+```{r summarize-range}
+
+city_feature <- readRDS("~/phenology-urban/data/raw/CONUS/StreetTrees/cleaned_ps_input/summary/city_bioclimate.rds") |>
+  select(site, bio1, bio12) |>
+  rename(city = site)
+
+overlap_city_species_range <- coef_summary_all |>
+  left_join(city_inven_backbone_filtered_consolidated |>
+              select(usageKey, verbatim_name), by = c("Factor" = "verbatim_name")) |>
+  left_join(read_rds("~/phenology-urban/data/proc/tree_origin/chelsa/sp_chelsa_summary.rds"),
+            by = c("usageKey" = "specieskey")) |>
+  left_join(city_feature |> 
+              mutate(city = ifelse(city == "St_George", "StGeorge", city)) |>
+              mutate(city = ifelse(city == "St.Louis", "StLouis", city)) |>              
+              st_drop_geometry(), by = "city")
+```
+
+#### Grouped by city (example: New York & Sacramento)
+
+Although some cities, such as New York and Sacramento, show a clearer pattern in which species originating from warmer climates exhibit more positive (i.e., stronger) phenological responses to temperature, this relationship is generally weak when evaluated across all cities. 
+
+One possible explanation is the limited variation in species’ climatic hot edges within individual cities. For example, warmer cities may predominantly host species whose climatic hot edges are already exceeded, thereby reducing within-city contrasts. Under such conditions, cross-species comparisons within a city may have limited power. A more informative approach may therefore be to focus on individual species and examine how their phenological sensitivity varies across cities that differ in climatic context.
+
+```{r}
+overlap_city_species_range_ny <- overlap_city_species_range |>
+  filter(city %in% c("NewYork", "Sacramento")) |>
+  mutate(hot_edge = bio1 - bio1_p95,
+         cold_edge = bio1_p5 - bio1,
+         d_temp = bio1 - bio1_median,
+         d_prcp = bio12 - bio12_median,
+         temp_breadth = bio1_p95 - bio1_p5,
+         prcp_breadth = bio12_p95 - bio12_p5,
+         dry_edge = bio12_p5 - bio12) # larger value: further away from the edge
+
+ggplot(overlap_city_species_range_ny |> filter(phe_type == "SOS"),
+       aes(x = hot_edge, y = Estimate, group = city, color = city)) +
+  geom_point(alpha = 0.2, size = 0.4) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.3) +
+  labs(x = "Distance from the hot edge (bio1)", y = "SOS temperature sensitivity (Estimate)") +
+  theme_classic(base_size = 14)
+  # theme(legend.position ="NA")
+
+slope_table <- overlap_city_species_range |>
+  mutate(hot_edge = bio1 - bio1_p95,
+         cold_edge = bio1_p5 - bio1,
+         d_temp = bio1 - bio1_median,
+         d_prcp = bio12 - bio12_median,
+         temp_breadth = bio1_p95 - bio1_p5,
+         prcp_breadth = bio12_p95 - bio12_p5,
+         dry_edge = bio12_p5 - bio12) |>
+  filter(phe_type == "SOS") |>
+  filter(!is.na(d_temp)) |>
+  group_by(city) |>
+  do(
+    tidy(lm(Estimate ~ d_temp, data = .))
+  ) |>
+  filter(term == "d_temp") |>
+  select(
+    city,
+    slope = estimate,
+    p_value = p.value
+  ) |>
+  ungroup()
+```
+
+#### Group by species
+
+For the most common 15 species across cities, I also examined how their phenological sensitivity varies with their hot/dry edges in different urban environments.
+
+For SOS, most species (9/15) show a positive relationship between hot-edge and temperature sensitivity, indicating that species planted in the warmer edge of their climatic niche tend to exhibit positive SOS responses (i.e., delayed spring) to temperature.
+
+For EOS, most species (13/15) show a negative relationship between dry-edge and temperature sensitivity, indicating that species planted in the drier edge of their climatic niche tend to exhibit negative EOS responses (i.e., advanced autumn) to temperature. It is consistent with the direct relationship between cities' precipitation and temperature sensitivity.
+
+```{r}
+overlap_city_species_range_sp <- overlap_city_species_range |>
+  filter(Factor %in% c(
+  "Acer saccharinum",
+  "Acer rubrum",
+  "Pyrus calleryana",
+  "Quercus rubra",
+  "Gleditsia triacanthos",
+  "Ulmus americana",
+  "Ginkgo biloba",
+  "Acer platanoides",
+  "Fraxinus pennsylvanica",
+  "Tilia cordata",
+  "Platanus hispanica",
+  "Ulmus pumila",
+  "Acer saccharum",
+  "Robinia pseudoacacia",
+  "Celtis occidentalis"
+)) |>
+  mutate(hot_edge = bio1 - bio1_p95,
+         cold_edge = bio1_p5 - bio1,
+         d_temp = bio1 - bio1_median,
+         d_prcp = bio12 - bio12_median,
+         temp_breadth = bio1_p95 - bio1_p5,
+         prcp_breadth = bio12_p95 - bio12_p5,
+         dry_edge = bio12_p5 - bio12) |>
+  mutate(status_group = ifelse(
+      hot_edge >= 0, "Outside", "Inside"
+    ))
+
+ggplot(overlap_city_species_range_sp |> filter(phe_type == "SOS"),
+       aes(x = hot_edge, y = Estimate, group = Factor, color = Factor)) +
+  geom_point(alpha = 0.2, size = 0.4) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.3) +
+  labs(x = "Distance from the hot edge (bio1)", y = "SOS temperature sensitivity (Estimate)") +
+  theme_classic(base_size = 14)
+  # theme(legend.position ="NA")
+
+ggplot(overlap_city_species_range_sp |> filter(phe_type == "EOS"),
+       aes(x = dry_edge, y = Estimate, group = Factor, color = Factor)) +
+  geom_point(alpha = 0.2, size = 0.4) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.3) +
+  labs(x = "Distance from the dry edge (bio12)", y = "EOS temperature sensitivity (Estimate)") +
+  theme_classic(base_size = 14)
+  # theme(legend.position ="NA")
+
+slope_table <- overlap_city_species_range_sp |>
+  filter(phe_type == "EOS") |>
+  filter(!is.na(dry_edge)) |>
+  group_by(Factor) |>
+  do(
+    tidy(lm(Estimate ~ dry_edge, data = .))
+  ) |>
+  filter(term == "dry_edge") |>
+  select(
+    Factor,
+    slope = estimate,
+    p_value = p.value
+  ) |>
+  ungroup()
+```
+
+In species-grouping case, replacing bioclimate with the distance from the hot edge is effectively equivalent to subtracting a constant value for each species. As a result, this should yield the same relationship to previous relationship directly using bioclimate. However, framing the analysis in terms of climatic distance may provide additional biological insight by explicitly capturing the degree of mismatch between a species’ native climatic range and the urban environment.
 
 
+#### Model fitting
+
+```{r}
+overlap_city_species_range_model <- overlap_city_species_range |>
+  # filter(city %in% c("NewYork", "Sacramento")) |>
+  mutate(hot_edge = bio1_p95 - bio1,
+         cold_edge = bio1_p5 - bio1,
+         d_temp = bio1 - bio1_median,
+         d_prcp = bio12 - bio12_median,
+         temp_breadth = bio1_p95 - bio1_p5,
+         prcp_breadth = bio12_p95 - bio12_p5,
+         dry_edge = bio12 - bio12_p5)  |>
+  select(-bio1, -bio12)# larger value: further away from the edge 
+
+source("~/phenology-urban/script/fit_pglmm_model.R")
+load("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/tree_species.RData")
+```
+
+##### Model test - Univariate for each species
+
+Single species 
+
+```{r}
+m_SOS <- fit_uni("SOS", input_data = overlap_city_species_range_model, city_feature, species_name = "Acer rubrum", clim = "hot_edge", bootstrap = T)
+m_SOS$plot
+
+m_EOS <- fit_uni("EOS", input_data = overlap_city_species_range_model, city_feature, species_name = "Acer rubrum", clim = "dry_edge", bootstrap = T)
+m_EOS$plot
+```
+
+Multi species (EOS ~ dry edge)
+
+```{r}
+species_vec <- c(
+  "Acer saccharinum",
+  "Acer rubrum",
+  "Pyrus calleryana",
+  "Quercus rubra",
+  "Gleditsia triacanthos",
+  "Ulmus americana",
+  "Ginkgo biloba",
+  "Acer platanoides",
+  "Fraxinus pennsylvanica",
+  "Tilia cordata"
+)
+
+plot_list <- lapply(
+  species_vec,
+  function(sp) {
+    fit_uni(
+      phe_type = "EOS", input_data = overlap_city_species_range_model, city_feature = city_feature, species_name = sp, clim = "dry_edge", bootstrap = T)$plot
+  }
+)
+names(plot_list) <- species_vec
+p_marg <- cowplot::plot_grid(plotlist = plot_list, ncol = 5) + 
+  theme(plot.margin = margin(b = 30, l = 30, r = 20),
+        panel.background = element_rect(fill = "white", color = NA),
+        plot.background  = element_rect(fill = "white", color = NA))
+# p_marg_xy <- ggdraw() +
+#   draw_plot(p_marg) +
+#   draw_label("Mean annual precipitation (mm)",
+#              x = 0.5, y = 0.03, size = 22) +
+#   draw_label(bquote("Estimated mean "~beta[Temp]~" estimate"),
+#              x = 0.02, y = 0.5, angle = 90, size = 22)
+
+p_marg
+```
+
+Multi species (one panel)
+
+```{r}
+clim = "dry_edge"
+phe_type = "EOS"
+x_lab <- if (rlang::as_name(clim) %in% c("hot_edge")) {
+  expression(italic(S)~"for temperature ("*degree*C*")")
+} else if (rlang::as_name(clim) %in% c("dry_edge")) {
+  expression(italic(S)~"for precipitation (mm)")
+} else {
+  rlang::as_name(clim)
+}
+
+pred_df <- lapply(
+  species_vec,
+  function(sp) {
+    fit_uni(
+      phe_type = phe_type, input_data = overlap_city_species_range_model, city_feature = city_feature, species_name = sp, clim = clim, bootstrap = T)$pred_table
+  }
+) |>
+  bind_rows()
+
+fit_input_df <- overlap_city_species_range_model |>
+  filter(Factor %in% species_vec, phe_type == !!phe_type) |>
+  select(Estimate, Lower, Upper, !!clim, Factor)
+
+p_EOS <- ggplot(fit_input_df, aes(x = .data[[clim]], y = Estimate, color = Factor)) +
+  geom_pointrange(aes(ymin = Lower, ymax = Upper), alpha = 0.1, size = 0.2) +
+  geom_ribbon(data = pred_df,
+              aes(x = .data[[clim]], ymin = y_lwr, ymax = y_upr, fill = species),
+              inherit.aes = FALSE,
+              alpha = 0.2) +
+  geom_line(data = pred_df,
+            aes(x = .data[[clim]], y = y_pred, color = species),
+            inherit.aes = FALSE,
+            linewidth = 0.5) +
+  guides(alpha = "none") +
+  theme_classic() +
+  labs(
+    x = x_lab,
+    y = paste0("Estimated effect on ", phe_type),
+    color = "Species",
+    fill  = "Species"
+  ) +
+  theme(
+    axis.text = element_text(size = 14),
+    axis.title = element_text(size = 16),
+    legend.text = element_text(face = "italic")
+    # axis.title = element_blank()
+  )
+
+clim = "hot_edge"
+phe_type = "SOS"
+x_lab <- if (rlang::as_name(clim) %in% c("hot_edge")) {
+  expression(italic(S)~"for temperature ("*degree*C*")")
+} else if (rlang::as_name(clim) %in% c("dry_edge")) {
+  expression(italic(S)~"for precipitation (mm)")
+} else {
+  rlang::as_name(clim)
+}
+pred_df <- lapply(
+  species_vec,
+  function(sp) {
+    fit_uni(
+      phe_type = phe_type, input_data = overlap_city_species_range_model, city_feature = city_feature, species_name = sp, clim = clim, bootstrap = T)$pred_table
+  }
+) |>
+  bind_rows()
+
+fit_input_df <- overlap_city_species_range_model |>
+  filter(Factor %in% species_vec, phe_type == !!phe_type) |>
+  select(Estimate, Lower, Upper, !!clim, Factor)
+
+p_SOS <- ggplot(fit_input_df, aes(x = .data[[clim]], y = Estimate, color = Factor)) +
+  geom_pointrange(aes(ymin = Lower, ymax = Upper), alpha = 0.1, size = 0.2) +
+  geom_ribbon(data = pred_df,
+              aes(x = .data[[clim]], ymin = y_lwr, ymax = y_upr, fill = species),
+              inherit.aes = FALSE,
+              alpha = 0.2) +
+  geom_line(data = pred_df,
+            aes(x = .data[[clim]], y = y_pred, color = species),
+            inherit.aes = FALSE,
+            linewidth = 0.5) +
+  guides(alpha = "none") +
+  theme_classic() +
+  labs(
+    x = x_lab,
+    y = paste0("Estimated effect on ", phe_type),
+    color = "Species",
+    fill  = "Species"
+  ) +
+  theme(
+    axis.text = element_text(size = 14),
+    axis.title = element_text(size = 16),
+    legend.text = element_text(face = "italic")
+    # axis.title = element_blank()
+  )
+
+
+p_uni_SOS_EOS <- p_SOS + p_EOS +
+  plot_layout(ncol = 2,
+              guides = "collect",
+              widths = c(1,1))
+ggsave("~/phenology-urban/temp/figure_agu/uni_SOS_EOS.png", p_uni_SOS_EOS, width = 11, height = 3.7, dpi = 500)
+```
+
+
+##### Model test - Multivariate
+
+```{r}
+m_SOS <- fit_multi_pglmm("SOS", overlap_city_species_range_model, city_feature, package = "brms")
+m_SOS$plot
+
+m_EOS <- fit_multi_pglmm("EOS", overlap_city_species_range_model, city_feature, package = "brms")
+m_EOS$plot
+```
+
+Use pglmm package + bootstrap
+
+```{r}
+m_SOS <- fit_multi_pglmm("SOS", overlap_city_species_range_model, city_feature, package = "phyr", bootstrap = T)
+m_SOS_p <- m_SOS$plot + 
+  theme(legend.position = "none",
+        title = element_blank()) + 
+  scale_y_discrete(labels = c(hot_edge_s = expression(italic(S)~"for temperature"),
+                              dry_edge_s = expression(italic(S)~"for precipitation")))
+
+m_EOS <- fit_multi_pglmm("EOS", overlap_city_species_range_model, city_feature, package = "phyr", bootstrap = T)
+m_EOS_p <- m_EOS$plot + 
+  theme(legend.position = "right",
+           axis.text.y = element_blank(),
+           title = element_blank())
+plot_list_multi <- list(m_SOS_p, m_EOS_p)
+  
+p_marg_multi <- cowplot::plot_grid(plotlist = plot_list_multi, ncol = 2) + 
+  theme(plot.margin = margin(b = 30, l = 30, r = 20),
+        panel.background = element_rect(fill = "white", color = NA),
+        plot.background  = element_rect(fill = "white", color = NA))
+p_multi_SOS_EOS <- ggdraw() +
+  draw_plot(p_marg_multi) +
+  draw_label("Posterior Estimate (95% CI)",
+             x = 0.5, y = 0.12, size = 16) +
+  draw_label("Variable",
+             x = 0.02, y = 0.65, angle = 90, size = 16)
+
+p_multi_SOS_EOS
+ggsave("~/phenology-urban/temp/figure_agu/multi_SOS_EOS.png", p_multi_SOS_EOS, width = 11, height = 1.7, dpi = 500)
+```
+
+Species variance ~ niche breadth
+
+```{r}
+overlap_city_species_range_model <- overlap_city_species_range |>
+  mutate(hot_edge = bio1 - bio1_p95,
+         cold_edge = bio1_p5 - bio1,
+         d_temp = bio1 - bio1_median,
+         d_prcp = bio12 - bio12_median,
+         temp_breadth = bio1_p95 - bio1_p5,
+         prcp_breadth = bio12_p95 - bio12_p5,
+         dry_edge = bio12_p5 - bio12)
+
+get_tau <-function(df, se_floor = 0.01) {
+  df <- df %>% mutate(se_use = pmax(sd, se_floor))
+  out <- tryCatch({
+    fit <- rma.uni(yi = Estimate, sei = se_use, method = "REML", data = df)
+    sqrt(fit$tau2)
+  }, error = function(e) {
+    fit <- rma.uni(yi = Estimate, sei = se_use, method = "DL", data = df)
+    sqrt(fit$tau2)
+  })
+  out
+}
+```
+
+No relationship between species variance and species climatic breadth. Even some papers mentioned that larger tolerance/adaptation might lead to weaker phenological sensitivity, I do not see that pattern here.
+
+```{r}
+tau_species <- overlap_city_species_range_model %>%
+  filter(phe_type == "EOS") %>%
+  group_by(Factor) %>%
+  filter(n() > 5) %>%
+  group_modify(~ tibble(tau = get_tau(.x,  se_floor = 0.01))) %>%
+  left_join(
+    overlap_city_species_range_model %>%
+      select(Factor, temp_breadth, prcp_breadth) %>%
+      distinct(),
+    by = "Factor"
+  )
+
+ggplot(tau_species,
+       aes(x = prcp_breadth, y = tau)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.3) +
+  labs(x = "Temperature breadth (bio1)", y = "Species-level SOS variance (tau)") +
+  theme_classic(base_size = 14)
+```
+
+City variance ~ bioclimate
+
+(consistent result with map): drier and hotter city have larger species variance
+
+```{r}
+tau_city <- overlap_city_species_range_model %>%
+  filter(phe_type == "EOS") %>%
+  group_by(city) %>%
+  filter(n() > 5) %>%
+  group_modify(~ tibble(tau = get_tau(.x,  se_floor = 0.01))) %>%
+  left_join(
+    overlap_city_species_range_model %>%
+      select(city, bio1, bio12) %>%
+      distinct(),
+    by = "city"
+  )
+
+ggplot(tau_city,
+       aes(x = bio12, y = tau)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.3) +
+  labs(x = "Temperature breadth (bio1)", y = "Species-level SOS variance (tau)") +
+  theme_classic(base_size = 14)
+```

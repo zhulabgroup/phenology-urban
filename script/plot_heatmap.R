@@ -207,7 +207,8 @@ plot_heatmap_sig <- function(coef_summary_all, level = "species", city_order_bio
     # labs(y = "City", x = level_title)
   
   tree_plot <- ggtree(tree_sub) +
-    layout_dendrogram()
+    layout_dendrogram() +
+    ggtitle(phe_type)
   
   p_right <- tree_plot / p_heat +
     plot_layout(heights = c(2, 20))

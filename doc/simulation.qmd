@@ -167,13 +167,13 @@ for (k in 1:K) {
   years  <- sample(2010:2015, n_obs, replace = TRUE)
 
   ## ---- 2. mesh, SPDE ----
-  mesh <- inla.mesh.2d(loc = coords, cutoff = 0.1, max.edge = c(0.5, 1))
-  spde <- inla.spde2.matern(mesh, alpha = 2)
-
-  Q <- inla.spde2.precision(spde, theta = c(log(1), log(0.2)))
-  u_spde <- as.vector(t(chol(solve(Q))) %*% rnorm(spde$n.spde))
-  A_spde <- inla.spde.make.A(mesh, loc = coords)
-  spatial_field <- as.vector(A_spde %*% u_spde)
+  # mesh <- inla.mesh.2d(loc = coords, cutoff = 0.1, max.edge = c(0.5, 1))
+  # spde <- inla.spde2.matern(mesh, alpha = 2)
+  # 
+  # Q <- inla.spde2.precision(spde, theta = c(log(1), log(0.2)))
+  # u_spde <- as.vector(t(chol(solve(Q))) %*% rnorm(spde$n.spde))
+  # A_spde <- inla.spde.make.A(mesh, loc = coords)
+  # spatial_field <- as.vector(A_spde %*% u_spde)
 
   ## ---- 3. year random effects ----
   year_levels <- sort(unique(years))
@@ -200,24 +200,23 @@ for (k in 1:K) {
   y  <- numeric(n_obs)
 
   for (i in 1:n_obs) {
-    mu[i] <- X[i, ] %*% beta_vec + spatial_field[i] + year_re[i]
+    mu[i] <- X[i, ] %*% beta_vec + year_re[i]
     y[i]  <- rnorm(1, mean = mu[i], sd = sigma_eps_true)
   }
 
   data_all <- data.frame(
     y = y, temp = temp, prcp = prcp, srad = srad, year = years
   )
-  s.index <- inla.spde.make.index("spatial", spde$n.spde)
+  # s.index <- inla.spde.make.index("spatial", spde$n.spde)
   stack_est <- inla.stack(
     tag = "est",
     data = list(y = y),
-    A = list(1, A_spde),
+    A = list(1),
     effects = list(
       data.frame(temp = temp,
                  prcp = prcp,
                  srad = srad,
-                 year = years),
-      spatial = s.index
+                 year = years)
     )
   )
 
@@ -225,8 +224,7 @@ for (k in 1:K) {
 
   model <- inla(
     y ~ temp + prcp + srad +
-      f(year, model = "iid") +
-      f(spatial, model = spde),
+      f(year, model = "iid"),
     data = inla.stack.data(stack_est),
     family = "gaussian",
     control.predictor = list(
@@ -267,7 +265,7 @@ sim_stage1 <- sim_stage1 |> left_join(data.frame(
     bio12 = bio12_s
   ), by = "city_id")
   
-write_rds(sim_stage1, "~/phenology-urban/data/proc/model_output/final_models_clean_outlier/simulation/sim_stage1.rds")
+write_rds(sim_stage1, "~/phenology-urban/data/proc/model_output/final_models_clean_outlier/simulation/sim_stage1_nosp.rds")
 ```
 
 ### Fit stage 2
@@ -275,7 +273,7 @@ write_rds(sim_stage1, "~/phenology-urban/data/proc/model_output/final_models_cle
 #### Use posterior mean + frequentist
 
 ```{r}
-model <- lmerTest::lmer(b_hat ~ bio1 + bio12 + (1 | as.factor(species_id)), 
+model <- lmerTest::lmer(b_hat ~ bio1 + bio12 + (1 | species_id), 
                         data = sim_stage1)
 summary(model)[["coefficients"]]
 ```
@@ -285,7 +283,7 @@ summary(model)[["coefficients"]]
 ```{r}
 sim_stage1$species_id <- as.factor(sim_stage1$species_id)
 m_brms <- brm(
-  b_hat ~ bio1 + bio12 + (1 | species_id),
+  bf(b_hat | se(se_hat, sigma = TRUE) ~ bio1 + bio12 + (1 | species_id)),
   data = sim_stage1,
   family = gaussian(),
   prior = set_prior("normal(0, 5)", class = "b"),
@@ -520,6 +518,62 @@ samples <- runMCMC(Cmcmc,
                    thin = 10,
                    samplesAsCodaMCMC = TRUE)
 ```
+
+#### MCMC of MCMC
+
+using mcmc for mcmc chains
+
+```{r}
+# sim_stage1 <- read_rds("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/simulation/sim_stage1.rds")
+set.seed(123)
+sim_stage1$species_id <- as.factor(sim_stage1$species_id)
+
+R <- 200
+post_lambda_bio1 <- NULL
+post_lambda_bio12 <- NULL
+
+for (r in 150:R) {
+  dat_r <- sim_stage1 %>%
+    mutate(beta_draw = rnorm(n(), mean = b_hat, sd = se_hat))
+  fit_r <- brm(
+    beta_draw ~ bio1 + bio12 + (1 | species_id),
+    data = dat_r,
+    family = gaussian(),
+    prior = set_prior("normal(0, 5)", class = "b"),
+    chains = 2,
+    cores = 2,
+    iter = 2000,
+    warmup = 1000,
+    thin = 10,
+    control = list(adapt_delta = 0.95, max_treedepth = 15)
+  )
+  draws_r <- as_draws_df(fit_r)
+  post_lambda_bio1 <- rbind(post_lambda_bio1, draws_r$b_bio1)
+  post_lambda_bio12 <- rbind(post_lambda_bio12, draws_r$b_bio12)
+  cat("Done resample", r, "of", R, "\n")
+}
+
+hist(post_lambda_bio12)
+summary_lambda1 <- quantile(post_lambda_bio1, probs = c(0.025, 0.5, 0.975), na.rm = TRUE)
+summary_lambda2 <- quantile(post_lambda_bio12, probs = c(0.025, 0.5, 0.975), na.rm = TRUE)
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ### Use the current data
 

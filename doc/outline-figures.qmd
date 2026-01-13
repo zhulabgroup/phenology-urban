@@ -774,14 +774,14 @@ temp <- ggplot() +
     n.breaks = 5 
   ) +
   labs(title = expression(italic("Acer rubrum") ~ "in 2023"), x = "x", y = "y") +
-  labs(x = "lon", y = "lat") +
+  labs(x = "Longitude", y = "Latitude") +
   theme_minimal() +
   coord_sf(xlim = c(bbox["xmin"], bbox["xmax"]),
            ylim = c(bbox["ymin"], bbox["ymax"]),
            expand = FALSE) +
   theme(
     axis.text = element_text(size = 12),
-    axis.title = element_text(size = 20),
+    axis.title = element_text(size = 16),
     legend.key.height = unit(0.3, "cm"),   # 图例条高度
     legend.key.width  = unit(0.4, "cm"),   # 图例条宽度
     legend.title = element_text(size = 8), # 图例标题字体
@@ -871,8 +871,8 @@ sp_ny_scatter_plot <- ggplot() +
 ggsave(
   sp_ny_scatter_plot,
   filename = here("temp/figure_agu/acer_rubrum_ny_scatter_plot.png"),
-  width = 6,
-  height = 4,
+  width = 5,
+  height = 5,
   units = "in",
   dpi = 500
 )
@@ -1208,9 +1208,9 @@ evi <- ggplot() +
 
 ggsave(
   evi,
-  filename = here("temp/figure_agu/acer_rubrum_ny_evi.png"),
+  filename = here("temp/figure_agu/acer_rubrum_ny_evi2.png"),
   width = 8,
-  height = 3.5,
+  height = 3.8,
   units = "in",
   dpi = 600
 )
