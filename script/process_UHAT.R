@@ -2,12 +2,81 @@ library(zhulabtools)
 load_packages(c("tidyverse", "ggplot2", "sf", "lubridate", "terra", "patchwork", "scales", "viridis", "leaflet"))
 select <- dplyr::select
 # output directory
-out_dir <- "~/lab-data/datasets/climate/UHAT/clean"
+out_dir <- "~/lab-data/datasets/climate/UHAT/clean_minmax"
 tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
 cities <- gsub("\\.rds$", "", basename(rds_files))
 
 ################## Save the seasonal file #################
+
+
+# helper that builds one raster for (yr, seas)
+build_UHAT_tif <- function(yr, seas, out_dir, temp_type) {
+  # 1) slice data
+  df <- UHAT_climate %>%
+    filter(year == yr, season == seas) %>%
+    transmute(lon, lat, temp = .data[[temp_type]])
+  
+  if (nrow(df) == 0) {
+    message(sprintf("[skip] %s %s: no rows", yr, seas))
+    return(invisible(NULL))
+  }
+  
+  # 2) points -> template cells
+  pts_ll  <- vect(df, geom = c("lon","lat"), crs = "EPSG:4326")
+  pts_prj <- project(pts_ll, crs(r_template))  # to template CRS
+  
+  xy_prj  <- crds(pts_prj, df = TRUE)
+  cell_id <- terra::cellFromXY(r_template, as.matrix(xy_prj))
+  
+  pts_with_cell <- df |>
+    mutate(.cell = cell_id) |>
+    filter(!is.na(.cell))
+  
+  if (nrow(pts_with_cell) == 0) {
+    message(sprintf("[skip] %s %s: all points outside template", yr, seas))
+    return(invisible(NULL))
+  }
+  
+  # 3) aggregate duplicates per cell
+  cell_values <- pts_with_cell |>
+    group_by(.cell) |>
+    summarise(temp = mean(temp, na.rm = TRUE), .groups = "drop")
+  
+  # 4) fill new raster on template grid
+  r_out <- rast(r_template)
+  values(r_out) <- NA_real_
+  r_out[cell_values$.cell] <- cell_values$temp
+  
+  # 5) trim NA borders and reproject to WGS84 lon/lat
+  r_trim <- r_out |>
+    trim()
+  
+  rx <- res(r_trim)[1]
+  ry <- res(r_trim)[2]
+  target_xmin <- min(xy_prj[,1]) - rx/2
+  target_ymin <- min(xy_prj[,2]) - ry/2
+  cur_ext <- ext(r_trim)
+  cur_xmin <- cur_ext[1]
+  cur_ymin <- cur_ext[3]
+  dx_shift <- target_xmin - cur_xmin
+  dy_shift <- target_ymin - cur_ymin
+  r_aligned <- terra::shift(r_trim, dx = dx_shift, dy = dy_shift)
+  crs(r_aligned) <- crs(r_template)  # ensure correct CRS
+  
+  # 6) write GeoTIFF
+  fname <- file.path(
+    out_dir,
+    paste0(city, sprintf("_%s_%s_%s.tif", seas, yr, temp_type))
+  )
+  writeRaster(
+    r_aligned, fname,
+    overwrite = TRUE, NAflag = -9999,
+    gdal = c("COMPRESS=LZW"), datatype = "FLT4S"
+  )
+  message(sprintf("[ok] wrote %s", fname))
+  invisible(fname)
+}
 
 for (city in cities) {
   message(paste0("Processing city: ", city))
@@ -50,86 +119,21 @@ for (city in cities) {
   r_template <- terra::rast(tifs[1])
   
   seasons_to_do <- c("summer", "winter")
-  
+  temp_type <- c("tmin", "tmax")
   # years present for those seasons
   years_to_do <- UHAT_climate %>%
     filter(season %in% seasons_to_do) %>%
     pull(year) %>%
     unique() %>%
     sort()
-
-  # helper that builds one raster for (yr, seas)
-  build_UHAT_tif <- function(yr, seas, out_dir) {
-    # 1) slice data
-    df <- UHAT_climate %>%
-      filter(year == yr, season == seas) %>%
-      transmute(lon, lat, temp = if ("tavg" %in% names(.)) tavg else temp)
-    
-    if (nrow(df) == 0) {
-      message(sprintf("[skip] %s %s: no rows", yr, seas))
-      return(invisible(NULL))
-    }
-    
-    # 2) points -> template cells
-    pts_ll  <- vect(df, geom = c("lon","lat"), crs = "EPSG:4326")
-    pts_prj <- project(pts_ll, crs(r_template))  # to template CRS
-    
-    xy_prj  <- crds(pts_prj, df = TRUE)
-    cell_id <- terra::cellFromXY(r_template, as.matrix(xy_prj))
-    
-    pts_with_cell <- df |>
-      mutate(.cell = cell_id) |>
-      filter(!is.na(.cell))
-    
-    if (nrow(pts_with_cell) == 0) {
-      message(sprintf("[skip] %s %s: all points outside template", yr, seas))
-      return(invisible(NULL))
-    }
-    
-    # 3) aggregate duplicates per cell
-    cell_values <- pts_with_cell |>
-      group_by(.cell) |>
-      summarise(temp = mean(temp, na.rm = TRUE), .groups = "drop")
-    
-    # 4) fill new raster on template grid
-    r_out <- rast(r_template)
-    values(r_out) <- NA_real_
-    r_out[cell_values$.cell] <- cell_values$temp
-    
-    # 5) trim NA borders and reproject to WGS84 lon/lat
-    r_trim <- r_out |>
-      trim()
-
-    rx <- res(r_trim)[1]
-    ry <- res(r_trim)[2]
-    target_xmin <- min(xy_prj[,1]) - rx/2
-    target_ymin <- min(xy_prj[,2]) - ry/2
-    cur_ext <- ext(r_trim)
-    cur_xmin <- cur_ext[1]
-    cur_ymin <- cur_ext[3]
-    dx_shift <- target_xmin - cur_xmin
-    dy_shift <- target_ymin - cur_ymin
-    r_aligned <- terra::shift(r_trim, dx = dx_shift, dy = dy_shift)
-    crs(r_aligned) <- crs(r_template)  # ensure correct CRS
-    
-    # 6) write GeoTIFF
-    fname <- file.path(
-      out_dir,
-      paste0(city, sprintf("_%s_%s.tif", seas, yr))
-    )
-    writeRaster(
-      r_aligned, fname,
-      overwrite = TRUE, NAflag = -9999,
-      gdal = c("COMPRESS=LZW"), datatype = "FLT4S"
-    )
-    message(sprintf("[ok] wrote %s", fname))
-    invisible(fname)
-  }
+  
   # run for all (year, season) pairs
   for (yr in years_to_do) {
     message(paste0("Processing year", yr))
     for (seas in seasons_to_do) {
-      build_UHAT_tif(yr, seas, out_dir)
+      for (i in temp_type){
+        build_UHAT_tif(yr, seas, out_dir, i)
+      }
     }
   }
 }
