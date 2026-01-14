@@ -66,7 +66,7 @@ fit_uni <- function(phe_type, input_data, city_feature, species_name, clim = "me
           (rlang::as_name(clim) %in% c("hot_edge")) ~ "Safety margin for temperature (°C)",
           (rlang::as_name(clim) %in% c("dry_edge")) ~ "Safety margin for precipitation (mm)"
         ),
-        y = paste0("Estimated effect on ", phe_type)
+        y = bquote(beta[Temp]~" estimate for "~.(phe_type))
       ) +
       theme(
         plot.title = element_text(hjust = 0.5, size = 16, face = "italic"),
@@ -163,7 +163,7 @@ fit_uni <- function(phe_type, input_data, city_feature, species_name, clim = "me
           (rlang::as_name(clim) %in% c("hot_edge")) ~ "Safety margin for temperature (°C)",
           (rlang::as_name(clim) %in% c("dry_edge")) ~ "Safety margin for precipitation (mm)"
         ),
-        y = paste0("Estimated effect on ", phe_type)
+        y = bquote(beta[Temp]~" estimate for "~.(phe_type))
       ) +
       theme(
         plot.title = element_text(hjust = 0.5, size = 16, face = "italic"),

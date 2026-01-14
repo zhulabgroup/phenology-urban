@@ -747,11 +747,6 @@ write_rds(sp_chelsa_summary_all, "~/phenology-urban/data/proc/tree_origin/chelsa
 ```
 
 ```{r summarize-range}
-
-city_feature <- readRDS("~/phenology-urban/data/raw/CONUS/StreetTrees/cleaned_ps_input/summary/city_bioclimate.rds") |>
-  select(site, bio1, bio12) |>
-  rename(city = site)
-
 overlap_city_species_range <- coef_summary_all |>
   left_join(city_inven_backbone_filtered_consolidated |>
               select(usageKey, verbatim_name), by = c("Factor" = "verbatim_name")) |>
@@ -888,7 +883,6 @@ In species-grouping case, replacing bioclimate with the distance from the hot ed
 
 ```{r}
 overlap_city_species_range_model <- overlap_city_species_range |>
-  # filter(city %in% c("NewYork", "Sacramento")) |>
   mutate(hot_edge = bio1_p95 - bio1,
          cold_edge = bio1_p5 - bio1,
          d_temp = bio1 - bio1_median,
@@ -896,7 +890,7 @@ overlap_city_species_range_model <- overlap_city_species_range |>
          temp_breadth = bio1_p95 - bio1_p5,
          prcp_breadth = bio12_p95 - bio12_p5,
          dry_edge = bio12 - bio12_p5)  |>
-  select(-bio1, -bio12)# larger value: further away from the edge 
+  select(-bio1, -bio12, -species)# larger value: further away from the edge 
 
 source("~/phenology-urban/script/fit_pglmm_model.R")
 load("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/tree_species.RData")
@@ -1072,15 +1066,19 @@ m_EOS$plot
 Use pglmm package + bootstrap
 
 ```{r}
-m_SOS <- fit_multi_pglmm("SOS", overlap_city_species_range_model, city_feature, package = "phyr", bootstrap = T)
-m_SOS_p <- m_SOS$plot + 
+# m_SOS <- fit_multi_pglmm("SOS", overlap_city_species_range_model, city_feature, package = "phyr", bootstrap = T)
+# m_EOS <- fit_multi_pglmm("EOS", overlap_city_species_range_model, city_feature, package = "phyr", bootstrap = T)
+# 
+# model_list_multi <- list(m_SOS, m_EOS)
+# write_rds(model_list_multi, "~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/model_multi_safemargin.rds")
+
+model_list_multi <- read_rds("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/model_multi_safemargin.rds")
+m_SOS_p <- model_list_multi[[1]]$plot +
   theme(legend.position = "none",
-        title = element_blank()) + 
+        title = element_blank()) +
   scale_y_discrete(labels = c(hot_edge_s = expression(italic(S)~"for temperature"),
                               dry_edge_s = expression(italic(S)~"for precipitation")))
-
-m_EOS <- fit_multi_pglmm("EOS", overlap_city_species_range_model, city_feature, package = "phyr", bootstrap = T)
-m_EOS_p <- m_EOS$plot + 
+m_EOS_p <- model_list_multi[[2]]$plot +
   theme(legend.position = "right",
            axis.text.y = element_blank(),
            title = element_blank())
@@ -1092,7 +1090,7 @@ p_marg_multi <- cowplot::plot_grid(plotlist = plot_list_multi, ncol = 2) +
         plot.background  = element_rect(fill = "white", color = NA))
 p_multi_SOS_EOS <- ggdraw() +
   draw_plot(p_marg_multi) +
-  draw_label("Posterior Estimate (95% CI)",
+  draw_label("Posterior estimate",
              x = 0.5, y = 0.12, size = 16) +
   draw_label("Variable",
              x = 0.02, y = 0.65, angle = 90, size = 16)
