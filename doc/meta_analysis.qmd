@@ -724,7 +724,7 @@ process_gbif_chelsa(chelsa_ras, gbif_dir, gbif_chelsa_dir, overwrite = FALSE)
 
 cli_alert_success("CHELSA data extraction completed for all GBIF files in the directory.")
 
-gbif_chelsa_dir <- "~/phenology-urban/data/proc/tree_origin/chelsa_occ"
+gbif_chelsa_dir <- "~/phenology-urban/data/proc/tree_origin/chelsa"
 
 sp_chelsa_files <- list.files(gbif_chelsa_dir, pattern = "\\.rds$", full.names = TRUE)
 sp_chelsa_summary_all <- map_dfr(sp_chelsa_files, function(sp_chelsa) {
@@ -883,7 +883,7 @@ In species-grouping case, replacing bioclimate with the distance from the hot ed
 
 ```{r}
 overlap_city_species_range_model <- overlap_city_species_range |>
-  mutate(hot_edge = bio1_p95 - bio1,
+  mutate(hot_edge = bio1 - bio1_p95,
          cold_edge = bio1_p5 - bio1,
          d_temp = bio1 - bio1_median,
          d_prcp = bio12 - bio12_median,
@@ -952,9 +952,9 @@ Multi species (one panel)
 clim = "dry_edge"
 phe_type = "EOS"
 x_lab <- if (rlang::as_name(clim) %in% c("hot_edge")) {
-  expression(italic(S)~"for temperature ("*degree*C*")")
+  expression("Safety margin for temperature ("*degree*C*")")
 } else if (rlang::as_name(clim) %in% c("dry_edge")) {
-  expression(italic(S)~"for precipitation (mm)")
+  "Safety margin for precipitation (mm)"
 } else {
   rlang::as_name(clim)
 }
@@ -991,8 +991,8 @@ p_EOS <- ggplot(fit_input_df, aes(x = .data[[clim]], y = Estimate, color = Facto
     fill  = "Species"
   ) +
   theme(
-    axis.text = element_text(size = 14),
-    axis.title = element_text(size = 16),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 14),
     legend.text = element_text(face = "italic")
     # axis.title = element_blank()
   )
@@ -1000,12 +1000,13 @@ p_EOS <- ggplot(fit_input_df, aes(x = .data[[clim]], y = Estimate, color = Facto
 clim = "hot_edge"
 phe_type = "SOS"
 x_lab <- if (rlang::as_name(clim) %in% c("hot_edge")) {
-  expression(italic(S)~"for temperature ("*degree*C*")")
+  expression("Safety margin for temperature ("*degree*C*")")
 } else if (rlang::as_name(clim) %in% c("dry_edge")) {
-  expression(italic(S)~"for precipitation (mm)")
+  "Safety margin for precipitation (mm)"
 } else {
   rlang::as_name(clim)
 }
+
 pred_df <- lapply(
   species_vec,
   function(sp) {
@@ -1038,8 +1039,8 @@ p_SOS <- ggplot(fit_input_df, aes(x = .data[[clim]], y = Estimate, color = Facto
     fill  = "Species"
   ) +
   theme(
-    axis.text = element_text(size = 14),
-    axis.title = element_text(size = 16),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 14),
     legend.text = element_text(face = "italic")
     # axis.title = element_blank()
   )

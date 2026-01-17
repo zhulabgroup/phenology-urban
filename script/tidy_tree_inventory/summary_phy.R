@@ -65,8 +65,14 @@ p_ring <- all_tree +
     name = "Number of trees",
     low  = "white",
     high = "darkblue" 
+  ) +
+  theme_void() +
+  theme(  legend.position = "bottom",
+          legend.box = "horizontal",
+          legend.key.width = unit(3, "cm"),
+          legend.text = element_text(size = 18),
+          legend.title = element_text(size = 22)
   )
-  theme_void()
 
 p_ring
 
@@ -137,35 +143,40 @@ plot_safety_margin <- function(occ_species_exp, city_species_exp, city_list, cli
     rename(x = all_of(climate_var))
   q_val <- quantile(occ_vals, probs = q_prob, na.rm = TRUE)
   if (is.null(var_label)) var_label <- climate_var
+  biom_columns <- occ_species_exp %>%
+    group_by(species) %>%
+    summarise(
+      mean_col    = mean(.data[[climate_var]], na.rm = TRUE),
+      median_col  = median(.data[[climate_var]], na.rm = TRUE),
+      p5_col      = quantile(.data[[climate_var]], 0.05, na.rm = TRUE),
+      p95_col     = quantile(.data[[climate_var]], 0.95, na.rm = TRUE),
+      p1_col      = quantile(.data[[climate_var]], 0.01, na.rm = TRUE),
+      p99_col     = quantile(.data[[climate_var]], 0.99, na.rm = TRUE),
+      .groups     = "drop"
+    )
   
   ggplot() +
-    # density for occurrence background
-    geom_density(
-      data = tibble(x = occ_vals) %>% filter(is.finite(x)),
-      aes(x = x),
-      adjust = 2,
-      linewidth = 1.0,
-      fill = "grey85",
-      color = "grey25",
-      alpha = 0.8
-    ) +
+    geom_linerange(data = biom_columns, aes(x = species,ymin = p1_col, ymax = p99_col), color = "grey30", linewidth = 5, alpha = 0.2) + 
+    geom_point(data = biom_columns, aes(x = species,y = median_col, shape = "median"), size = 4) +  
+    geom_point(data = biom_columns, aes(x = species,y = mean_col, shape = "mean"), color = "grey30", size = 4, alpha =0.5) + 
+    geom_point(data = biom_columns, aes(x = species,y = p5_col, shape = "p5"), color = "grey30", size = 4) +  
+    geom_point(data = biom_columns, aes(x = species,y = p95_col, shape = "p95"), color = "grey30", size = 4) + 
+    labs(y = var_label) +
+    scale_shape_manual(name = "Climatic niche metrics",
+                       values = c("mean" = 4, "median" = 20, "p5" = 124, "p95" = 124),
+                       labels = c("Mean", "Median", "0.05 quantile", "0.95 quantile")) +  
+    guides(color = guide_legend(order = 1), shape = guide_legend(order = 2)) + 
+    coord_flip()+
     # percentile line (95% for bio1, 5% for bio12)
-    geom_vline(
-      xintercept = q_val,
-      linetype = "dashed",
-      linewidth = 1.1,
-      color = "black"
-    ) +
+    geom_hline(yintercept = q_val, linewidth = 1.1, color = "grey30", ) +
     # city lines
-    geom_vline(
-      data = city_df,
-      aes(xintercept = x),
-      color = "dodgerblue4",
-      alpha = 0.7,
-      linewidth = 0.7
-    ) +
-    labs(x = var_label, y = "Density") +
-    theme_classic(base_size = 13)
+    geom_hline(data = city_df, aes(yintercept = x), linetype = "dashed", color = "dodgerblue4", alpha = 0.7, linewidth = 1.1) +
+    theme_classic(base_size = 13) +
+    theme(legend.position = "bottom",
+      axis.text.x = element_text( hjust = 1),
+          axis.ticks.y = element_line(linewidth = 0),
+          axis.text.y = element_blank(),
+          axis.title.y = element_blank())
 }
 
 ### Plot density and safety margin
@@ -187,4 +198,6 @@ p_safety_margin_prcp <- plot_safety_margin(
   species_exp = species_exp
 )
 
-p_safety_margin_temp/p_safety_margin_prcp 
+p_safety_margin_temp/p_safety_margin_prcp +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom")

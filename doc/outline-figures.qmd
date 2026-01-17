@@ -846,6 +846,7 @@ sp_ny_scatter_plot <- ggplot() +
     low = "grey70", 
     high = "grey10" 
   ) +
+  # facet_wrap(~ year) +
   geom_ribbon(data = plot_data, aes(x = temp, y = y_mean, ymin = y_low, ymax = y_high), fill = "#FCA636FF", alpha = 0.2) +
   geom_line(data = plot_data, aes(x = temp, y = y_mean), color = "#FCA636FF", linewidth = 1) +
   theme_bw(base_size = 14)+
