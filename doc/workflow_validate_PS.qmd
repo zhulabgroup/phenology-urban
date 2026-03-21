@@ -19,6 +19,24 @@ check_install_packages(c("readr", "here", "sf", "ggplot2", "dplyr", "lubridate",
 load_packages(c("readr", "here", "sf", "ggplot2", "dplyr", "lubridate", "tidyr", "leaflet", "purrr", "patchwork", "stringr"))
 
 select <- dplyr::select # Avoid masking by base R's select function
+theme_set(
+  theme_minimal(base_size = 14) +
+    theme(
+      # Font family and general text
+      # Axis and facet titles
+      axis.title = element_text(size = 16),
+      strip.text = element_text(size = 14, hjust = 0),
+      # Axis tick labels (optional, default inherits from base_size)
+      # axis.text = element_text(size = 10),
+      # Panel background and border
+      panel.background = element_rect(fill = "white", color = "black"),
+      # Grid lines
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      # Facet/strip placement
+      strip.placement = "outside"
+    )
+)
 ```
 
 # Introduction
@@ -205,7 +223,7 @@ npn_sos <- compute_npnphe(start = "Leaves", end = "Increasing leaf size") |>
 
 ggplot(npn_sos, aes(npn_doy)) +
   geom_histogram(aes(y = ..density..), bins = 30, fill = "grey", color = NA) + 
-  geom_density(color = "black", size = 0.5) +
+  geom_density(color = "black", linewidth = 0.5) +
   labs(
     x = "DOY",
     y = "Density",
@@ -424,7 +442,7 @@ Generally, the trend suggests a consistency between PS-derived SOS and NPN-deriv
 #| fig-width: 10
 #| warning: false
 
-
+library(randomcoloR)
 npn_points <- readRDS("~/phenology-urban/data/raw/CONUS/StreetTrees/cleaned_ps_input/summary/matching_npn.rds")
 
 # read in all PS_doy_data.rds in the folder
@@ -441,57 +459,87 @@ npn_sos_ps <- npn_sos |>
               filter(direction == "up"), by = c("new_id" = "id", "year")) |>
   na.omit()
 
-
 summary_npn_sos_ps <- npn_sos_ps |>
-  filter(type != "case3") |>
-  group_by(Longitude, Latitude, year, type, doy, site) |>
+  filter(type == "case1") |> # just keep case 1
+  group_by(Longitude, Latitude, year, type, doy, city) |>
   summarise(
-    mean = mean(npn_doy, na.rm = TRUE),
+    mean = median(npn_doy, na.rm = TRUE),
     p5 = quantile(npn_doy, 0.05, na.rm = TRUE),
     p95 = quantile(npn_doy, 0.95, na.rm = TRUE),
     .groups = "drop"
   )
 
-# Group and split by 'type'
-split_by_type <- summary_npn_sos_ps %>%
-  group_by(type) %>%
-  group_split()
+npn_eos_ps <- npn_eos |>
+  left_join(npn_points, by = c("Longitude" = "lon", "Latitude" = "lat")) |>
+  left_join(ps_doy_data |>
+             filter(direction == "down"), by = c("new_id" = "id", "year")) |>
+  na.omit()
+
+summary_npn_eos_ps_all <- npn_eos_ps |>
+  filter(type == "case2") |> # just keep case 1
+  group_by(Longitude, Latitude, year, type, doy, city) |>
+  summarise(
+    mean = median(npn_doy, na.rm = TRUE),
+    p5 = quantile(npn_doy, 0.05, na.rm = TRUE),
+    p95 = quantile(npn_doy, 0.95, na.rm = TRUE),
+    var = var(npn_doy, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(
+    weight = ifelse(var == 0 | is.na(var), 1, 1 / var)
+  )
+
+set.seed(20260320)
+all_cities <- unique(c(summary_npn_sos_ps$city, summary_npn_eos_ps_all$city)) |> sort()
+color_palette <- setNames(
+  randomcoloR::distinctColorPalette(length(all_cities)),
+  all_cities
+)
 
 # Define a function to fit and plot each case
-plot_weighted_fit <- function(df) {
-  type_name <- unique(df$type)
-
+plot_weighted_fit <- function(df, phe = "SOS") {
   model <- lm(doy ~ mean + 0, data = df)
   df$fitted <- predict(model)
 
   slope <- round(coef(model)[1], 3)
+  p_value <- signif(summary(model)$coefficients[1, 4], 3)
   mse <- mean(residuals(model)^2)
   rmse <- round(sqrt(mse), 3)
-
-  annot_label <- paste0("y = ", slope, "x", "\nRMSE = ", rmse)
+  annot_label <- paste0("y = ", slope, "x",
+                        "\np-value = ", p_value)
+  # cor_res <- cor.test(df$doy, df$mean, method = "pearson")
+  # r <- round(unname(cor_res$estimate), 3)
+  # p_value <- signif(cor_res$p.value, 3)
+  # rmse <- round(sqrt(mean((df$doy - df$mean)^2)), 3)
+  # annot_label <- paste0("r = ", r,
+  #                       "\np-value = ", p_value, 
+  #                       "\nRMSE = ", rmse)
 
   ggplot(df, aes(x = mean, y = doy)) +
-    geom_linerange(aes(xmin = p5, xmax = p95, color = site), width = 0.5, alpha = 0.3) +
-    geom_point(aes(color = site)) +
+    geom_linerange(aes(xmin = p5, xmax = p95, color = city), linewidth = 0.5, alpha = 0.3) +
+    geom_point(aes(color = city), alpha = 0.3, size = 1) +
     geom_abline(slope = 1, intercept = 0, color = "grey50", linetype = "dashed") +
     annotate("text",
              x = min(df$mean, na.rm = TRUE),
              y = max(df$doy, na.rm = TRUE),
              label = annot_label,
              hjust = 0, vjust = 1, size = 4) +
+    scale_color_manual(values = color_palette,
+                       limits = all_cities,
+                       drop = T) + 
     labs(
-      title = paste("NPN SOS vs PS SOS —", type_name),
-      x = "NPN SOS",
-      y = "PS SOS"
+      x = paste0("NPN-derived ", phe),
+      y = paste0("PlanetScope-derived ", phe)
     ) +
-    theme_minimal() +
-    theme(legend.position = "none")
+    theme(
+      legend.position = "none",
+      strip.background = element_blank(),
+      strip.placement = "outside"
+    ) 
 }
 
-plots <- lapply(split_by_type, plot_weighted_fit)
-
-plots[[1]] + plots[[2]] +
-  plot_layout(guides = "collect")
+plot_sos <- plot_weighted_fit(summary_npn_sos_ps, phe = "SOS")
+plot_eos <- plot_weighted_fit(summary_npn_eos_ps_all, phe = "EOS")
 ```
 
 [@fig-npn-eos-ps] compares the EOS derived from NPN observations with those estimated from PlanetScope imagery across the two cases. In terms of RMSE, there is a better agreement between PS-derived SOS and NPN-derived SOS compared to EOS. However, the scatter around the 1:1 line is more balanced for EOS, particularly in case 2, where the metric is based on 'Falling leaves'.
@@ -501,66 +549,39 @@ plots[[1]] + plots[[2]] +
 #| fig-width: 10
 #| warning: false
 
-npn_eos_ps <- npn_eos |>
-  left_join(npn_points, by = c("Longitude" = "lon", "Latitude" = "lat")) |>
-  left_join(ps_doy_data |>
-             filter(direction == "down"), by = c("new_id" = "id", "year")) |>
-  na.omit()
+legend_df <- data.frame(
+  city = factor(all_cities, levels = all_cities),
+  x = 1,
+  y = seq_along(all_cities)
+)
+legend_plot <- ggplot(legend_df, aes(x, y, color = city)) +
+  geom_linerange(aes(xmin = x-1, xmax = x+1, color = city), linewidth = 0.5, alpha = 0.3) +
+  geom_point(size = 1, alpha = 0.3) +
+  scale_color_manual(
+    values = color_palette[all_cities],
+    breaks = all_cities,
+    limits = all_cities,
+    name = "City"
+  ) +
+  guides(
+    color = guide_legend(ncol = 2)
+  ) +
+  theme_void() +
+  theme(legend.position = "right",
+        legend.text = element_text(size = 10),
+        legend.title = element_text(size = 12))
+shared_legend <- cowplot::get_legend(legend_plot)
 
-summary_npn_eos_ps_all <- npn_eos_ps %>%
-  group_by(Longitude, Latitude, year, type, doy, site) %>%
-  summarise(
-    mean = mean(npn_doy, na.rm = TRUE),
-    p5 = quantile(npn_doy, 0.05, na.rm = TRUE),
-    p95 = quantile(npn_doy, 0.95, na.rm = TRUE),
-    var = var(npn_doy, na.rm = TRUE),
-    .groups = "drop"
-  ) %>%
-  mutate(
-    weight = ifelse(var == 0 | is.na(var), 1, 1 / var)
-  )
-
-# Group and split by 'type'
-split_by_type <- summary_npn_eos_ps_all %>%
-  group_by(type) %>%
-  group_split()
-
-# Define a function to fit and plot each case
-plot_weighted_fit <- function(df) {
-  type_name <- unique(df$type)
-
-  model <- lm(doy ~ mean + 0, data = df)
-  df$fitted <- predict(model)
-
-  slope <- round(coef(model)[1], 3)
-  mse <- mean(residuals(model)^2)
-  rmse <- round(sqrt(mse), 3)
-
-
-  annot_label <- paste0("y = ", slope, "x", "\nRMSE = ", rmse)
-
-  ggplot(df, aes(x = mean, y = doy)) +
-    geom_linerange(aes(xmin = p5, xmax = p95,color = site), width = 0.5, alpha = 0.3) +
-    geom_point(aes(color = site)) +
-    geom_abline(slope = 1, intercept = 0, color = "grey50", linetype = "dashed") +
-    annotate("text",
-             x = min(df$mean, na.rm = TRUE),
-             y = max(df$doy, na.rm = TRUE),
-             label = annot_label,
-             hjust = 0, vjust = 1, size = 4) +
-    labs(
-      title = paste("NPN EOS vs PS EOS —", type_name),
-      x = "NPN EOS",
-      y = "PS EOS"
-    ) +
-    theme_minimal() +
-    theme(legend.position = "none")
-}
-
-plots <- lapply(split_by_type, plot_weighted_fit)
-
-plots[[1]] + plots[[2]] +
-  plot_layout(guides = "collect")
+p_main <- plot_sos + plot_eos +
+  patchwork::plot_annotation(tag_levels = "a") &
+  theme(plot.tag = element_text(face = "bold"))
+p = cowplot::plot_grid(
+  p_main,NULL,shared_legend,NULL,
+  ncol = 4,
+  rel_widths = c(1,0.05, 0.18,0.05)
+)
+p
+ggsave("~/phenology-urban/temp/figure_agu/validate_ps_npn.png", p, width = 12, height = 4.5, dpi = 500)
 ```
 
 The comparison results are similar to those of @ps_npn_zhao, where the PS-derived MOS (middle of spring) is generally lower than the ground-observed MOS, while the MOF (middle of fall) shows a more balanced distribution.

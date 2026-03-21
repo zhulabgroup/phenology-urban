@@ -359,7 +359,8 @@ phe_type = "SOS"
 phe_metric <- "doy"
 
 model_input_sf <-  prepare_data("NewYork", source = "Grid", taxa_col= "canonicalname", phe_type = phe_type)|>
-  filter(canonicalname == species)
+  filter(canonicalname == species) |>
+    filter(year == 2023)
 
 x <- model_input_sf[[phe_metric]]
 q <- stats::quantile(x, probs = c(0.25, 0.75), na.rm = TRUE)
@@ -371,7 +372,6 @@ NY_city_input <- model_input_sf %>%
            dplyr::between(.data[[phe_metric]], lo, hi))
   
 tree_location <- NY_city_input |>
-  filter(year == 2023) |>
   filter(!(lon == "NaN") & !(lat == "NaN")) |>
   st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F)
 
@@ -486,11 +486,13 @@ temp <- ggplot() +
   )
 
 sp_ny_scatter_plot <- ggplot() +
-  geom_hex(data = NY_city_input, aes(x = temp_winter, y = doy), bins = 60, alpha = 0.5) +
+  geom_hex(data = NY_city_input |> filter(year==2023), aes(x = temp_winter, y = doy), bins = 60, alpha = 0.5) +
   scale_fill_gradient(
     low = "grey70", 
     high = "grey10" 
   ) +
+  geom_smooth(data = NY_city_input |> filter(year==2023), aes(x = temp_winter, y = doy),
+              method = "lm", color = "blue", se = FALSE, linewidth = 0.8) +
   geom_ribbon(data = plot_data, aes(x = temp, y = y_mean, ymin = y_low, ymax = y_high), fill = "#FCA636FF", alpha = 0.2) +
   geom_line(data = plot_data, aes(x = temp, y = y_mean), color = "#FCA636FF", linewidth = 1) +
   theme_bw(base_size = 14)+
@@ -527,18 +529,41 @@ sp_ny_scatter_plot
 ```{r}
 #| include: false
 # Helper to process files by pattern
-plot_coef_sp_city <- function(r_output_dir){
+plot_coef_sp_city <- function(r_output_dir, level = "Factor", phe_types){
   coef_summary <- data.frame()
   coef_summary <- map_dfr(
       phe_types,
       ~ read_rds(paste0(r_output_dir, .x, "_summary.rds")) %>%
           mutate(phe_type = .x)
     )
-  coef_summary$Factor2 <- factor(coef_summary$Factor,
-                               levels = unique(coef_summary$Factor))
-  coef_summary$phe_type <- factor(coef_summary$phe_type,
+  
+  load("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/tree_species.RData") # phylo_tree
+  class_tree <- phylo_tree
+  df_filtered <- coef_summary %>%
+      filter(.data[[level]] %in% class_tree$tip.label)
+  class_used   <- unique(df_filtered[[level]])
+  tree_sub  <- drop.tip(class_tree,
+                        setdiff(class_tree$tip.label, class_used))
+  class_order <- tree_sub$tip.label 
+  
+  coef_df_plot <- df_filtered |>
+    mutate(
+      !!level := factor(.data[[level]], levels = rev(class_order))
+    ) |>
+    mutate(
+      Color = case_when(
+        is.na(Color) ~ "grey95",
+        TRUE ~ Color
+      ),
+      SigAlpha = case_when(
+        is.na(SigAlpha) ~ 1,
+        TRUE ~ SigAlpha
+      ),
+      !!level := factor(.data[[level]], levels = rev(class_order))
+    )
+  coef_df_plot$phe_type <- factor(coef_df_plot$phe_type,
                                 levels = c("SOS", "EOS"))
-  p_coef <-  ggplot(coef_summary, aes(x = Factor2, 
+  p_coef <-  ggplot(coef_df_plot, aes(x = Factor, 
                                y = Estimate,
                                color = Color
                                )) +
@@ -550,10 +575,10 @@ plot_coef_sp_city <- function(r_output_dir){
     labs(x = "Species", y = bquote(beta[Temp]~" estimate")) + 
     theme_minimal() +
     theme(
-      axis.text.x = element_text(angle = 75, hjust = 1, size = 8, face = "italic"),
+      axis.text.x = element_blank(),
       axis.title = element_text(size = 14),
       axis.text.y = element_text(size = 12),
-      strip.text = element_text(size = 14)) +
+      strip.text = element_blank()) +
     # coord_flip() +
     facet_wrap(~ phe_type, ncol = 1, scales = "free_y") +
     scale_alpha_identity() +
@@ -562,7 +587,13 @@ plot_coef_sp_city <- function(r_output_dir){
     # geom_text(aes(label = Estimate, y = Estimate  ), vjust = -0.7, show.legend = FALSE, size = 3) +
     guides(alpha = "none")
   
-  return(p_coef)
+  tree_plot <- ggtree(tree_sub) +
+    layout_dendrogram()
+  
+  p_combined <- tree_plot / p_coef +
+    plot_layout(heights = c(2, 20))
+  
+  return(p_combined)
 }
 ```
 
@@ -575,10 +606,19 @@ plot_coef_sp_city <- function(r_output_dir){
 #| warning: false
 #| eval: true
 
+
 city = "NewYork"
 phe_types = c("SOS", "EOS")
 r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/NewYork/canonicalname/")
-plot_coef_sp_city(r_output_dir)
+p1 = plot_coef_sp_city(r_output_dir, level = "Factor", phe_types)
+
+ggsave(
+  filename = paste0("~/phenology-urban/temp/figure_agu/example_city.png"),
+  plot = p1,
+  width = 9.5,
+  height = 6,
+  dpi = 500
+)
 ```
 
 ```{r input-heatmap}
@@ -637,8 +677,8 @@ city_feature <- readRDS("~/phenology-urban/data/raw/CONUS/StreetTrees/cleaned_ps
 #| eval: true
 
 source("~/phenology-urban/script/plot_heatmap.R")
-sp_SOS <- plot_heatmap_sig(coef_summary_all, level = "species", phe_type = "SOS")
-sp_EOS <- plot_heatmap_sig(coef_summary_all, level = "species", phe_type = "EOS")
+sp_SOS <- plot_heatmap_sig(coef_summary_all, level = "species", phe_type = "SOS", city_order_bio = "lat")
+sp_EOS <- plot_heatmap_sig(coef_summary_all, level = "species", phe_type = "EOS", city_order_bio = "lat")
 combine_heat <- wrap_plots(sp_SOS, sp_EOS, ncol = 2) &
   theme(
     plot.title = element_text(size = 20)
@@ -650,10 +690,11 @@ combine_heat <- wrap_plots(sp_SOS, sp_EOS, ncol = 2) &
 p_heat_xy <- ggdraw() +
   draw_plot(combine_heat) +
   draw_label("Species",
-             x = 0.5, y = 0.03, size = 22) +
+             x = 0.5, y = 0.02, size = 26) +
   draw_label("City",
-             x = 0.02, y = 0.5, angle = 90, size = 22)
+             x = 0.02, y = 0.5, angle = 90, size = 26)
 p_heat_xy
+ggsave("~/phenology-urban/temp/figure_agu/species_level_heatmap.png", p_heat_xy, width = 21.5, height = 16, dpi = 500)
 ```
 
 ## Phenological responses vary with regional climatic context
@@ -692,9 +733,21 @@ tau_breaks <- pretty(range(tau_vals), n = 5)
 #| fig-height: 8.5
 #| warning: false
 
-p = ggplot() +
-  geom_sf(data = boundary_us , fill = "grey95", color = "grey85") +
-  geom_point(data = model_results_loc,
+chelsa_ras_us <- terra::rast("~/phenology-urban/data/proc/tree_origin/chelsa_map/chelsa_us.tif")
+bio1 <- chelsa_ras_us[[1]]
+bio12 <- chelsa_ras_us[[2]]
+
+p_sos = ggplot() +
+  geom_sf(data = boundary_us , fill = "white", color = "transparent") +
+  tidyterra::geom_spatraster(data = bio1, alpha = 0.4) +
+  scale_fill_gradientn(
+    colours = rev(RColorBrewer::brewer.pal(9, "RdBu")),
+    name = "bio1 (°C)",
+    na.value = "transparent"
+  ) +
+  geom_sf(data = boundary_us , fill = "transparent", color = "grey85") +
+  geom_point(data = model_results_loc |> 
+               filter(phe_type == "SOS"),
              aes(x = lon, y = lat, text = site,
                  size   = (sd)),
              shape  = 21,
@@ -702,21 +755,24 @@ p = ggplot() +
              colour = "grey20" # acts as the color of the boundary line
              ) +
   geom_point(
-    data = model_results_loc,
+    data = model_results_loc |> 
+      filter(phe_type == "SOS"),
     aes(x = lon, y = lat,  text = site, color = avg, size = sd), alpha =0.7
   ) +
   scale_color_gradientn(
     name = "Mean estimated effect",
     colors = c("#FCA636FF", "white", "#0D0887FF"),
-    values = scales::rescale(c(ceiling(range_vals[1] * 10) / 10, 0, floor(range_vals[2] * 10) / 10)),
-    breaks = c(ceiling(range_vals[1] * 10) / 10, 0, floor(range_vals[2] * 10) / 10)
+    values = rescale(c(-6.1, 0, 4.7)),
+  breaks = c(-6.1, 0, 4.7),
+  limits = c(-6.1, 4.7),
   )+
   facet_wrap(~ phe_type, ncol = 1) +
   scale_size_continuous(
     name = "Among-species variance",
     breaks = (tau_breaks),
     labels = (tau_breaks)^2,
-    range = c(3, 12)
+    range = c(3, 12),
+    limits = range(tau_vals)
   ) +
   guides(
     color = guide_colorbar(order = 1),
@@ -732,7 +788,111 @@ p = ggplot() +
   ) +
   labs(x = "Longitude", y = "Latitude") +
   coord_sf(expand = FALSE)
-p
+
+p_eos = ggplot() +
+  geom_sf(data = boundary_us , fill = "white", color = "transparent") +
+  tidyterra::geom_spatraster(data = bio12, alpha = 0.4) +
+  scale_fill_gradientn(
+    colours = RColorBrewer::brewer.pal(9, "YlGnBu"),
+    name = "bio12 (mm)",
+    na.value = "transparent"
+  ) +
+  geom_sf(data = boundary_us , fill = "transparent", color = "grey85") +
+  geom_point(data = model_results_loc |> 
+               filter(phe_type == "EOS"),
+             aes(x = lon, y = lat, text = site,
+                 size   = (sd)),
+             shape  = 21,
+             stroke = 1, # acts as the thickness of the boundary line
+             colour = "grey20" # acts as the color of the boundary line
+  ) +
+  geom_point(
+    data = model_results_loc |> 
+      filter(phe_type == "EOS"),
+    aes(x = lon, y = lat, text = site, color = avg, size = sd), alpha =0.7
+  ) +
+  scale_color_gradientn(
+    name = "Mean estimated effect",
+    colors = c("#FCA636FF", "white", "#0D0887FF"),
+    values = rescale(c(-6.1, 0, 4.7)),
+    breaks = c(-6.1, 0, 4.7),
+    limits = range_vals,
+  )+
+  facet_wrap(~ phe_type, ncol = 1) +
+  scale_size_continuous(
+    name = "Among-species variance",
+    breaks = (tau_breaks),
+    labels = (tau_breaks)^2,
+    range = c(3, 12),
+    limits = range(tau_vals)
+  ) +
+  guides(
+    color = guide_colorbar(order = 1),
+    size  = guide_legend(order = 2)
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 16),
+    axis.title.x = element_text(size = 20),
+    axis.text.y = element_blank(),
+    axis.title.y = element_blank(),
+    strip.text = element_text(size = 22, face = "bold"),
+    legend.title = element_text(size = 16),
+    legend.text = element_text(size = 14)
+  ) +
+  labs(x = "Longitude") +
+  coord_sf(expand = FALSE)
+
+p_sos_fill <- p_sos +
+  guides(
+    color = "none",
+    size  = "none",
+    fill  = guide_colorbar(
+      direction = "horizontal",
+      order = 1,
+      label.theme = element_text(angle = 45, hjust = 1, vjust = 1))
+  ) +
+  theme(
+    legend.position = "bottom",
+    legend.box = "horizontal",
+    legend.box.just = "left",
+    legend.title = element_text(size = 12),
+    legend.text  = element_text(size = 10)
+  )
+
+p_eos_fill <- p_eos +
+  guides(
+    color = "none",
+    size  = "none",
+    fill  = guide_colorbar(
+      direction = "horizontal",
+      order = 1,
+      label.theme = element_text(angle = 45, hjust = 1, vjust = 1))
+  ) +
+  theme(
+    legend.position = "bottom",
+    legend.box = "horizontal",
+    legend.box.just = "left",
+    legend.title = element_text(size = 12),
+    legend.text  = element_text(size = 10)
+  )
+
+leg_color_size <- cowplot::get_legend(
+  p_sos +
+    guides(
+      fill  = "none",
+      color = guide_colorbar(order = 1),
+      size  = guide_legend(order = 2)
+    ) +
+    theme(
+      legend.position = "right",
+      legend.box = "vertical"
+    )
+)
+
+left <- p_sos_fill + p_eos_fill + 
+  plot_layout(ncol = 2)
+wrap_elements(leg_color_size)
 ```
 
 ```{r}

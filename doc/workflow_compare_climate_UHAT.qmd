@@ -14,8 +14,26 @@ editor_options:
 # Install and load 'zhulabtools' package
 library(zhulabtools)
 # Check and  load required packages
-load_packages(c("dplyr", "here", "sf","viridis", "leaflet", "cli", "terra","patchwork", "data.table", "plotly", "readxl", "tidyverse", "ks", "ggnewscale", "plotbiomes","coda", "patchwork", "performance", "terra", "ggpmisc", "gstat", "ggmcmc", "taxize", "stats", "viridis","INLA"))
+load_packages(c("dplyr", "here", "sf","viridis", "leaflet", "cli", "terra","patchwork", "data.table", "plotly", "readxl", "tidyverse", "ks", "ggnewscale", "plotbiomes","coda", "patchwork", "performance", "terra", "ggpmisc", "ggmcmc", "taxize", "stats", "viridis","INLA"))
 city = "NY"
+theme_set(
+  theme_minimal(base_size = 14) +
+    theme(
+      # Font family and general text
+      # Axis and facet titles
+      axis.title = element_text(size = 16),
+      strip.text = element_text(size = 14, hjust = 0),
+      # Axis tick labels (optional, default inherits from base_size)
+      # axis.text = element_text(size = 10),
+      # Panel background and border
+      panel.background = element_rect(fill = "white", color = "black"),
+      # Grid lines
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      # Facet/strip placement
+      strip.placement = "outside"
+    )
+)
 ```
 
 ## Introduction
@@ -38,35 +56,12 @@ $u(\mathbf{t})$ is the temporal random effect which captures random year effect.
 
 $\epsilon(\mathbf{s}_i, \mathbf{t})$ represents the residual error term.
 
-I selected 76 cities across the contiguous U.S., based on the availability of existing tree data, their diversity in urbanization patterns (building height and population), and their geographic variation in mean annual temperature and precipitation. [@fig-spatial] shows the spatial distribution of cities selected. The size of the blue circles represents the relative number of trees in each city's inventory. The full list of cities can be found [here](https://docs.google.com/spreadsheets/d/1pD9wdsTO6YLL5HfZ0Yi3Mn0VL-1iOW5Ek08Ydoko0b4/edit?usp=sharing).
-
-```{r fig-spatial}
-#| warning: false
-#| fig-cap: "Spatial distribution of cities with tree inventories."
-
-inventory_centroids <- readRDS(here("data/raw/CONUS/StreetTrees/cleaned_ps_input/summary/inventory_centroids.rds"))
-
-leaflet(data = inventory_centroids) |>
-  addProviderTiles(providers$OpenStreetMap, options = providerTileOptions(opacity = 0.9)) |>
-  addCircleMarkers(
-    popup = ~ paste0(
-      "<strong>", site, "</strong><br>",
-      "Num trees: ", num_tree, "<br>"
-    ),
-    radius = ~ sqrt(num_tree) / 20,
-    stroke = FALSE, fillOpacity = 0.7,
-    color = "blue"
-  )
-```
-
 This document adopts the same workflow for analyzing urban phenology data, with the key modification of **climate data source**. The aim is to provide a basis for discussion regarding the advantages and limitations of using different datasets (WU, Daymet and U-HAT) in urban phenology studies. New York City is selected as the case-study area for comparison. Phenological observations of individual trees derived from remote sensing are available for 2017–2024.
 
 ```{r}
 #| include: false
 #| eval: true
-
 compare_climate <- read_rds("~/phenology-urban/data/proc/urban/NY/WU_surface/NY.rds")
-
 ```
 
 ## Data source comparison
@@ -96,42 +91,60 @@ Overall, the UHAT tends to report higher temperatures and higher variance than W
 #| warning: false
 
 wu_uhat <- compare_climate |> 
-  select(id, year, temp_summer, temp_winter, UHAT_temp_summer, UHAT_temp_winter)
+  select(id, taxa, year, temp_summer, temp_winter, UHAT_temp_summer, UHAT_temp_winter) |>
+  st_drop_geometry()
 
-wu_uhat_winter <- wu_uhat %>%
-  select(year, x = temp_winter, y = UHAT_temp_winter) %>%
-  tidyr::drop_na() %>%
-  group_split(year) %>%
-  purrr::map(~{
-    rng <- range(c(.x$x, .x$y), na.rm = TRUE)
-    ggplot(.x, aes(x, y)) +
-      geom_point(size = 0.2, alpha = 0.1) +
-      geom_abline(slope = 1, intercept = 0, color = "red") +
-      labs(x = "Weather Underground", y = "UHAT",
-           title = paste0(unique(.x$year))) +
-      coord_fixed(xlim = rng, ylim = rng) +
-      theme_minimal()
-  }) |>
-  wrap_plots(ncol = 7) + plot_annotation(title = "Winter temperature for EOS")
+plot_climate_comp <- function(data, x_label, y_label){
+  plot_df <- data %>%
+    group_by(year) %>%
+    summarise(x_median = median(x, na.rm = TRUE), 
+              y_median = median(y, na.rm = TRUE),
+              x_p5 = quantile(x, 0.05, na.rm = TRUE),
+              x_p95 = quantile(x, 0.95, na.rm = TRUE),
+              y_p5 = quantile(y, 0.05, na.rm = TRUE),
+              y_p95 = quantile(y, 0.95, na.rm = TRUE),
+              .groups = "drop"
+              )
+  xy_range <- range(
+    c(plot_df$x_p5, plot_df$x_p95, plot_df$y_p5, plot_df$y_p95),
+    na.rm = TRUE)
+  # xy_range <- range(
+  #   c(data$x, data$x, data$y, data$y),
+  #   na.rm = TRUE)
+  ggplot(data, aes(x, y)) +
+    geom_hex(binwidth = c(diff(xy_range)/25, diff(xy_range)/25), 
+             alpha = 0.7, color = "NA") +
+  # geom_point(data = NY_city_input, aes(x = temp_winter, y = doy),alpha = 0.5) +
+    scale_fill_viridis_c(name = "Density",
+                         limits = c(0, 3000),
+                         trans = "sqrt",
+                         breaks = c(0, 300, 1000, 2000, 3000)) +
+    geom_abline(slope = 1, intercept = 0, color = "grey80", linetype = "dashed") +
+    scale_color_viridis_c(name = "Year") +
+    coord_fixed(ratio = 1, xlim = xy_range, ylim = xy_range) +
+    labs(x = x_label , y= y_label)
   
-wu_uhat_summer <- wu_uhat %>%
-  select(year, x = temp_summer, y = UHAT_temp_summer) %>%
-  tidyr::drop_na() %>%
-  group_split(year) %>%
-  purrr::map(~{
-    rng <- range(c(.x$x, .x$y), na.rm = TRUE)
-    ggplot(.x, aes(x, y)) +
-      geom_point(size = 0.2, alpha = 0.1) +
-      geom_abline(slope = 1, intercept = 0, color = "red") +
-      labs(x = "Weather Underground", y = "UHAT",
-           title = paste0(unique(.x$year))) +
-      coord_fixed(xlim = rng, ylim = rng) +
-      theme_minimal()
-  }) |>
-  wrap_plots(ncol = 7) + plot_annotation(title = "Summer temperature for EOS")
+  # ggplot(plot_df, aes(x_median, y_median, color = year)) +
+  #   geom_point(size = 0.5, alpha = 0.2) +
+  #   geom_errorbar(aes(ymin = y_p5, ymax = y_p95),  width = 0.1, linewidth = 0.4, alpha = 0.1) +
+  #   geom_errorbarh(aes(xmin = x_p5, xmax = x_p95), width = 0.1, linewidth = 0.4,  alpha = 0.1) +
+  #   geom_abline(slope = 1, intercept = 0, color = "grey50", linetype = "dashed") +
+  #   scale_color_viridis_c(name = "Year") +
+  #   coord_fixed(ratio = 1, xlim = xy_range, ylim = xy_range) +
+  #   labs(x = x_label , y= y_label)
+}
 
-wu_uhat_winter/
-  wu_uhat_summer
+wu_uhat_winter <- plot_climate_comp(
+  data = wu_uhat %>%
+    select(year, taxa, x = temp_winter, y = UHAT_temp_winter) |>
+    filter(!is.na(x) & !is.na(y)),
+  x_label = "WU winter temperature (°C)", y_label = "UHAT winter temperature (°C)")
+
+wu_uhat_summer <- plot_climate_comp(
+  data = wu_uhat %>%
+    select(year, taxa, x = temp_summer, y = UHAT_temp_summer) |>
+    filter(!is.na(x) & !is.na(y)),
+  x_label = "WU summer temperature (°C)", y_label = "UHAT summer temperature (°C)")
 ```
 
 #### U-HAT vs. Daymet
@@ -147,42 +160,27 @@ Similarly, I ploted [@fig-compare-daymet-uhat] below to compare the Daymet data 
 #| warning: false
 
 daymet_uhat <- compare_climate |> 
-  select(id, year, Daymet_temp_summer, Daymet_temp_winter, UHAT_temp_summer, UHAT_temp_winter)
+  select(id, taxa, year, Daymet_temp_summer, Daymet_temp_winter, UHAT_temp_summer, UHAT_temp_winter)|>
+  st_drop_geometry()
 
-daymet_uhat_winter <- daymet_uhat %>%
-  select(year, x = Daymet_temp_winter, y = UHAT_temp_winter) %>%
-  tidyr::drop_na() %>%
-  group_split(year) %>%
-  purrr::map(~{
-    rng <- range(c(.x$x, .x$y), na.rm = TRUE)
-    ggplot(.x, aes(x, y)) +
-      geom_point(size = 0.2, alpha = 0.1) +
-      geom_abline(slope = 1, intercept = 0, color = "red") +
-      labs(x = "Daymet", y = "UHAT",
-           title = paste0(unique(.x$year))) +
-      coord_fixed(xlim = rng, ylim = rng) +
-      theme_minimal()
-  }) |>
-  wrap_plots(ncol = 7) + plot_annotation(title = "Winter temperature for EOS")
-  
-daymet_uhat_summer <- daymet_uhat %>%
-  select(year, x = Daymet_temp_summer, y = UHAT_temp_summer) %>%
-  tidyr::drop_na() %>%
-  group_split(year) %>%
-  purrr::map(~{
-    rng <- range(c(.x$x, .x$y), na.rm = TRUE)
-    ggplot(.x, aes(x, y)) +
-      geom_point(size = 0.2, alpha = 0.1) +
-      geom_abline(slope = 1, intercept = 0, color = "red") +
-      labs(x = "Daymet", y = "UHAT",
-           title = paste0(unique(.x$year))) +
-      coord_fixed(xlim = rng, ylim = rng) +
-      theme_minimal()
-  }) |>
-  wrap_plots(ncol = 7) + plot_annotation(title = "Summer temperature for EOS")
+daymet_uhat_winter <-  plot_climate_comp(
+  data = daymet_uhat %>%
+  select(year, taxa, x = Daymet_temp_winter, y = UHAT_temp_winter) |>
+    filter(!is.na(x) & !is.na(y)),
+  x_label = "Daymet winter temperature (°C)", y_label = "UHAT winter temperature (°C)")
+    
+daymet_uhat_summer <-  plot_climate_comp(
+  data =  daymet_uhat %>%
+  select(year, taxa, x = Daymet_temp_summer, y = UHAT_temp_summer) |>
+    filter(!is.na(x) & !is.na(y)),
+  x_label = "Daymet summer temperature (°C)", y_label = "UHAT summer temperature (°C)")
 
-daymet_uhat_winter/
-  daymet_uhat_summer
+p_comb <- wu_uhat_winter + wu_uhat_summer + daymet_uhat_winter + daymet_uhat_summer +
+  plot_layout(ncol = 2, guide = "collect") +
+  plot_annotation(tag_levels = "a") &
+  theme(plot.tag = element_text(face = "bold"))
+
+ggsave(p_comb, filename = "~/phenology-urban/temp/figure_agu/temperature_comparison.png", width = 10, height = 9)
 ```
 
 ### Precipitation

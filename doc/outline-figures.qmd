@@ -218,17 +218,17 @@ one species across cities, raw DOY histogram -> IQR boxplot -> IQR scatterplot (
 ```{r}
 library(randomcoloR)
 species = "Acer rubrum"
-phe_type = "SOS"
+phe_type = "EOS"
 all_city_input <- read_rds(paste0("~/phenology-urban/data/proc/model_output/nooutlier_", phe_type, "_input.rds")) |>
   filter(year < 2024) |>
   mutate(year = as.factor(year))
-fixed_city <- unique(all_city_input$city) |>
-      sort()
-set.seed(123)
-color_palette <- setNames(
-  distinctColorPalette(length(fixed_city)),
-  fixed_city
-)
+# fixed_city <- unique(all_city_input$city) |>
+#       sort()
+# set.seed(123)
+# color_palette <- setNames(
+#   distinctColorPalette(length(fixed_city)),
+#   fixed_city
+# )
 
 sp_histgram_SOS <- ggplot() +
   geom_density(data = all_city_input|>
@@ -293,6 +293,39 @@ sp_boxplot_SOS <- ggplot() +
   )) +
   theme_classic() +
   theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.text.x = element_text(size = 10),
+    title = element_text(size = 14),
+    legend.position = "none"
+  )
+
+
+sp_IQR_SOS <- ggplot() +
+  geom_point(data = all_city_input |>
+                  filter(canonicalname == species)|>
+                  dplyr::group_by(city) |>
+                  dplyr::summarise(
+                    median_doy = median(doy, na.rm = TRUE),
+                    IQR_d = quantile(doy, 0.75, na.rm = TRUE) - quantile(doy, 0.25, na.rm = TRUE),
+                    lower_IQR_d = max(quantile(doy, 0.25, na.rm = TRUE), min(doy, na.rm = TRUE)),
+                    upper_IQR_d = min(quantile(doy, 0.75, na.rm = TRUE), max(doy, na.rm = TRUE)),
+                    median_temp = median(doy, na.rm = TRUE),
+                    .groups = "drop"), 
+               aes(x = 1, y = IQR_d, color = city), 
+               size = 2, alpha = 0.5) +
+  scale_color_manual(values = color_palette) + 
+  coord_flip(ylim = case_when(
+    phe_type == "SOS" ~ c(-50, 250),
+    phe_type == "EOS" ~ c(150, 450)
+  )) +
+  labs(y = case_when(
+    phe_type == "SOS" ~ "IQR for Start-of-season (DOY)",
+    phe_type == "EOS" ~ "IQR for End-of-season (DOY)"
+  )) +
+  theme_classic() +
+  theme(
+    axis.title.y = element_blank(),
     axis.text.y = element_blank(),
     axis.ticks.y = element_blank(),
     axis.text.x = element_text(size = 10),
@@ -399,21 +432,76 @@ sum_boxplot_SOS <- ggplot() +
     legend.position = "none"
   )
 
+
+sum_IQR_SOS <- ggplot() +
+  geom_point(data = all_city_input |>
+                  filter(canonicalname == species)|>
+                  dplyr::group_by(city) |>
+                  dplyr::summarise(
+                    median_doy = median(doy, na.rm = TRUE),
+                    .groups = "drop") |>
+                  summarise(
+                    median_doy_cities = median(median_doy, na.rm = TRUE),
+                    IQR_d = quantile(median_doy, 0.75, na.rm = TRUE) - quantile(median_doy, 0.25, na.rm = TRUE),
+                    lower_IQR_d = max(quantile(median_doy, 0.25, na.rm = TRUE), min(median_doy, na.rm = TRUE)),
+                    upper_IQR_d = min(quantile(median_doy, 0.75, na.rm = TRUE), max(median_doy, na.rm = TRUE)),
+                    .groups = "drop"), 
+               aes(x = "none", y = IQR_d), 
+               color = "grey60", size = 2, alpha = 0.5) +
+  coord_flip(ylim = case_when(
+    phe_type == "SOS" ~ c(-50, 250),
+    phe_type == "EOS" ~ c(150, 450)
+  )) +
+  labs(y = case_when(
+    phe_type == "SOS" ~ "IQR for median start-of-season by city (DOY)",
+    phe_type == "EOS" ~ "IQR for median end-of-season by city (DOY)"
+  )) +
+  theme_classic() +
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.title.y = element_blank(),
+    axis.text.x = element_text(size = 10),
+    title = element_text(size = 14),
+    legend.position = "none"
+  )
+
+# top <- wrap_plots(
+#   sp_histgram_SOS, sp_boxplot_SOS,
+#   ncol = 1, heights = c(3, 3)
+# )
+# 
+# bottom <- wrap_plots(
+#   sum_histgram_SOS, sum_boxplot_SOS,
+#   ncol = 1, heights = c(1, 1)
+# )
+# 
+# final_plot <- wrap_plots(
+#   top, bottom,
+#   ncol = 1, heights = c(6, 2)
+# )
+# 
+
+
 top <- wrap_plots(
-  sp_histgram_SOS, sp_boxplot_SOS,
-  ncol = 1, heights = c(3, 3)
+  sp_boxplot_SOS, sp_IQR_SOS,
+  ncol = 1, heights = c(3, 0.5)
 )
 
 bottom <- wrap_plots(
-  sum_histgram_SOS, sum_boxplot_SOS,
-  ncol = 1, heights = c(1, 1)
+  sum_boxplot_SOS, sum_IQR_SOS,
+  ncol = 1, heights = c(1, 0.5)
 )
 
 final_plot <- wrap_plots(
   top, bottom,
-  ncol = 1, heights = c(6, 2)
+  ncol = 1, heights = c(3.5, 1.5)
 )
 
+final_plot <- wrap_plots(
+  sp_boxplot_SOS, sum_boxplot_SOS,
+  ncol = 1, heights = c(3, 1)
+)
 
 
 summary_data <- all_city_input |>
@@ -440,6 +528,7 @@ summary_data <- all_city_input |>
 IQR_scatter <- ggplot(summary_data, 
        aes(x = IQR_d_all, y = IQR_d, color = city)) +
   geom_point(size = 2, alpha = 0.7) +
+  geom_smooth(method = "lm", formula = y ~ 0 + x, se = FALSE, color = "grey40", linewidth = 0.8) +
   geom_abline(slope = 1, intercept = 0, 
               color = "black", linetype = "dashed", linewidth = 0.8) +
   scale_color_manual(values = color_palette) + 
@@ -476,6 +565,7 @@ IQR_boxplot <- ggplot() +
          phe_type == "SOS" ~ "Interquartile range of start-of-season within city (DOY)",
          phe_type == "EOS" ~ "Interquartile range of end-of-season within city (DOY)"
   )) +
+  coord_cartesian(xlim = c(0, 160), ylim = c(0, 160)) +
   theme_classic() +
   theme(
     axis.text.y = element_text(size = 10),
@@ -514,7 +604,328 @@ city_IQR_scatter <- ggplot(summary_data |>
 
 ```
 
+### Use random-effect model to partition variance
 
+```{r lmer}
+library(lme4)
+library(tidytext)
+fit_variance_partition <- function(df, species_name) {
+  d <- df |> 
+    filter(canonicalname == species_name) |>
+    mutate(tree_uid = interaction(city, id, drop = TRUE))
+  
+  if (n_distinct(d$city) < 2 || n_distinct(d$tree_uid) < 10) {
+    return(tibble(
+      species = species_name,
+      sigma_city = NA_real_,
+      sigma_within = NA_real_,
+      sigma_residual = NA_real_,
+      prop_city = NA_real_,
+      prop_within = NA_real_
+    ))
+  }
+  
+  model <- tryCatch(
+    lmer(doy ~ 1 +  (1 | year) + (1 | city) + (1 | city:id), data = d),
+    error = function(e) NULL
+  )
+  
+  if (is.null(model)) {
+    return(tibble(
+      species = species_name,
+      sigma_city = NA_real_,
+      sigma_within = NA_real_,
+      sigma_residual = NA_real_,
+      prop_city = NA_real_,
+      prop_within = NA_real_,
+      compared_ratio = NA_real_,
+      phe_type = phe_type
+    ))
+  }
+  
+  vc <- as.data.frame(VarCorr(model))
+  sigma_city     <- vc$vcov[vc$grp == "city"]
+  sigma_within  <- vc$vcov[vc$grp == "city:id"]
+  sigma_residual <- vc$vcov[vc$grp == "Residual"]
+  sigma_year <- vc$vcov[vc$grp == "year"]
+  total_var <- sigma_city + sigma_within + sigma_residual + sigma_year
+  tibble(
+    species = species_name,
+    sigma_city = sigma_city,
+    sigma_within = sigma_within,
+    sigma_residual = sigma_residual,
+    prop_city = sigma_city / total_var,
+    prop_within = sigma_within / total_var,
+    prop_residual = sigma_residual / total_var,
+    prop_city2 = prop_city / (sum(prop_city, prop_within)),
+    prop_within2 = prop_within / (sum(prop_city, prop_within)),
+    phe_type = phe_type
+  )
+}
+
+phe_type = "EOS"
+all_city_input <- data.frame()
+for (city in cities){
+  model_input_all <- prepare_data(city, source = "Grid", taxa_col = "canonicalname", phe_type = phe_type)
+  phe_metric <- "doy"
+  clean_model_input_all <- model_input_all |>
+    filter(year < 2024) |>
+    group_by(canonicalname) |>
+    summarise(
+      q1 = quantile(.data[[phe_metric]], 0.25, na.rm = TRUE),
+      q3 = quantile(.data[[phe_metric]], 0.75, na.rm = TRUE),
+      iqr = q3 - q1,
+      lo = q1 - 1.5 * iqr,
+      hi = q3 + 1.5 * iqr,
+      .groups = "drop"
+    ) |>
+    right_join(
+      model_input_all |> filter(year < 2024),
+      by = "canonicalname"
+    ) |>
+    filter(
+      is.na(.data[[phe_metric]]) |
+        dplyr::between(.data[[phe_metric]], lo, hi)
+    ) |>
+    mutate(city = city) |>
+    select(-q1, -q3, -iqr, -lo, -hi)
+  all_city_input <- rbind(all_city_input, clean_model_input_all)
+}
+species_list <- unique(all_city_input$canonicalname)
+variance_partition_all_eos <- map_dfr(
+  species_list,
+  ~ fit_variance_partition(all_city_input, .x)
+)
+
+# variance_partition_all_eos$prop_within2 <- -variance_partition_all_eos$prop_within2
+plot_df_eos <- variance_partition_all_eos %>%
+  select(species, prop_city2, prop_within2, phe_type) %>%
+  filter(is.finite(prop_city2), is.finite(prop_within2)) %>%
+  mutate(
+    prop_city2 = round(prop_city2 * 100, 2),
+    prop_within2 = round(prop_within2 * 100, 2),
+    group = if_else(prop_city2 < abs(prop_within2),
+                    "Within-city > Across-city",
+                    "Within-city < Across-city")
+  ) %>%
+  mutate(
+    species = factor(species, levels = unique(species))
+  ) %>%
+  pivot_longer(
+    cols = c(prop_within2, prop_city2),
+    names_to = "component",
+    values_to = "prop"
+  ) %>%
+  mutate(
+    component = recode(component,
+                       prop_within2 = "Within-city",
+                       prop_city2   = "Across-city")
+  )
+
+
+phe_type = "SOS"
+all_city_input <- data.frame()
+for (city in cities){
+  model_input_all <- prepare_data(city, source = "Grid", taxa_col = "canonicalname", phe_type = phe_type)
+  phe_metric <- "doy"
+  clean_model_input_all <- model_input_all |>
+    filter(year < 2024) |>
+    group_by(canonicalname) |>
+    summarise(
+      q1 = quantile(.data[[phe_metric]], 0.25, na.rm = TRUE),
+      q3 = quantile(.data[[phe_metric]], 0.75, na.rm = TRUE),
+      iqr = q3 - q1,
+      lo = q1 - 1.5 * iqr,
+      hi = q3 + 1.5 * iqr,
+      .groups = "drop"
+    ) |>
+    right_join(
+      model_input_all |> filter(year < 2024),
+      by = "canonicalname"
+    ) |>
+    filter(
+      is.na(.data[[phe_metric]]) |
+        dplyr::between(.data[[phe_metric]], lo, hi)
+    ) |>
+    mutate(city = city) |>
+    select(-q1, -q3, -iqr, -lo, -hi)
+  all_city_input <- rbind(all_city_input, clean_model_input_all)
+}
+species_list <- unique(all_city_input$canonicalname)
+variance_partition_all_sos <- map_dfr(
+  species_list,
+  ~ fit_variance_partition(all_city_input, .x)
+)
+
+# variance_partition_all_sos$prop_within2 <- -variance_partition_all_sos$prop_within2
+plot_df_sos <- variance_partition_all_sos %>%
+  select(species, prop_city2, prop_within2, phe_type) %>%
+  filter(is.finite(prop_city2), is.finite(prop_within2)) %>%
+  mutate(
+    prop_city2 = round(prop_city2 * 100, 2),
+    prop_within2 = round(prop_within2 * 100, 2),
+    group = if_else(prop_city2 < abs(prop_within2),
+                    "Within-city > Across-city",
+                    "Within-city < Across-city")
+  ) %>%
+  mutate(
+    species = factor(species, levels = unique(species))
+  ) %>%
+  pivot_longer(
+    cols = c(prop_within2, prop_city2),
+    names_to = "component",
+    values_to = "prop"
+  ) %>%
+  mutate(
+    component = recode(component,
+                       prop_within2 = "Within-city",
+                       prop_city2   = "Across-city")
+  )
+
+plot_df <- rbind(plot_df_sos, plot_df_eos) |>
+  mutate(
+    phe_type = factor(phe_type, levels = c("SOS", "EOS")),
+    component = recode(component,
+                       "Across-city" = "Inter-urban",
+                       "Within-city" = "Intra-urban")
+  )
+
+plot_df2 <- plot_df %>%
+  group_by(phe_type, species) %>%
+  mutate(intra_prop = prop[component == "Intra-urban"][1]) %>%
+  ungroup()
+
+p_var <- ggplot(plot_df2,
+       aes(x = prop,
+           y = reorder_within(species, intra_prop, phe_type),
+           fill = component)) +
+  geom_col(width = 1) +
+  geom_bar(stat = "identity", position = "stack", width = 0) +
+  geom_vline(xintercept = 50, linetype = "dashed", color = "red",linewidth=1)+
+  scale_fill_manual(values = c("Inter-urban" = "grey80", "Intra-urban" = "grey40")) +
+  labs(y = "Species", x = "Variance relative proportion (%)") +
+  coord_cartesian(xlim = c(0, 100))+
+  facet_wrap(~phe_type, ncol = 2, scales = "free_y") +
+  scale_y_reordered() +
+  scale_x_continuous(labels = abs) +
+  theme(panel.grid=element_blank(),
+        panel.background = element_rect(fill ='white',color ='black'),
+        axis.text.x = element_text(size = 14,color = "black"),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.title = element_text(size = 18),
+        strip.background = element_blank(),
+        strip.text = element_blank(),
+        legend.title = element_blank(),
+        legend.text = element_text(size = 14),
+        legend.position = "bottom"
+  )
+p_var
+ggsave("~/phenology-urban/temp/figure_agu/phenology_var_porp.png", p_var, width = 10, height = 5, dpi = 500)
+```
+
+### Use sum-of-square to partition variance
+
+```{r sum-of-square}
+library(data.table)
+dt <- as.data.table(all_city_input )
+dt <- dt[, .(canonicalname, city, doy, year)]
+dt <- dt[!is.na(doy) & !is.na(city) & !is.na(canonicalname)]
+
+city_stats <- dt[
+  ,
+  .(
+    n_k = .N,
+    mean_k = mean(doy),
+    ssw_k = sum((doy - mean(doy))^2) 
+  ),
+  by = .(canonicalname, year, city)
+]
+sp_overall <- city_stats[
+  ,
+  .(
+    N = sum(n_k),
+    K = .N,
+    mean_all = sum(n_k * mean_k) / sum(n_k)
+  ),
+  by = .(canonicalname, year)
+]
+
+res_jfisher <- merge(city_stats, sp_overall, by = c("canonicalname", "year")) |>
+  mutate(sp_year = paste0(canonicalname, "_", year))
+
+res_jfisher <- res_jfisher[
+  ,
+  .(
+    N = first(N),
+    K = first(K),
+    SSB = sum(n_k * (mean_k - first(mean_all))^2),
+    SSW = sum(ssw_k)
+  ),
+  by = sp_year
+]
+
+res_jfisher[
+  ,
+  JFisher := fifelse(SSW > 0, SSB / SSW, NA_real_)
+]
+
+p_jfisher <- ggplot(res_jfisher |> filter(K > 1), aes(x = SSB, y = SSW)) +
+  geom_point(alpha = 0.6, color = "grey40", size = 2) +
+  labs(x = "Across-city sum of squares (SSB)", 
+       y = "Within-city sum of squares (SSW)") +
+  coord_fixed(xlim = c(0, 100000000), ylim = c(0, 100000000)) +
+  geom_smooth(method = "lm", formula = y ~ x, se = FALSE, color = "black", linewidth = 0.8) +
+  ggpmisc::stat_poly_eq(
+    formula = y ~ x,
+    aes(
+      label = paste(
+        ..p.value.label..
+      )
+    ),
+    parse = TRUE,
+    label.x = 0.7,
+    label.y = "top"
+  ) +
+  geom_abline(slope = 1, intercept = 0, 
+              color = "grey80", linetype = "dashed", linewidth = 0.8) +
+  theme_classic() +
+  theme(
+    axis.text.x = element_text(size = 10),
+    axis.text.y = element_text(size = 10),
+    title = element_text(size = 14),
+    legend.position = "none"
+  )
+
+ggplot(res_jfisher |> filter(K > 1), aes(x = JFisher)) +
+  geom_histogram(binwidth = 0.1, fill = "grey60", color = "black", alpha = 0.7) +
+  geom_vline(xintercept = 1, linetype = "dashed", color = "red", linewidth = 0.8) +
+  labs(x = "J-Fisher's statistic",
+       y = "Number of species") +
+  theme_classic() +
+  theme(
+    
+  )+ 
+  theme_minimal(base_size = 10) +
+  theme(
+    # Font family and general text
+    text = element_text(family = "Arial Unicode MS"),
+    axis.title = element_text(size = 10),
+    strip.text = element_text(size = 10, hjust = 0),
+    
+    # Panel background and border
+    panel.background = element_rect(fill = "white", color = "black"),
+    
+    # Grid lines
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    strip.placement = "outside",
+    axis.text.x = element_text(size = 10),
+    axis.text.y = element_text(size = 10),
+    title = element_text(size = 14),
+    legend.position = "none"
+    )
+```
 
 ### Just phenology variation
 
@@ -619,7 +1030,6 @@ city = "Moab"
 plot_phe_temp_city <- function(city, taxon_col){
   plots <- lapply(c("SOS", "EOS"), function(phe_type) {
     model_input_all <- prepare_data(city, source = "Grid", taxa_col= taxon_col, phe_type = phe_type)
-  
     fixed_taxa <- unique(model_input_all[[taxon_col]]) |>
       sort()
     color_palette <- setNames(viridis(length(fixed_taxa)), fixed_taxa)
@@ -659,7 +1069,7 @@ plot_phe_temp_city <- function(city, taxon_col){
   return(plot)
 }
 
-p <- plot_phe_temp_city(city, "genus") / plot_phe_temp_city(city,taxa_col=  "canonicalname") +
+p <- plot_phe_temp_city(city, "genus") / plot_phe_temp_city(city, taxon_col=  "canonicalname") +
   plot_annotation(title = paste0("Phenology variation across species in ",city))
 ```
 
@@ -671,49 +1081,83 @@ rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
 cities <- gsub("\\.rds$", "", basename(rds_files))
 
 source(here("script/spatial_stats_model/prepare_model_input.R"))
+set.seed(123)
+color_palette <- setNames(
+  randomcoloR::distinctColorPalette(length(cities)),
+  cities |> sort()
+)
 
 plot_phe_temp_cities <- function(cities, taxon_col, color_col = "city"){
   plots <- lapply(c("SOS", "EOS"), function(phe_type) {
-    all_city_input <- read_rds(paste0("~/phenology-urban/data/proc/model_output/all_", phe_type, "_input.rds")) |>
-      filter(year < 2024) |>
-      mutate(year = as.factor(year))
-  
-    fixed_taxa <- unique(all_city_input[[color_col]]) |>
-      sort()
-    color_palette <- setNames(viridis(length(fixed_taxa)), fixed_taxa)
+    all_city_input <- data.frame()
+    for (city in cities){
+      model_input_all <- prepare_data(city, source = "Grid", taxa_col = taxon_col, phe_type = phe_type)
+      phe_metric <- "doy"
+      clean_model_input_all <- model_input_all |>
+        filter(year < 2024) |>
+        group_by(canonicalname) |>
+        summarise(
+          q1 = quantile(.data[[phe_metric]], 0.25, na.rm = TRUE),
+          q3 = quantile(.data[[phe_metric]], 0.75, na.rm = TRUE),
+          iqr = q3 - q1,
+          lo = q1 - 1.5 * iqr,
+          hi = q3 + 1.5 * iqr,
+          .groups = "drop"
+        ) |>
+        right_join(
+          model_input_all |> filter(year < 2024),
+          by = "canonicalname"
+        ) |>
+        filter(
+          is.na(.data[[phe_metric]]) |
+            dplyr::between(.data[[phe_metric]], lo, hi)
+        ) |>
+        mutate(city = city) |>
+        select(-q1, -q3, -iqr, -lo, -hi)
+      all_city_input <- rbind(all_city_input, clean_model_input_all)
+    }
     
     temp_col = grep("^temp", names(all_city_input), value = TRUE)
     doy_temp_summary <- all_city_input %>%
-      dplyr::group_by(city, year) %>%
+      dplyr::group_by(city, canonicalname) %>%
       dplyr::summarise(
         obs = n(),
         median_doy = median(doy, na.rm = TRUE),
         IQR_d = quantile(doy, 0.75, na.rm = TRUE) - quantile(doy, 0.25, na.rm = TRUE),
+        q25_d = quantile(doy, 0.25, na.rm = TRUE),
+        q75_d = quantile(doy, 0.75, na.rm = TRUE),
         lower_whisker_d = max(quantile(doy, 0.25, na.rm = TRUE) - 1.5 * IQR_d, min(doy, na.rm = TRUE)),
         upper_whisker_d = min(quantile(doy, 0.75, na.rm = TRUE) + 1.5 * IQR_d, max(doy, na.rm = TRUE)),
         median_temp = median(.data[[temp_col]], na.rm = TRUE),
         IQR_t = quantile(.data[[temp_col]], 0.75, na.rm = TRUE) - quantile(.data[[temp_col]], 0.25, na.rm = TRUE),
+        q25_t = quantile(.data[[temp_col]], 0.25, na.rm = TRUE),
+        q75_t = quantile(.data[[temp_col]], 0.75, na.rm = TRUE),
         lower_whisker_t = max(quantile(.data[[temp_col]], 0.25, na.rm = TRUE) - 1.5 * IQR_t, min(.data[[temp_col]], na.rm = TRUE)),
         upper_whisker_t = min(quantile(.data[[temp_col]], 0.75, na.rm = TRUE) + 1.5 * IQR_t, max(.data[[temp_col]], na.rm = TRUE)),
         .groups = "drop"
       ) 
     
     title_text <- if(phe_type == "SOS") {
-      "Mean winter temperature"
+      "Mean winter temperature (°C)"
     } else {
-      "Mean summer temperature"
+      "Mean summer temperature (°C)"
+    }
+    phy_type_label <- if(phe_type == "SOS") {
+      "Start-of-season (DOY)"
+    } else {
+      "End-of-season (DOY)"
     }
     
-    ggplot(doy_temp_summary, aes(x = median_temp, y = median_doy, color = .data[[color_col]])) +
-      geom_point(size = 1, alpha = 0.5) +
-      geom_errorbar(aes(ymin = lower_whisker_d, ymax = upper_whisker_d), width = 0.2, linewidth = 0.5, alpha = 0.1) +
-      geom_errorbarh(aes(xmin = lower_whisker_t, xmax = upper_whisker_t), width = 4, linewidth = 0.5,  alpha = 0.1) +
-      scale_color_manual(values = color_palette) + 
-      labs(x = title_text, y = phe_type) +
+    ggplot(doy_temp_summary, aes(x = median_temp, y = median_doy)) +
+      geom_point(size = 0.5, alpha = 0.5, color = "grey30") +
+      geom_errorbar(aes(ymin = q25_d, ymax = q75_d), width = 0.1, linewidth = 0.3, alpha = 0.05, color = "grey30") +
+      geom_errorbarh(aes(xmin = q25_t, xmax = q75_t), width = 1, linewidth = 0.3,  alpha = 0.05, color = "grey30") +
+      # scale_color_manual(values = color_palette) + 
+      labs(x = title_text, y = phy_type_label) +
       theme_classic() +
-      theme(axis.text.x = element_text(size = 10),
-            axis.text.y = element_text(size = 10),
-            title = element_text(size = 14),
+      theme(axis.text.x = element_text(size = 14),
+            axis.text.y = element_text(size = 14),
+            title = element_text(size = 18),
             legend.position = "none")
     })
   
@@ -722,8 +1166,9 @@ plot_phe_temp_cities <- function(cities, taxon_col, color_col = "city"){
   return(plot)
 }
 
-plot_phe_temp_cities(cities, taxon_col = "canonicalname", color_col = "year")
-
+p <- plot_phe_temp_cities(cities, taxon_col = "canonicalname", color_col = "city")
+p
+ggsave("~/phenology-urban/temp/figure_agu/phenology_temperature_cities2.png", p, width = 10, height = 4.5, dpi = 500)
 ```
 
 
@@ -735,9 +1180,23 @@ plot_phe_temp_cities(cities, taxon_col = "canonicalname", color_col = "year")
 source(here("script/spatial_stats_model/prepare_model_input.R"))
 species = "Acer rubrum"
 phe_type = "SOS"
-NY_city_input <-  prepare_data("NewYork", source = "Grid", taxa_col= "canonicalname", phe_type = phe_type)|>
-  filter(canonicalname == species)
-  
+
+model_input_sf <-  prepare_data("NewYork", source = "Grid", taxa_col= "canonicalname", phe_type = phe_type)|>
+  filter(canonicalname == species) |>
+    filter(year == 2023)
+
+x <- model_input_sf[[phe_metric]]
+q <- stats::quantile(x, probs = c(0.25, 0.75), na.rm = TRUE)
+iqr <- diff(q)
+lo  <- q[1] - 1.5 * iqr
+hi  <- q[2] + 1.5 * iqr
+NY_city_input <- model_input_sf %>%
+  filter(year == 2023) |>
+  filter(is.na(.data[[phe_metric]]) |
+           dplyr::between(.data[[phe_metric]], lo, hi))
+
+ny_boundary <- st_read("~/phenology-urban/data/raw/Example_city/NY/boundary/nybb_dissolved.shp") |>
+  st_transform(crs = 4326)
 tree_location <- NY_city_input |>
   filter(year == 2023) |>
   filter(!(lon == "NaN") & !(lat == "NaN")) |>
@@ -755,40 +1214,70 @@ crs(temp_tif) <- crs(r_template)  # ensure correct CRS
 tree_location <- tree_location|>
   st_transform(crs(temp_tif))
 
-clipped <- crop(temp_tif, vect(tree_location))
+clipped <- crop(temp_tif, vect(tree_location)) |>
+  st_transform(crs = crs(ny_boundary))  # transform to WGS84 for plotting
 temp_df <- as.data.frame(clipped, xy = TRUE) |>
   rename_with(~ "value", .cols = 3)
 
 bbox <- st_bbox(tree_location)
-
-temp <- ggplot() +
-  geom_tile(data = temp_df, aes(x = x, y = y, fill = value)) +
+map_city <- ggplot() +
+  geom_sf(data = ny_boundary, fill = "grey90", color = "black") +
   geom_sf(data = tree_location, aes(color = doy), size = 0.5) +
-  scale_fill_gradient(
-    name = "Mean summer\ntemperature (°C)",  
-    low = "grey10", 
-    high = "grey90" 
-  ) +
   scale_color_viridis_c(name = "Start-of-season\n(DOY)") +
-    scale_y_continuous(
+  scale_y_continuous(
     n.breaks = 5 
   ) +
-  labs(title = expression(italic("Acer rubrum") ~ "in 2023"), x = "x", y = "y") +
+    scale_x_continuous(
+    n.breaks = 3
+  ) +
+  labs(x = "Longitude", y = "Latitude") +
+  theme_minimal() +
+  # coord_sf(xlim = c(bbox["xmin"], bbox["xmax"]),
+  #          ylim = c(bbox["ymin"], bbox["ymax"]),
+  #          expand = FALSE) +
+  theme(
+    axis.text = element_text(size = 14),
+    axis.title = element_text(size = 20),
+    legend.key.height = unit(0.5, "cm"),   # 图例条高度
+    legend.key.width  = unit(0.4, "cm"),   # 图例条宽度
+    legend.title = element_text(size = 14), # 图例标题字体
+    legend.text  = element_text(size = 12), # 图例标签字体
+    legend.spacing.y = unit(0.1, "cm")     # 图例项之间距离
+  )
+
+ny_v <- vect(ny_boundary)
+temp_in_nycrs <- project(temp_tif, crs(ny_v))
+clipped <- crop(temp_in_nycrs, ny_v) |> mask(ny_v)
+temp_df <- as.data.frame(clipped, xy = TRUE) |>
+  rename_with(~ "value", .cols = 3)
+bbox <- st_bbox(ny_boundary)
+temp <- ggplot() +
+  geom_sf(data = ny_boundary, fill = "grey90", color = "black") +
+  geom_tile(data = temp_df, aes(x = x, y = y, fill = value)) +
+  scale_fill_viridis_c(
+  name = "Mean winter\ntemperature (°C)",
+  option = "inferno"
+) +
+  scale_y_continuous(n.breaks = 5) +
+  scale_x_continuous(n.breaks = 3) +
   labs(x = "Longitude", y = "Latitude") +
   theme_minimal() +
   coord_sf(xlim = c(bbox["xmin"], bbox["xmax"]),
            ylim = c(bbox["ymin"], bbox["ymax"]),
            expand = FALSE) +
   theme(
-    axis.text = element_text(size = 12),
-    axis.title = element_text(size = 16),
-    legend.key.height = unit(0.3, "cm"),   # 图例条高度
+    axis.text = element_text(size = 14),
+    axis.title = element_text(size = 20),
+    legend.key.height = unit(0.5, "cm"),   # 图例条高度
     legend.key.width  = unit(0.4, "cm"),   # 图例条宽度
-    legend.title = element_text(size = 8), # 图例标题字体
-    legend.text  = element_text(size = 6), # 图例标签字体
+    legend.title = element_text(size = 14), # 图例标题字体
+    legend.text  = element_text(size = 12), # 图例标签字体
     legend.spacing.y = unit(0.1, "cm")     # 图例项之间距离
   )
 
+map_city <- map_city + theme(axis.title.y = element_blank())
+two_panel <- temp + map_city + plot_annotation(title = expression(italic("Acer rubrum") ~ "in 2023")) +
+  plot_layout(guides = "collect")
 ## change to model fit and point density
 
 Acer_rubrum_SOS <- readRDS("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/NewYork/canonicalname/Acer_rubrum_SOS.rds")
@@ -841,13 +1330,14 @@ plot_data <- data.frame(
 )
 
 sp_ny_scatter_plot <- ggplot() +
-  geom_hex(data = NY_city_input, aes(x = temp_winter, y = doy), bins = 60, alpha = 0.5, color = "NA") +
+  geom_hex(data = NY_city_input, aes(x = temp_winter, y = doy), bins = 20, alpha = 0.5, color = "NA") +
+  # geom_point(data = NY_city_input, aes(x = temp_winter, y = doy),alpha = 0.5) +
   scale_fill_gradient(
     low = "grey70", 
     high = "grey10" 
   ) +
   # facet_wrap(~ year) +
-  geom_ribbon(data = plot_data, aes(x = temp, y = y_mean, ymin = y_low, ymax = y_high), fill = "#FCA636FF", alpha = 0.2) +
+  # geom_ribbon(data = plot_data, aes(x = temp, y = y_mean, ymin = y_low, ymax = y_high), fill = "#FCA636FF", alpha = 0.2) +
   geom_line(data = plot_data, aes(x = temp, y = y_mean), color = "#FCA636FF", linewidth = 1) +
   theme_bw(base_size = 14)+
   labs(x = "Mean winter temperature (°C)", 
@@ -855,25 +1345,35 @@ sp_ny_scatter_plot <- ggplot() +
   theme_classic() +
   annotate(
     "text",
-    x = -Inf, y = -Inf,     
-    label = paste0("hat(beta)[temp] == ", round(b_temp, 2)),
-    hjust = -0.5, vjust = -0.6, 
-    size  = 6,
+    x = Inf, y = Inf,     
+    label = paste0("hat(beta)[Temp] == ", round(b_temp, 2)),
+    hjust = 1.1, vjust = 1.1, 
+    size  = 7,
     color = "#FCA636FF",
     parse = TRUE
   )+
+  scale_y_continuous(limits= c(98, 122)) +
   theme(
-    axis.text = element_text(size = 12),
+    axis.text = element_text(size = 14),
     axis.title = element_text(size = 20),
     title = element_text(size = 14),
     legend.position = "none"
   )
 
+
 ggsave(
   sp_ny_scatter_plot,
   filename = here("temp/figure_agu/acer_rubrum_ny_scatter_plot.png"),
-  width = 5,
-  height = 5,
+  width = 4.5,
+  height = 4,
+  units = "in",
+  dpi = 500
+)
+ggsave(
+  map_city,
+  filename = here("temp/figure_agu/acer_rubrum_ny_doy_map.png"),
+  width = 4,
+  height = 4,
   units = "in",
   dpi = 500
 )
@@ -881,7 +1381,7 @@ ggsave(
 ggsave(
   temp,
   filename = here("temp/figure_agu/acer_rubrum_ny_map.png"),
-  width = 6,
+  width = 4,
   height = 4,
   units = "in",
   dpi = 500
