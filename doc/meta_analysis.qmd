@@ -744,6 +744,24 @@ sp_chelsa_summary_all <- map_dfr(sp_chelsa_files, function(sp_chelsa) {
     )
 })
 write_rds(sp_chelsa_summary_all, "~/phenology-urban/data/proc/tree_origin/chelsa_occ/sp_chelsa_summary.rds", compress = "gz")
+
+
+# Chelsa map
+boundary_us <- st_read(("~/lab-data/datasets/boundary/USAdministrative/US/us_boundarydissolve.shp"), quiet = T) |>
+  st_transform(4326)
+us_v <- terra::vect(boundary_us)
+us_v <- terra::project(us_v, terra::crs(chelsa_ras))
+r1 <- terra::crop(chelsa_ras, terra::ext(us_v))
+r2 <- terra::mask(r1, us_v)
+
+# save r2 raster
+save_map_dir <- "~/phenology-urban/data/proc/tree_origin/chelsa_map"
+terra::writeRaster(
+  r2,
+  filename = paste0(save_map_dir, "/chelsa_us.tif"),
+  overwrite = TRUE,
+  gdal = c("COMPRESS=LZW", "TILED=YES", "BIGTIFF=IF_SAFER")
+)
 ```
 
 ```{r summarize-range}
@@ -971,6 +989,10 @@ pred_df <- lapply(
 fit_input_df <- overlap_city_species_range_model |>
   filter(Factor %in% species_vec, phe_type == !!phe_type) |>
   select(Estimate, Lower, Upper, !!clim, Factor)
+x_vals <- fit_input_df[[clim]]
+x_min  <- min(x_vals, na.rm = TRUE)
+x_max  <- max(x_vals, na.rm = TRUE)
+x_rng  <- x_max - x_min
 
 p_EOS <- ggplot(fit_input_df, aes(x = .data[[clim]], y = Estimate, color = Factor)) +
   geom_pointrange(aes(ymin = Lower, ymax = Upper), alpha = 0.1, size = 0.2) +
@@ -983,6 +1005,9 @@ p_EOS <- ggplot(fit_input_df, aes(x = .data[[clim]], y = Estimate, color = Facto
             inherit.aes = FALSE,
             linewidth = 0.5) +
   guides(alpha = "none") +
+  scale_x_continuous(
+    limits = c(x_min - 0.15 * x_rng, x_max)
+  ) +
   theme_classic() +
   labs(
     x = x_lab,
@@ -1019,6 +1044,10 @@ pred_df <- lapply(
 fit_input_df <- overlap_city_species_range_model |>
   filter(Factor %in% species_vec, phe_type == !!phe_type) |>
   select(Estimate, Lower, Upper, !!clim, Factor)
+x_vals <- fit_input_df[[clim]]
+x_min  <- min(x_vals, na.rm = TRUE)
+x_max  <- max(x_vals, na.rm = TRUE)
+x_rng  <- x_max - x_min
 
 p_SOS <- ggplot(fit_input_df, aes(x = .data[[clim]], y = Estimate, color = Factor)) +
   geom_pointrange(aes(ymin = Lower, ymax = Upper), alpha = 0.1, size = 0.2) +
@@ -1031,6 +1060,9 @@ p_SOS <- ggplot(fit_input_df, aes(x = .data[[clim]], y = Estimate, color = Facto
             inherit.aes = FALSE,
             linewidth = 0.5) +
   guides(alpha = "none") +
+  scale_x_continuous(
+    limits = c(x_min - 0.15 * x_rng, x_max)
+  ) + 
   theme_classic() +
   labs(
     x = x_lab,
@@ -1045,6 +1077,8 @@ p_SOS <- ggplot(fit_input_df, aes(x = .data[[clim]], y = Estimate, color = Facto
     # axis.title = element_blank()
   )
 
+p_SOS <- p_SOS + labs(y = bquote(beta[Temp]~" estimate for SOS"))
+p_EOS <- p_EOS + labs(y = bquote(beta[Temp]~" estimate for EOS"))
 
 p_uni_SOS_EOS <- p_SOS + p_EOS +
   plot_layout(ncol = 2,

@@ -1,0 +1,155 @@
+---
+title: "Equation"
+author: "Jiali Zhu"
+date: "today"
+editor_options:
+  chunk_output_type: console
+---
+
+```{r}
+#| label: load-packages
+#| include: false
+#| warning: false
+
+# Install and load 'zhulabtools' package
+library(zhulabtools)
+# Check and  load required packages
+load_packages(c("dplyr", "here", "sf","viridis", "leaflet", "cli", "terra","patchwork", "data.table", "plotly", "readxl", "tidyverse", "ks", "ggnewscale", "plotbiomes","coda", "patchwork", "performance", "terra", "ggpmisc", "gstat", "ggmcmc", "taxize", "stats", "viridis","INLA"))
+city = "NY"
+```
+
+## Variance partitioning model
+
+For species $m = 1, \dots, S$, let $y_{i,m,n,t}$ denote the phenological timing (SOS or EOS, day of year) of individual tree $j$ of species $m$ in city $n$ and year $t$. We fitted an intercept-only linear mixed-effects model for each species:
+
+where:
+
+- $\mu_m$ is the species-specific mean phenological timing,
+
+- $u_{m,n}$ is the inter-urban (between-city) random effect for species $m$,
+
+- $v_{m,j(n)}$ is the intra-urban (between-individual) random effect, with individuals nested within cities,
+
+- $w_{m,t}$ is the interannual random effect,
+
+- $\varepsilon_{j,m,n,t}$ is the residual error.
+
+All random effects were assumed to be independent and normally distributed:
+
+$$
+y_{j,m,n,t}
+= \mu_m
++ u_{m,n}
++ v_{m,j(n)}
++ w_{m,t}
++ \varepsilon_{i,m,n,t},
+$$
+$$
+u_{m,n} \sim \mathcal{N}(0, \sigma^2_{\mathrm{inter},m}),
+$$
+
+$$
+v_{m,j(n)} \sim \mathcal{N}(0, \sigma^2_{\mathrm{intra},m}),
+$$
+
+$$
+w_{m,t} \sim \mathcal{N}(0, \sigma^2_{\mathrm{year},m}),
+$$
+
+$$
+\varepsilon_{j,m,n,t} \sim \mathcal{N}(0, \sigma^2_{\mathrm{residual},m}).
+$$
+
+The total phenological variance for species $m$ was computed as:
+
+$$
+\sigma^2_{\mathrm{total},m}
+= \sigma^2_{\mathrm{inter},m}
++ \sigma^2_{\mathrm{intra},m}
++ \sigma^2_{\mathrm{year},m}
++ \sigma^2_{\mathrm{residual},m}.
+$$
+
+The proportional contributions of inter-urban and intra-urban variability were calculated as:
+
+$$
+\mathrm{Prop}_{\mathrm{inter},m}
+= \frac{\sigma^2_{\mathrm{inter},m}}{\sigma^2_{\mathrm{total},m}},
+\qquad
+\mathrm{Prop}_{\mathrm{intra},m}
+= \frac{\sigma^2_{\mathrm{intra},m}}{\sigma^2_{\mathrm{total},m}}.
+$$
+
+The relative contributions of spatial components were further defined as:
+$$
+\sigma^2_{\mathrm{total},m}
+= \sigma^2_{\mathrm{inter},m}
++ \sigma^2_{\mathrm{intra},m}
++ \sigma^2_{\mathrm{year},m}
++ \sigma^2_{\mathrm{residual},m}.
+$$
+$$
+\mathrm{Prop}^{*}_{\mathrm{inter},m}
+= \frac{\sigma^2_{\mathrm{inter},m}}
+{\sigma^2_{\mathrm{intra},m} + \sigma^2_{\mathrm{inter},m}},
+\qquad
+\mathrm{Prop}^{*}_{\mathrm{intra},m}
+= \frac{\sigma^2_{\mathrm{intra},m}}
+{\sigma^2_{\mathrm{intra},m} + \sigma^2_{\mathrm{inter},m}}.
+$$
+
+
+
+## Model 1
+
+$$y(\mathbf{s}_i, \mathbf{t}) = \mathbf{x}_{\mathbf{s}_i,\mathbf{t}} \boldsymbol{\beta} + w(\mathbf{s}_i) + u(\mathbf{t}) + \epsilon(\mathbf{s}_i, \mathbf{t})$$
+
+$$\mathbf{x}_{\mathbf{s}_i,\mathbf{t}} = [1, \text{Temp}_{\mathbf{s}_i,\mathbf{t}}, \text{Prcp}_{\mathbf{s}_i,\mathbf{t}}, \text{Srad}_{\mathbf{s}_i,\mathbf{t}}]$$
+
+$$\boldsymbol{\beta} = (\beta_0, \beta_{\text{Temp}}, \beta_{\text{Prcp}}, \beta_{\text{Srad}})^\top$$
+
+$$\boldsymbol{\beta} \sim \mathcal{N}(\mathbf{0}, \sigma_\beta^2 \mathbf{I})$$
+
+$$w(\mathbf{s}) \sim \text{GP}\!\left(0,\; C(\mathbf{s},\mathbf{s}')\right)$$
+
+$$u(\mathbf{t}) \stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma_u^2)$$
+
+$$\epsilon(\mathbf{s}_i, \mathbf{t}) \stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma^2_\varepsilon)$$
+
+## Safety margin
+
+$$S_{\mathrm{bio1},m,n}
+= \mathrm{bio1}_n - Q_{0.95}\!\left(\mathrm{bio1}_m\right)$$
+
+$$S_{\mathrm{bio12},m,n}
+= \mathrm{bio12}_n - Q_{0.05}\!\left(\mathrm{bio12}_m\right)$$
+
+>| There is something I am still struggling with. I want to focus on one-sided mismatches for the hot edge and the dry edge. Under our current definition, positive values of $S_{\mathrm{bio1}}$ indicate thermal mismatch, with larger values corresponding to stronger mismatch, whereas for $S_{\mathrm{bio12}}$, negative values indicate mismatch, with more negative values representing stronger drought-related mismatch. Although the directions of the two metrics are opposite, this setup is intuitive given the meanings of temperature and precipitation extremes (hotter means higher value vs. drier means lower value). In another [study](https://www-nature-com.proxy.lib.umich.edu/articles/s41558-022-01465-8#Sec6), the positions of city-level and species-level values for $\mathrm{bio1}$ are reversed, such that negative values ($S < 0$) uniformly indicate that a species is already experiencing "unsafe" climatic conditions under the baseline, with more negative values corresponding to stronger mismatch.
+
+## Model 2
+
+$$\theta_{m,n} = \mathbf{z}_{m, n} \boldsymbol{\lambda} +b_{m} + \epsilon_{m,n}$$
+
+$$\mathbf{z}_{m,n} = [1, S_{\mathrm{bio1},m,n}, S_{\mathrm{bio12},m,n}]$$
+
+$$\boldsymbol{\lambda} = (\lambda_0,\lambda_1,\lambda_2)^\top$$
+
+$$\boldsymbol{\lambda} \sim \mathcal{N}\!\left(\mathbf{0}, \sigma_\lambda^2 \mathbf{I}\right)$$
+
+$$\mathbf{b} = (b_1, \dots, b_M)^\top \sim \mathcal{MVN}\!\left(\mathbf{0},\; \sigma^2_{\mathrm{phy}}\,\mathbf{A}\right)$$
+
+$$\epsilon_{m,n} \stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma^2_\varepsilon)$$
+
+For visualization:
+
+$$y_{m,n} = \theta_{0,m} + \theta_{1,m}\, S_{\mathrm{bio12},m,n} + \varepsilon_{m,n}$$
+
+or
+
+$$y_{m,n} = \theta_{0,m} + \theta_{1,m}\, S_{\mathrm{bio1},m,n} + \varepsilon_{m,n}$$
+
+$$\varepsilon_{m,n} \sim \mathcal{N}\!\left(0,\; \frac{\sigma_m^2}{w_{m,n}}\right)$$
+
+Weights were defined as the inverse of the posterior variance of the estimated temperature sensitivity, i.e., $w_{m,n} = \frac{1}{\mathrm{SD}_{m,n}^2}$, where $\mathrm{SD}_{m,n}$ is the posterior standard deviation associated with $y_{m,n}$.
+
+

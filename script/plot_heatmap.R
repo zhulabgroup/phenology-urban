@@ -160,13 +160,18 @@ plot_heatmap_sig <- function(coef_summary_all, level = "species", city_order_bio
   tree_sub  <- drop.tip(class_tree,
                         setdiff(class_tree$tip.label, class_used))
   class_order <- tree_sub$tip.label 
+  
   city_order <- df_filtered %>%
-    distinct(city) %>%
-    arrange() %>%
+    distinct(city, .data[[city_order_bio]]) %>%
+    arrange(desc(.data[[city_order_bio]])) %>%
     pull(city)
   
   coef_df_plot <- df_filtered |>
     complete(city, .data[[level]]) |>
+    mutate(
+      city    = factor(city, levels = city_order),
+      !!level := factor(.data[[level]], levels = rev(class_order))
+    ) |>
     mutate(
       Color = case_when(
         is.na(Color) ~ "grey95",
@@ -199,7 +204,7 @@ plot_heatmap_sig <- function(coef_summary_all, level = "species", city_order_bio
       panel.grid = element_blank(),
       axis.title = element_blank(),
       # axis.title = element_text(size = 18),
-      axis.text.y = element_text(size = 12),
+      axis.text.y = element_text(size = 18),
       legend.position = "none",
       legend.text = element_text(size = 18),
       legend.title = element_text(size = 18)
@@ -207,15 +212,11 @@ plot_heatmap_sig <- function(coef_summary_all, level = "species", city_order_bio
     # labs(y = "City", x = level_title)
   
   tree_plot <- ggtree(tree_sub) +
-    layout_dendrogram() +
-    ggtitle(phe_type)
+    layout_dendrogram()
   
   p_right <- tree_plot / p_heat +
-    plot_layout(heights = c(2, 20))
-  p_combined <- (p_right) +
-    plot_annotation(
-      subtitle = paste0(phe_type)
-    )
+    plot_layout(heights = c(2, 30))
+  p_combined <- (p_right)
   
   return(p_combined)
 }

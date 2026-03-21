@@ -1,6 +1,3 @@
-library(phytools)
-library(phyr)
-
 fit_uni <- function(phe_type, input_data, city_feature, species_name, clim = "mean_temp", bootstrap){
   combine_feature <- input_data |>
     filter(Factor == species_name) |>
@@ -64,7 +61,9 @@ fit_uni <- function(phe_type, input_data, city_feature, species_name, clim = "me
           (rlang::as_name(clim) %in% c("mean_prcp", "bio12")) ~ "Mean annual precipitation (mm)",
           (rlang::as_name(clim) %in% c("mean_temp", "bio1")) ~ "Mean annual temperature (°C)",
           (rlang::as_name(clim) %in% c("hot_edge")) ~ "Safety margin for temperature (°C)",
-          (rlang::as_name(clim) %in% c("dry_edge")) ~ "Safety margin for precipitation (mm)"
+          (rlang::as_name(clim) %in% c("dry_edge")) ~ "Safety margin for precipitation (mm)",
+          (rlang::as_name(clim) %in% c("d_temp")) ~ "Difference between city's temperature and niche centroid (°C)",
+          (rlang::as_name(clim) %in% c("d_prcp")) ~ "Difference between city's precipitation and niche centroid (mm)"
         ),
         y = bquote(beta[Temp]~" estimate for "~.(phe_type))
       ) +
@@ -161,7 +160,9 @@ fit_uni <- function(phe_type, input_data, city_feature, species_name, clim = "me
           (rlang::as_name(clim) %in% c("mean_prcp", "bio12")) ~ "Mean annual precipitation (mm)",
           (rlang::as_name(clim) %in% c("mean_temp", "bio1")) ~ "Mean annual temperature (°C)",
           (rlang::as_name(clim) %in% c("hot_edge")) ~ "Safety margin for temperature (°C)",
-          (rlang::as_name(clim) %in% c("dry_edge")) ~ "Safety margin for precipitation (mm)"
+          (rlang::as_name(clim) %in% c("dry_edge")) ~ "Safety margin for precipitation (mm)",
+          (rlang::as_name(clim) %in% c("d_temp")) ~ "Difference between city's temperature and niche centroid (°C)",
+          (rlang::as_name(clim) %in% c("d_prcp")) ~ "Difference between city's precipitation and niche centroid (mm)"
         ),
         y = bquote(beta[Temp]~" estimate for "~.(phe_type))
       ) +
@@ -182,7 +183,7 @@ fit_uni <- function(phe_type, input_data, city_feature, species_name, clim = "me
 }
 
 
-fit_multi_pglmm <- function(phe_type, input_data, city_feature, package, bootstrap) {
+fit_multi_pglmm <- function(phe_type, input_data, city_feature, package, bootstrap, prcp, temp) {
   D <- input_data %>%
     rename(species = Factor) %>%
     mutate(species = gsub("_", " ", species)) %>%
@@ -209,10 +210,8 @@ fit_multi_pglmm <- function(phe_type, input_data, city_feature, package, bootstr
     filter(species %in% rownames(A2)) %>%
     mutate(
       species  = factor(species),
-      bio12_s  = as.numeric(scale(bio12)),
-      bio1_s   = as.numeric(scale(bio1)),
-      hot_edge_s = as.numeric(scale(hot_edge)),
-      dry_edge_s = as.numeric(scale(dry_edge)),
+      prcp_s  = as.numeric(scale(.data[[prcp]])), # standardize the climate variables prcp
+      temp_s   = as.numeric(scale(.data[[temp]])), # standardize the climate variables temp
       w        = 1/(sd^2)
     ) %>%
     droplevels()
@@ -228,7 +227,7 @@ fit_multi_pglmm <- function(phe_type, input_data, city_feature, package, bootstr
         dat_r <- D2 %>%
           mutate(beta_draw = rnorm(n(), mean = Estimate, sd = sd))
         fit <- pglmm(
-          beta_draw ~ 1 + hot_edge_s + dry_edge_s + (1 | species__),
+          beta_draw ~ 1 + temp_s + prcp_s + (1 | species__),
           data = dat_r,
           family = "gaussian",
           cov_ranef = list(species = A2),
@@ -256,6 +255,11 @@ fit_multi_pglmm <- function(phe_type, input_data, city_feature, package, bootstr
       model <- boot_summary
       full_data <- boot_fits
       p_SOS_hist <- boot_fits %>%
+        mutate(term = dplyr::case_when(
+          term == "temp_s"    ~ temp,   # temp = "d_temp"
+          term == "prcp_s"    ~ prcp,   # prcp = "d_prcp"
+          TRUE ~ term
+               )) %>%
         group_by(term) %>%
         mutate(
           lower_95 = quantile(estimate, 0.025),
@@ -308,7 +312,7 @@ fit_multi_pglmm <- function(phe_type, input_data, city_feature, package, bootstr
         )
     } else if(bootstrap == FALSE){
       model <- pglmm(
-        Estimate ~ 1+ (1|species__) + hot_edge_s + dry_edge_s,
+        Estimate ~ 1+ (1|species__) + temp_s + prcp_s,
         data = D2,
         family = "gaussian",
         cov_ranef = list(species = A2),
@@ -323,7 +327,7 @@ fit_multi_pglmm <- function(phe_type, input_data, city_feature, package, bootstr
     model <- brm(
       # Formula: The syntax (1 | gr(factor, cov = matrix)) specifies a
       # random effect structured by a custom covariance matrix (A2).
-      Estimate ~ hot_edge_s + dry_edge_s + (1 | gr(species, cov = A2)) ,
+      Estimate ~ temp_s + prcp_s + (1 | gr(species, cov = A2)) ,
       data = D2,
       family = gaussian(),
       prior = set_prior("normal(0, 5)", class = "b"),
@@ -337,13 +341,19 @@ fit_multi_pglmm <- function(phe_type, input_data, city_feature, package, bootstr
   
     post_draws <- as_tibble(model)
     p_SOS_hist <- post_draws %>%
-      select(b_Intercept, b_hot_edge_s, b_dry_edge_s) %>%
+      select(b_Intercept, b_temp_s, b_prcp_s) %>%
       pivot_longer(
         cols = starts_with("b_"),
         names_to = "Parameter",
         values_to = "Estimate"
       ) %>%
-      mutate(Parameter = gsub("b_", "", Parameter)) %>%
+      mutate(Parameter = gsub("b_", "", Parameter),
+             Parameter = dplyr::case_when(
+               Parameter == "Intercept" ~ "Intercept",
+               Parameter == "temp_s"    ~ temp,   # temp = "d_temp"
+               Parameter == "prcp_s"    ~ prcp,   # prcp = "d_prcp"
+               TRUE ~ Parameter
+             )) %>%
       group_by(Parameter) %>%
       mutate(
         lower_95 = quantile(Estimate, 0.025),
