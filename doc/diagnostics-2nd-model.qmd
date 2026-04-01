@@ -478,6 +478,8 @@ p_uni_SOS_EOS <- p_SOS + p_EOS +
               guides = "collect",
               widths = c(1,1))
 p_uni_SOS_EOS
+
+ggsave("~/phenology-urban/temp/figure_agu/uni_bioclimate_SOS_EOS.png", p_uni_SOS_EOS, width = 11, height = 3.7, dpi = 500)
 ```
 
 #### Multivariate model for all species (for inference)
@@ -496,8 +498,13 @@ Because the combination of bootstrapping and `phyr` is computationally intensive
 #| echo: false
 #| message: false
 #| warning: false
-m_SOS <- fit_multi_pglmm("SOS", overlap_city_species_range_model, city_feature, package = "brms", prcp = "bio12", temp = "bio1")
-m_EOS <- fit_multi_pglmm("EOS", overlap_city_species_range_model, city_feature, package = "brms", prcp = "bio12", temp = "bio1")
+m_SOS <- fit_multi_pglmm(phe_type = "SOS", input_data = overlap_city_species_range_model, city_feature, package = "phyr", prcp = "bio12", temp = "bio1", bootstrap = T)
+m_EOS <- fit_multi_pglmm(phe_type = "EOS", input_data = overlap_city_species_range_model, city_feature, package = "phyr", prcp = "bio12", temp = "bio1", bootstrap = T)
+
+model_list_multi <- list(m_SOS, m_EOS)
+write_rds(model_list_multi, "~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/model_multi_bioclimate_phylo_test.rds")
+
+model_list_multi <- read_rds("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/freq/model_multi_bioclimate.rds")
 ```
 
 ```{r fig-multivariate-bioclimate}

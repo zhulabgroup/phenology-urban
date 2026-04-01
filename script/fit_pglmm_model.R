@@ -80,7 +80,7 @@ fit_uni <- function(phe_type, input_data, city_feature, species_name, clim = "me
     
   } else {
     set.seed(1)
-    B <- 1000
+    B <- 500
     boot_fits <- map_dfr(seq_len(B), function(b) {
       dat_r <- df_phe |>
         mutate(beta_draw = rnorm(n(), mean = Estimate, sd = sd))
@@ -222,7 +222,7 @@ fit_multi_pglmm <- function(phe_type, input_data, city_feature, package, bootstr
     
     if(bootstrap == TRUE){
       set.seed(1)
-      B <- 1000
+      B <- 500
       boot_fits <- map_dfr(seq_len(B), function(b) {
         dat_r <- D2 %>%
           mutate(beta_draw = rnorm(n(), mean = Estimate, sd = sd))
@@ -231,15 +231,27 @@ fit_multi_pglmm <- function(phe_type, input_data, city_feature, package, bootstr
           data = dat_r,
           family = "gaussian",
           cov_ranef = list(species = A2),
-          bayes = FALSE
+          bayes = FALSE,
+          REML = FALSE
         )
-          tibble(
-            boot = b,
-            term = rownames(fit[["B"]]),
-            estimate = as.numeric(fit[["B"]][,1]),
-            se = as.numeric(fit[["B.se"]][,1]),
-            p = as.numeric(fit[["B.pvalue"]][,1])
-          )
+        fit_nophy <- pglmm(
+          beta_draw ~ 1 + temp_s + prcp_s + (1 | species),
+          data = dat_r,
+          family = "gaussian",
+          bayes = FALSE,
+          REML = FALSE
+        )
+        tibble(
+          boot = b,
+          term = rownames(fit[["B"]]),
+          estimate = as.numeric(fit[["B"]][,1]),
+          se = as.numeric(fit[["B.se"]][,1]),
+          p = as.numeric(fit[["B.pvalue"]][,1]),
+          
+          delta_AIC = fit_nophy$AIC - fit$AIC,
+          delta_logLik = fit$logLik - fit_nophy$logLik,
+          delta_BIC = fit_nophy$BIC - fit$BIC
+        )
         })
       boot_summary <- boot_fits %>%
         filter(!is.na(term)) %>%
@@ -251,6 +263,16 @@ fit_multi_pglmm <- function(phe_type, input_data, city_feature, package, bootstr
           q50  = quantile(estimate, 0.50,  na.rm = TRUE),
           q975 = quantile(estimate, 0.975, na.rm = TRUE),
           .groups = "drop"
+        )
+      phy_structure <- boot_fits %>%
+        filter(term == "(Intercept)") %>%
+        summarise(
+          mean_delta_AIC = mean(delta_AIC, na.rm = TRUE),
+          mean_delta_logLik = mean(delta_logLik, na.rm = TRUE),
+          mean_delta_BIC = mean(delta_BIC, na.rm = TRUE),
+          ttest_mean_delta_AIC = t.test(delta_AIC, mu = 0)$p.value,
+          ttest_mean_delta_logLik = t.test(delta_logLik, mu = 0)$p.value,
+          ttest_mean_delta_BIC = t.test(delta_BIC, mu = 0)$p.value
         )
       model <- boot_summary
       full_data <- boot_fits
@@ -406,5 +428,5 @@ fit_multi_pglmm <- function(phe_type, input_data, city_feature, package, bootstr
       )
     full_data = post_draws
   }
-  return(list(model = model, plot = p_SOS_hist, full_data = full_data) )
+  return(list(model = model, plot = p_SOS_hist, full_data = full_data, phy_structure = phy_structure) )
 }

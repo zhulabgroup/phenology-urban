@@ -80,7 +80,7 @@ if (!dir.exists(r_output_dir)) {
 }
 standardize <- FALSE
 
-for (city in cities) {
+for (city in cities[34]) {
   for (phe_type in c("SOS", "EOS")) {
     model_input_all <- prepare_data(city, source = "Grid", taxa_col= "canonicalname", phe_type = phe_type)
     # if (standardize) {
