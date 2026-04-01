@@ -720,7 +720,8 @@ model_results_loc <- inventory_centroids |>
          lat = st_coordinates(x)[, 2],
          phe_type = factor(phe_type, levels = c("SOS", "EOS")))
 
-range_vals <- range(model_results_loc$avg, na.rm = TRUE)
+sos_range_vals <- range(model_results_loc |> filter(phe_type == "SOS") |> pull(avg), na.rm = TRUE)
+eos_range_vals <- range(model_results_loc |> filter(phe_type == "EOS") |> pull(avg), na.rm = TRUE)
 tau_vals <- unique(model_results_loc$sd) |> na.omit()
 tau_breaks <- pretty(range(tau_vals), n = 5)
 ```
@@ -760,11 +761,11 @@ p_sos = ggplot() +
     aes(x = lon, y = lat,  text = site, color = avg, size = sd), alpha =0.7
   ) +
   scale_color_gradientn(
-    name = "Mean estimated effect",
+    name = "Mean estimated\neffect",
     colors = c("#FCA636FF", "white", "#0D0887FF"),
-    values = rescale(c(-6.1, 0, 4.7)),
-  breaks = c(-6.1, 0, 4.7),
-  limits = c(-6.1, 4.7),
+    values = rescale(c(round(sos_range_vals[1], 1), 0, round(sos_range_vals[2], 1))),
+    breaks = c(round(sos_range_vals[1], 1), 0, round(sos_range_vals[2], 1)),
+    limits = c(round(sos_range_vals[1], 1), round(sos_range_vals[2], 1)),
   )+
   facet_wrap(~ phe_type, ncol = 1) +
   scale_size_continuous(
@@ -812,11 +813,11 @@ p_eos = ggplot() +
     aes(x = lon, y = lat, text = site, color = avg, size = sd), alpha =0.7
   ) +
   scale_color_gradientn(
-    name = "Mean estimated effect",
+    name = "Mean estimated\neffect",
     colors = c("#FCA636FF", "white", "#0D0887FF"),
-    values = rescale(c(-6.1, 0, 4.7)),
-    breaks = c(-6.1, 0, 4.7),
-    limits = range_vals,
+    values = rescale(c(round(eos_range_vals[1], 1), 0, round(eos_range_vals[2], 1))),
+    breaks = c(round(eos_range_vals[1], 1), 0, round(eos_range_vals[2], 1)),
+    limits = c(round(eos_range_vals[1], 1), round(eos_range_vals[2], 1)),
   )+
   facet_wrap(~ phe_type, ncol = 1) +
   scale_size_continuous(
@@ -845,7 +846,10 @@ p_eos = ggplot() +
 
 p_sos_fill <- p_sos +
   guides(
-    color = "none",
+    color = guide_colorbar(
+      direction = "horizontal",
+      order = 1,
+      label.theme = element_text(angle = 45, hjust = 1, vjust = 1)),
     size  = "none",
     fill  = guide_colorbar(
       direction = "horizontal",
@@ -862,11 +866,14 @@ p_sos_fill <- p_sos +
 
 p_eos_fill <- p_eos +
   guides(
-    color = "none",
+    color = guide_colorbar(
+      direction = "horizontal",
+      order = 1,
+      label.theme = element_text(angle = 45, hjust = 1, vjust = 1)),
     size  = "none",
     fill  = guide_colorbar(
       direction = "horizontal",
-      order = 1,
+      order = 2,
       label.theme = element_text(angle = 45, hjust = 1, vjust = 1))
   ) +
   theme(
@@ -881,7 +888,7 @@ leg_color_size <- cowplot::get_legend(
   p_sos +
     guides(
       fill  = "none",
-      color = guide_colorbar(order = 1),
+      color = "none",
       size  = guide_legend(order = 2)
     ) +
     theme(
@@ -893,6 +900,13 @@ leg_color_size <- cowplot::get_legend(
 left <- p_sos_fill + p_eos_fill + 
   plot_layout(ncol = 2)
 wrap_elements(leg_color_size)
+ggsave(
+  filename = "~/phenology-urban/temp/figure_agu/spatial_city.png",
+  plot = left,
+  width = 14,
+  height = 6,
+  dpi = 500
+)
 ```
 
 ```{r}

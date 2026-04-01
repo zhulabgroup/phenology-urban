@@ -18,6 +18,25 @@ if (!require(plotbiomes)) {
   devtools::install_github("valentinitnelav/plotbiomes")
 }
 load_packages(c("dplyr", "here", "sf","viridis", "leaflet", "cli", "terra","patchwork", "data.table", "plotly", "readxl", "tidyverse","rgbif", "ggmcmc", "INLA","scales", "ks", "ggnewscale", "ggExtra", "plotbiomes", "scatterpie"))
+
+theme_set(
+  theme_minimal(base_size = 14) +
+    theme(
+      # Font family and general text
+      # Axis and facet titles
+      axis.title = element_text(size = 16),
+      strip.text = element_text(size = 14, hjust = 0),
+      # Axis tick labels (optional, default inherits from base_size)
+      # axis.text = element_text(size = 10),
+      # Panel background and border
+      panel.background = element_rect(fill = "white", color = "black"),
+      # Grid lines
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      # Facet/strip placement
+      strip.placement = "outside"
+    )
+)
 ```
 
 
@@ -217,291 +236,33 @@ one species across cities, raw DOY histogram -> IQR boxplot -> IQR scatterplot (
 
 ```{r}
 library(randomcoloR)
-species = "Acer rubrum"
-phe_type = "EOS"
-all_city_input <- read_rds(paste0("~/phenology-urban/data/proc/model_output/nooutlier_", phe_type, "_input.rds")) |>
-  filter(year < 2024) |>
+set.seed(123)
+color_palette <- setNames(
+  distinctColorPalette(length(cities)),
+  cities
+)
+source(here("script/plot_raw_phe.R"))
+
+phe_type = "SOS"
+sos_city_input <- read_rds(paste0("~/phenology-urban/data/proc/model_output/nooutlier_", phe_type, "_input.rds")) |>
+  # filter(year == 2023) |>
   mutate(year = as.factor(year))
-# fixed_city <- unique(all_city_input$city) |>
-#       sort()
-# set.seed(123)
-# color_palette <- setNames(
-#   distinctColorPalette(length(fixed_city)),
-#   fixed_city
-# )
+sos_species = c("Pistacia chinensis", "Platanus occidentalis") # within from large to small
+plot_sos <- sos_species |> 
+  map(~ plot_species_raw_phe(.x, sos_city_input, color_palette, phe_type = "SOS")) |>
+  wrap_plots(ncol = 1)
 
-sp_histgram_SOS <- ggplot() +
-  geom_density(data = all_city_input|>
-                 filter(canonicalname == species), 
-               aes(x = doy, fill = city), 
-               color = alpha("black", 0.3), 
-               linewidth= 0.3, alpha = 0.5) +
-  scale_fill_manual(values = color_palette) + 
-  scale_y_continuous(
-    name = "Density"
-  ) +
-  labs(x = case_when(
-    phe_type == "SOS" ~ "Start-of-season (DOY)",
-    phe_type == "EOS" ~ "End-of-season (DOY)"
-  )) +
-  theme_classic() +
-  theme(
-    axis.text.x = element_text(size = 10),
-    axis.text.y = element_text(size = 10),
-    title = element_text(size = 14),
-    legend.position = "none"
-  ) +
-  ggtitle(paste0( species))+
-  scale_x_continuous(limits = case_when(
-    phe_type == "SOS" ~ c(-50, 250),
-    phe_type == "EOS" ~ c(150, 450)
-  ))+
-  theme(axis.title.x = element_blank(),
-        axis.text.x  = element_blank(),
-        axis.ticks.x = element_blank())
+phe_type = "EOS"
+eos_city_input <- read_rds(paste0("~/phenology-urban/data/proc/model_output/nooutlier_", phe_type, "_input.rds")) |>
+  # filter(year == 2023) |>
+  mutate(year = as.factor(year))
+eos_species <- c("Quercus alba","Tilia cordata") # within from large to small, Tilia cordata
+plot_eos <- eos_species |> 
+  map(~ plot_species_raw_phe(.x, eos_city_input, color_palette, phe_type = "EOS")) |>
+  wrap_plots(ncol = 1)
 
-sp_boxplot_SOS <- ggplot() +
-  geom_errorbar(data = all_city_input |>
-                  filter(canonicalname == species)|>
-                  dplyr::group_by(city) |>
-                  dplyr::summarise(
-                    median_doy = median(doy, na.rm = TRUE),
-                    IQR_d = quantile(doy, 0.75, na.rm = TRUE) - quantile(doy, 0.25, na.rm = TRUE),
-                    lower_IQR_d = max(quantile(doy, 0.25, na.rm = TRUE), min(doy, na.rm = TRUE)),
-                    upper_IQR_d = min(quantile(doy, 0.75, na.rm = TRUE), max(doy, na.rm = TRUE)),
-                    median_temp = median(doy, na.rm = TRUE),
-                    .groups = "drop"), 
-               aes(x = city, ymin = lower_IQR_d, ymax = upper_IQR_d, color = city), 
-               width = 0.2, linewidth = 1, alpha = 0.5) +
-  geom_point(data = all_city_input |>
-                  filter(canonicalname == species)|>
-                  dplyr::group_by(city) |>
-                  dplyr::summarise(
-                    median_doy = median(doy, na.rm = TRUE),
-                    .groups = "drop"), 
-               aes(x = city, y = median_doy, color = city), 
-               size = 2, alpha = 0.5) +
-  scale_color_manual(values = color_palette) + 
-  coord_flip(ylim = case_when(
-    phe_type == "SOS" ~ c(-50, 250),
-    phe_type == "EOS" ~ c(150, 450)
-  )) +
-  labs(x = "City") +
-  labs(y = case_when(
-    phe_type == "SOS" ~ "Start-of-season (DOY)",
-    phe_type == "EOS" ~ "End-of-season (DOY)"
-  )) +
-  theme_classic() +
-  theme(
-    axis.text.y = element_blank(),
-    axis.ticks.y = element_blank(),
-    axis.text.x = element_text(size = 10),
-    title = element_text(size = 14),
-    legend.position = "none"
-  )
-
-
-sp_IQR_SOS <- ggplot() +
-  geom_point(data = all_city_input |>
-                  filter(canonicalname == species)|>
-                  dplyr::group_by(city) |>
-                  dplyr::summarise(
-                    median_doy = median(doy, na.rm = TRUE),
-                    IQR_d = quantile(doy, 0.75, na.rm = TRUE) - quantile(doy, 0.25, na.rm = TRUE),
-                    lower_IQR_d = max(quantile(doy, 0.25, na.rm = TRUE), min(doy, na.rm = TRUE)),
-                    upper_IQR_d = min(quantile(doy, 0.75, na.rm = TRUE), max(doy, na.rm = TRUE)),
-                    median_temp = median(doy, na.rm = TRUE),
-                    .groups = "drop"), 
-               aes(x = 1, y = IQR_d, color = city), 
-               size = 2, alpha = 0.5) +
-  scale_color_manual(values = color_palette) + 
-  coord_flip(ylim = case_when(
-    phe_type == "SOS" ~ c(-50, 250),
-    phe_type == "EOS" ~ c(150, 450)
-  )) +
-  labs(y = case_when(
-    phe_type == "SOS" ~ "IQR for Start-of-season (DOY)",
-    phe_type == "EOS" ~ "IQR for End-of-season (DOY)"
-  )) +
-  theme_classic() +
-  theme(
-    axis.title.y = element_blank(),
-    axis.text.y = element_blank(),
-    axis.ticks.y = element_blank(),
-    axis.text.x = element_text(size = 10),
-    title = element_text(size = 14),
-    legend.position = "none"
-  )
-
-
-sum_histgram_SOS <- ggplot() +
-  geom_density(data = all_city_input |>
-                  filter(canonicalname == species)|>
-                  dplyr::group_by(city) |>
-                  dplyr::summarise(
-                    median_doy = median(doy, na.rm = TRUE),
-                    IQR_d = quantile(doy, 0.75, na.rm = TRUE) - quantile(doy, 0.25, na.rm = TRUE),
-                    lower_IQR_d = max(quantile(doy, 0.25, na.rm = TRUE), min(doy, na.rm = TRUE)),
-                    upper_IQR_d = min(quantile(doy, 0.75, na.rm = TRUE), max(doy, na.rm = TRUE)),
-                    .groups = "drop"),
-               color = alpha("black"),
-               aes(x = median_doy),
-               linewidth= 0.5, fill = "grey60", alpha = 0.5) +
-  scale_y_continuous(
-    name = "Density",
-    breaks = seq(0, 0.04, by = 0.02)
-  ) +
-  labs(x = case_when(
-    phe_type == "SOS" ~ "Median start-of-season by city (DOY)",
-    phe_type == "EOS" ~ "Median end-of-season by city (DOY)"
-  )) +
-  theme_classic() +
-  theme(
-    axis.text.x = element_text(size = 10),
-    axis.text.y = element_text(size = 10),
-    title = element_text(size = 14),
-    legend.position = "none"
-  ) +
-  scale_x_continuous(limits = case_when(
-    phe_type == "SOS" ~ c(-50, 250),
-    phe_type == "EOS" ~ c(150, 450)
-  )) +
-  theme(axis.title.x = element_blank(),
-        axis.text.x  = element_blank(),
-        axis.ticks.x = element_blank())
-
-sum_boxplot_SOS <- ggplot() +
-  geom_errorbar(data = all_city_input |>
-                  filter(canonicalname == species)|>
-                  dplyr::group_by(city) |>
-                  dplyr::summarise(
-                    median_doy = median(doy, na.rm = TRUE),
-                    .groups = "drop") |>
-                  summarise(
-                    median_doy_cities = median(median_doy, na.rm = TRUE),
-                    IQR_d = quantile(median_doy, 0.75, na.rm = TRUE) - quantile(median_doy, 0.25, na.rm = TRUE),
-                    lower_IQR_d = max(quantile(median_doy, 0.25, na.rm = TRUE), min(median_doy, na.rm = TRUE)),
-                    upper_IQR_d = min(quantile(median_doy, 0.75, na.rm = TRUE), max(median_doy, na.rm = TRUE)),
-                    .groups = "drop"), 
-               aes(x = "none", ymin = lower_IQR_d, ymax = upper_IQR_d), 
-               color = "grey60", width = 0.2, linewidth = 1, alpha = 0.5) +
-  geom_point(data = all_city_input |>
-                  filter(canonicalname == species)|>
-                  dplyr::group_by(city) |>
-                  dplyr::summarise(
-                    median_doy = median(doy, na.rm = TRUE),
-                    .groups = "drop") |>
-                  summarise(
-                    median_doy_cities = median(median_doy, na.rm = TRUE),
-                    IQR_d = quantile(median_doy, 0.75, na.rm = TRUE) - quantile(median_doy, 0.25, na.rm = TRUE),
-                    lower_IQR_d = max(quantile(median_doy, 0.25, na.rm = TRUE), min(median_doy, na.rm = TRUE)),
-                    upper_IQR_d = min(quantile(median_doy, 0.75, na.rm = TRUE), max(median_doy, na.rm = TRUE)),
-                    .groups = "drop"), 
-               aes(x = "none", y = median_doy_cities), 
-               color = "grey60", size = 2, alpha = 0.5) +
-  # geom_rect(
-  #   data = all_city_input |>
-  #     filter(canonicalname == species) %>%
-  #     summarise(
-  #       lower_IQR = quantile(doy, 0.25, na.rm = TRUE),
-  #       upper_IQR = quantile(doy, 0.75, na.rm = TRUE),
-  #       .groups = "drop"
-  #     ),
-  #   aes(xmin = 0.5, xmax = length((all_city_input |>
-  #                                    filter(canonicalname == species) |> 
-  #                                    distinct(city) |>
-  #                                    pull())),
-  #       ymin = lower_IQR, ymax = upper_IQR),
-  #   fill = "grey60", alpha = 0.5, inherit.aes = FALSE
-  # ) +
-  coord_flip(ylim = case_when(
-    phe_type == "SOS" ~ c(-50, 250),
-    phe_type == "EOS" ~ c(150, 450)
-  )) +
-  labs(y = case_when(
-    phe_type == "SOS" ~ "Median start-of-season by city (DOY)",
-    phe_type == "EOS" ~ "Median end-of-season by city (DOY)"
-  )) +
-  theme_classic() +
-  theme(
-    axis.text.y = element_blank(),
-    axis.ticks.y = element_blank(),
-    axis.title.y = element_blank(),
-    axis.text.x = element_text(size = 10),
-    title = element_text(size = 14),
-    legend.position = "none"
-  )
-
-
-sum_IQR_SOS <- ggplot() +
-  geom_point(data = all_city_input |>
-                  filter(canonicalname == species)|>
-                  dplyr::group_by(city) |>
-                  dplyr::summarise(
-                    median_doy = median(doy, na.rm = TRUE),
-                    .groups = "drop") |>
-                  summarise(
-                    median_doy_cities = median(median_doy, na.rm = TRUE),
-                    IQR_d = quantile(median_doy, 0.75, na.rm = TRUE) - quantile(median_doy, 0.25, na.rm = TRUE),
-                    lower_IQR_d = max(quantile(median_doy, 0.25, na.rm = TRUE), min(median_doy, na.rm = TRUE)),
-                    upper_IQR_d = min(quantile(median_doy, 0.75, na.rm = TRUE), max(median_doy, na.rm = TRUE)),
-                    .groups = "drop"), 
-               aes(x = "none", y = IQR_d), 
-               color = "grey60", size = 2, alpha = 0.5) +
-  coord_flip(ylim = case_when(
-    phe_type == "SOS" ~ c(-50, 250),
-    phe_type == "EOS" ~ c(150, 450)
-  )) +
-  labs(y = case_when(
-    phe_type == "SOS" ~ "IQR for median start-of-season by city (DOY)",
-    phe_type == "EOS" ~ "IQR for median end-of-season by city (DOY)"
-  )) +
-  theme_classic() +
-  theme(
-    axis.text.y = element_blank(),
-    axis.ticks.y = element_blank(),
-    axis.title.y = element_blank(),
-    axis.text.x = element_text(size = 10),
-    title = element_text(size = 14),
-    legend.position = "none"
-  )
-
-# top <- wrap_plots(
-#   sp_histgram_SOS, sp_boxplot_SOS,
-#   ncol = 1, heights = c(3, 3)
-# )
-# 
-# bottom <- wrap_plots(
-#   sum_histgram_SOS, sum_boxplot_SOS,
-#   ncol = 1, heights = c(1, 1)
-# )
-# 
-# final_plot <- wrap_plots(
-#   top, bottom,
-#   ncol = 1, heights = c(6, 2)
-# )
-# 
-
-
-top <- wrap_plots(
-  sp_boxplot_SOS, sp_IQR_SOS,
-  ncol = 1, heights = c(3, 0.5)
-)
-
-bottom <- wrap_plots(
-  sum_boxplot_SOS, sum_IQR_SOS,
-  ncol = 1, heights = c(1, 0.5)
-)
-
-final_plot <- wrap_plots(
-  top, bottom,
-  ncol = 1, heights = c(3.5, 1.5)
-)
-
-final_plot <- wrap_plots(
-  sp_boxplot_SOS, sum_boxplot_SOS,
-  ncol = 1, heights = c(3, 1)
-)
+ggsave("~/phenology-urban/temp/figure_agu/raw_sos.png", plot_sos, width = 5, height = 5, dpi = 500)
+ggsave("~/phenology-urban/temp/figure_agu/raw_eos.png", plot_eos, width = 5, height = 5, dpi = 500)
 
 
 summary_data <- all_city_input |>
@@ -639,7 +400,8 @@ fit_variance_partition <- function(df, species_name) {
       prop_city = NA_real_,
       prop_within = NA_real_,
       compared_ratio = NA_real_,
-      phe_type = phe_type
+      phe_type = phe_type,
+      sample_city = n_distinct(d$city)
     ))
   }
   
@@ -659,9 +421,13 @@ fit_variance_partition <- function(df, species_name) {
     prop_residual = sigma_residual / total_var,
     prop_city2 = prop_city / (sum(prop_city, prop_within)),
     prop_within2 = prop_within / (sum(prop_city, prop_within)),
-    phe_type = phe_type
+    phe_type = phe_type,
+    sample_city = n_distinct(d$city)
   )
 }
+
+
+################### EOS plot ###################
 
 phe_type = "EOS"
 all_city_input <- data.frame()
@@ -699,7 +465,7 @@ variance_partition_all_eos <- map_dfr(
 
 # variance_partition_all_eos$prop_within2 <- -variance_partition_all_eos$prop_within2
 plot_df_eos <- variance_partition_all_eos %>%
-  select(species, prop_city2, prop_within2, phe_type) %>%
+  select(species, prop_city2, prop_within2, phe_type, sample_city) %>%
   filter(is.finite(prop_city2), is.finite(prop_within2)) %>%
   mutate(
     prop_city2 = round(prop_city2 * 100, 2),
@@ -710,7 +476,7 @@ plot_df_eos <- variance_partition_all_eos %>%
   ) %>%
   mutate(
     species = factor(species, levels = unique(species))
-  ) %>%
+  ) |>
   pivot_longer(
     cols = c(prop_within2, prop_city2),
     names_to = "component",
@@ -722,6 +488,59 @@ plot_df_eos <- variance_partition_all_eos %>%
                        prop_city2   = "Across-city")
   )
 
+load("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/tree_species.RData")
+
+D <- plot_df_eos %>%
+  mutate(species = gsub("_", " ", species)) %>%
+  filter(species %in% phylo_tree$tip.label)
+
+sp_data <- sort(unique(na.omit(D$species)))
+sp_tree <- sort(phylo_tree$tip.label)
+keep_sp <- intersect(sp_data, sp_tree)
+
+D2 <- D %>%
+  filter(species %in% keep_sp) %>%
+  droplevels() %>%
+  mutate(
+    species = factor(species, levels = keep_sp)
+  )
+
+tr2 <- drop.tip(phylo_tree, setdiff(phylo_tree$tip.label, keep_sp))
+
+all_tree <- ggtree(tr2, layout = "fan", open.angle = 10)+
+  geom_tiplab(offset = 55, size =0, linesize = 0.3)
+all_ring <- as.data.frame(plot_df_eos) |>
+  mutate(label = species)
+
+p_EOS_ring <- all_tree +
+  geom_fruit(
+    data = all_ring,
+    geom = geom_col,
+    mapping = aes(
+      y = label,
+      x = prop,
+      fill = component
+    ),
+    orientation = "y",
+    width = 1,
+    offset = 0.05,
+    pwidth = 0.5,
+    axis.params = list(
+      axis = "x",
+      text.size = 4.5,
+      hjust = 1,
+      vjust = 1.5,
+      nbreak = 3
+    ),
+    grid.params = list()
+  ) +
+  scale_fill_manual(
+    values = c("Across-city" = "grey80", "Within-city" = "grey40"),
+    name = "Variance proportion (%)",
+    labels = c("Inter-urban", "Intra-urban")
+  )
+
+################### SOS plot ###################
 
 phe_type = "SOS"
 all_city_input <- data.frame()
@@ -759,7 +578,7 @@ variance_partition_all_sos <- map_dfr(
 
 # variance_partition_all_sos$prop_within2 <- -variance_partition_all_sos$prop_within2
 plot_df_sos <- variance_partition_all_sos %>%
-  select(species, prop_city2, prop_within2, phe_type) %>%
+  select(species, prop_city2, prop_within2, phe_type, sample_city) %>%
   filter(is.finite(prop_city2), is.finite(prop_within2)) %>%
   mutate(
     prop_city2 = round(prop_city2 * 100, 2),
@@ -770,7 +589,7 @@ plot_df_sos <- variance_partition_all_sos %>%
   ) %>%
   mutate(
     species = factor(species, levels = unique(species))
-  ) %>%
+  ) |>
   pivot_longer(
     cols = c(prop_within2, prop_city2),
     names_to = "component",
@@ -781,6 +600,65 @@ plot_df_sos <- variance_partition_all_sos %>%
                        prop_within2 = "Within-city",
                        prop_city2   = "Across-city")
   )
+
+
+D <- plot_df_sos %>%
+  mutate(species = gsub("_", " ", species)) %>%
+  filter(species %in% phylo_tree$tip.label)
+
+sp_data <- sort(unique(na.omit(D$species)))
+sp_tree <- sort(phylo_tree$tip.label)
+keep_sp <- intersect(sp_data, sp_tree)
+
+D2 <- D %>%
+  filter(species %in% keep_sp) %>%
+  droplevels() %>%
+  mutate(
+    species = factor(species, levels = keep_sp)
+  )
+
+tr2 <- drop.tip(phylo_tree, setdiff(phylo_tree$tip.label, keep_sp))
+
+all_tree <- ggtree(tr2, layout = "fan", open.angle = 10)+
+  geom_tiplab(offset = 55, size =0, linesize = 0.3)
+all_ring <- as.data.frame(plot_df_eos) |>
+  mutate(label = species)
+
+p_SOS_ring <- all_tree +
+  geom_fruit(
+    data = all_ring,
+    geom = geom_col,
+    mapping = aes(
+      y = label,
+      x = prop,
+      fill = component
+    ),
+    orientation = "y",
+    width = 1,
+    offset = 0.05,
+    pwidth = 0.5,
+    axis.params = list(
+      axis = "x",
+      text.size = 4.5,
+      hjust = 1,
+      vjust = 1.5,
+      nbreak = 3
+    ),
+    grid.params = list()
+  ) +
+  scale_fill_manual(
+    values = c("Across-city" = "grey80", "Within-city" = "grey40"),
+    name = "Variance proportion (%)",
+    labels = c("Inter-urban", "Intra-urban")
+  )
+
+
+ring = p_SOS_ring / p_EOS_ring +
+  plot_layout(ncol = 1, 
+              guides = "collect") &
+  theme(legend.position = "bottom")
+ggsave("~/phenology-urban/temp/figure_agu/phenology_var_porp_ring.png", ring, width = 10, height = 14, dpi = 500)
+################### Combine ###################
 
 plot_df <- rbind(plot_df_sos, plot_df_eos) |>
   mutate(
@@ -1154,6 +1032,7 @@ plot_phe_temp_cities <- function(cities, taxon_col, color_col = "city"){
       geom_errorbarh(aes(xmin = q25_t, xmax = q75_t), width = 1, linewidth = 0.3,  alpha = 0.05, color = "grey30") +
       # scale_color_manual(values = color_palette) + 
       labs(x = title_text, y = phy_type_label) +
+      scale_y_continuous(limits = c(0, 365)) +
       theme_classic() +
       theme(axis.text.x = element_text(size = 14),
             axis.text.y = element_text(size = 14),
@@ -1718,3 +1597,163 @@ ggsave(
 
 ```
 
+## Frequentist result
+
+
+```{r}
+plot_coef_sp_city <- function(r_output_dir, level = "Factor", phe_types){
+  coef_summary <- data.frame()
+  coef_summary <- map_dfr(
+      phe_types,
+      ~ read_rds(paste0(r_output_dir, .x, "_summary.rds")) %>%
+          mutate(phe_type = .x)
+    )
+  
+  load("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/tree_species.RData") # phylo_tree
+  class_tree <- phylo_tree
+  df_filtered <- coef_summary %>%
+      filter(.data[[level]] %in% class_tree$tip.label)
+  class_used   <- unique(df_filtered[[level]])
+  tree_sub  <- drop.tip(class_tree,
+                        setdiff(class_tree$tip.label, class_used))
+  class_order <- tree_sub$tip.label 
+  
+  coef_df_plot <- df_filtered |>
+    mutate(
+      !!level := factor(.data[[level]], levels = rev(class_order))
+    ) |>
+    mutate(
+      Color = case_when(
+        is.na(Color) ~ "grey95",
+        TRUE ~ Color
+      ),
+      SigAlpha = case_when(
+        is.na(SigAlpha) ~ 1,
+        TRUE ~ SigAlpha
+      ),
+      !!level := factor(.data[[level]], levels = rev(class_order))
+    )
+  coef_df_plot$phe_type <- factor(coef_df_plot$phe_type,
+                                levels = c("SOS", "EOS"))
+  p_coef <-  ggplot(coef_df_plot, aes(x = Factor, 
+                               y = Estimate,
+                               color = Color
+                               )) +
+    geom_point(aes(alpha = SigAlpha, color = Color), position = position_dodge(w = 0.5), size = 3) +
+    geom_errorbar(aes(ymin = Lower, ymax = Upper, alpha = SigAlpha, color = Color), 
+                  position = position_dodge(w = 0.5), 
+                  width = 0.2) +
+    geom_hline(yintercept = 0, linetype = 2) +
+    labs(x = "Species", y = bquote(beta[Temp]~" estimate")) + 
+    theme_minimal() +
+    theme(
+      axis.text.x = element_blank(),
+      axis.title = element_text(size = 14),
+      axis.text.y = element_text(size = 12),
+      strip.text = element_blank()) +
+    # coord_flip() +
+    facet_wrap(~ phe_type, ncol = 1, scales = "free_y") +
+    scale_alpha_identity() +
+    scale_color_identity() +
+    # geom_text(aes(label = Sig, y = Upper + 0.05  ), hjust = -0.5, show.legend = FALSE) +
+    # geom_text(aes(label = Estimate, y = Estimate  ), vjust = -0.7, show.legend = FALSE, size = 3) +
+    guides(alpha = "none")
+  
+  tree_plot <- ggtree(tree_sub) +
+    layout_dendrogram()
+  
+  p_combined <- tree_plot / p_coef +
+    plot_layout(heights = c(2, 20))
+  
+  return(p_combined)
+}
+
+city = "NewYork"
+phe_types = c("SOS", "EOS")
+r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/NewYork/canonicalname/")
+p1 = plot_coef_sp_city(r_output_dir, level = "Factor", phe_types)
+
+# ggsave(
+#   filename = paste0("~/phenology-urban/temp/figure_agu/example_city.png"),
+#   plot = p1,
+#   width = 9.5,
+#   height = 6,
+#   dpi = 500
+# )
+```
+
+```{r input-heatmap}
+#| include: false
+### Group by city and phe_type
+tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
+rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
+cities <- gsub("\\.rds$", "", basename(rds_files))
+phe_types <- c("SOS", "EOS")
+
+coef_summary_all <- data.frame()
+
+for (city in cities) {
+  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/", city, "/canonicalname/")
+  for (phe_type in phe_types) {
+    file_path <- file.path(r_output_dir, paste0(phe_type, "_summary.rds"))
+    if (file.exists(file_path)) {
+      coef_summary <- readr::read_rds(file_path) |>
+        dplyr::mutate(phe_type = phe_type, city = city)
+      coef_summary_all <- dplyr::bind_rows(coef_summary_all, coef_summary)
+    }
+  }
+}
+coef_summary_all <- coef_summary_all |>
+  mutate(phe_type = factor(phe_type, levels = c("SOS", "EOS")),
+         genus = sub(" .*", "", Factor),
+         species = Factor) |>
+  left_join(
+    readr::read_rds("~/phenology-urban/temp/tree_genus_family.rds"),
+    by = "genus")
+
+inventory_centroids <- readRDS(("~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/summary/inventory_centroids.rds"))
+boundary_us <- st_read(("~/lab-data/datasets/boundary/USAdministrative/US/us_boundarydissolve.shp"), quiet = T) |>
+  st_transform(4326)
+
+load("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/tree_species.RData") # phylo_tree
+load("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/tree_genus.RData") # tree_genus
+load("~/phenology-urban/temp/tree_family.RData") # tree_family
+
+city_feature <- readRDS("~/phenology-urban/data/raw/CONUS/StreetTrees/cleaned_ps_input/summary/city_feature.rds") |>
+  select(-bio1, -bio12) |>
+  left_join(read_rds("~/phenology-urban/data/raw/CONUS/StreetTrees/cleaned_ps_input/summary/city_bioclimate.rds") |>
+              select(site, bio1, bio12), by = "site") |>
+  rename(city = site) |>
+  mutate(city = ifelse(city == "St_George", "StGeorge", city)) |>
+  mutate(city = ifelse(city == "St.Louis", "StLouis", city))
+```
+
+```{r}
+#| label: fig-heatmap
+#| include: true
+#| fig-width: 16
+#| fig-height: 12
+#| fig-cap: "Phenological responses to intra-urban temperature variation across species and cities. Colors indicate the direction of the phenological response, and color intensity reflects the level of statistical significance. Panels present heatmaps summarizing the phenological response types for each species–city combination. Species along the x-axis are ordered according to their phylogenetic relationships, whereas cities on the y-axis are arranged alphabetically."
+#| warning: false
+#| eval: true
+
+source("~/phenology-urban/script/plot_heatmap.R")
+sp_SOS <- plot_heatmap_sig(coef_summary_all, level = "species", phe_type = "SOS", city_order_bio = "lat")
+sp_EOS <- plot_heatmap_sig(coef_summary_all, level = "species", phe_type = "EOS", city_order_bio = "lat")
+combine_heat <- wrap_plots(sp_SOS, sp_EOS, ncol = 2) &
+  theme(
+    plot.title = element_text(size = 20)
+  )+ 
+  theme(plot.margin = margin(b = 20, l = 20, r =5),
+        panel.background = element_rect(fill = "white", color = NA),
+        plot.background  = element_rect(fill = "white", color = NA))
+
+p_heat_xy <- ggdraw() +
+  draw_plot(combine_heat) +
+  draw_label("Species",
+             x = 0.5, y = 0.02, size = 26) +
+  draw_label("City",
+             x = 0.02, y = 0.5, angle = 90, size = 26)
+p_heat_xy
+ggsave("~/phenology-urban/temp/figure_agu/species_level_heatmap.png", p_heat_xy, width = 21.5, height = 16, dpi = 500)
+```
