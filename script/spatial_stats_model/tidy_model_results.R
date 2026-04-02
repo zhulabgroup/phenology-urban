@@ -108,24 +108,25 @@ prepare_coef_summary_mcmc <- function(r_output_dir, phe_type){
   summary_data <- combined_param_data |>
     group_by(Parameter) |>
     summarise(
-      median_value = median(value, na.rm = TRUE),
-      lower_2_5 = quantile(value, 0.025, na.rm = TRUE),
-      upper_97_5 = quantile(value, 0.975, na.rm = TRUE),
-      sd_value = sd(value, na.rm = TRUE),
+      Estimate = median(value, na.rm = TRUE),
+      Lower = quantile(value, 0.025, na.rm = TRUE),
+      Upper = quantile(value, 0.975, na.rm = TRUE),
+      sd = sd(value, na.rm = TRUE),
       # waic = first(waic),
       converge = first(converge),
       # milk = first(milk),
       .groups = "drop"
     ) |>
-    mutate(Sig = ifelse(lower_2_5 * upper_97_5 > 0, "*", ""),
+    mutate(Factor= Parameter,
+      Sig = ifelse(Upper * Lower > 0, "*", ""),
            SigAlpha = ifelse(Sig == "*", 1, 0.2),
-           Color = ifelse(median_value >0, "#0D0887FF" , "#FCA636FF")) 
+           Color = ifelse(Estimate >0, "#0D0887FF" , "#FCA636FF")) 
   write_rds(summary_data, paste0(r_output_dir, phe_type, "_summary.rds"))
 }
   
 for (city in cities) { 
   message(paste0("Processing city: ", city))
-  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models/mcmc/spatial_mat/", city, "/canonicalname/")
+  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/mcmc/spatial_mat/", city, "/canonicalname/")
   for (phe_type in phe_types){
     prepare_coef_summary_mcmc(r_output_dir, phe_type)
   }
