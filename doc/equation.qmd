@@ -14,8 +14,6 @@ editor_options:
 # Install and load 'zhulabtools' package
 library(zhulabtools)
 # Check and  load required packages
-load_packages(c("dplyr", "here", "sf","viridis", "leaflet", "cli", "terra","patchwork", "data.table", "plotly", "readxl", "tidyverse", "ks", "ggnewscale", "plotbiomes","coda", "patchwork", "performance", "terra", "ggpmisc", "gstat", "ggmcmc", "taxize", "stats", "viridis","INLA"))
-city = "NY"
 ```
 
 ## Variance partitioning model
@@ -130,7 +128,7 @@ $$S_{\mathrm{bio12},m,n}
 
 $$\theta_{m,n} = \mathbf{z}_{m, n} \boldsymbol{\lambda} +b_{m} + \epsilon_{m,n}$$
 
-$$\mathbf{z}_{m,n} = [1, S_{\mathrm{bio1},m,n}, S_{\mathrm{bio12},m,n}]$$
+$$\mathbf{z}_{m,n} = [1, \mathrm{bio1}_{n}, \mathrm{bio12}_{n}]$$
 
 $$\boldsymbol{\lambda} = (\lambda_0,\lambda_1,\lambda_2)^\top$$
 
