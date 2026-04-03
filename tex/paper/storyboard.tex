@@ -1,0 +1,46 @@
+\documentclass[12pt]{article}
+
+\input{config/packages}
+\input{config/macros}
+
+\begin{document}
+
+\title{\titlestyle{Storyboard of paper}}
+\author{}
+\date{}
+\maketitle
+
+This storyboard summarizes the scientific motivation, conceptual framework, and figure-driven narrative for the study. It starts from the ecological background, defines the central knowledge gap, and then outlines how empirical niche patterns and model-based coexistence conditions are presented in a manuscript-style flow.
+
+\section{Introduction}
+Understanding why ecologically similar species either coexist or exclude each other is a central question in community ecology. In grassland systems, competitive interactions and environmental gradients jointly shape species persistence. This storyboard links empirical niche patterns to a simple competition model to frame testable hypotheses about coexistence and priority effects.
+
+\section{Methods}
+
+\subsection{Study area}
+The study focuses on grassland species distributed across geographic and climatic gradients in California. Species occurrences are used to characterize realized climate niches and define the environmental context for interaction outcomes.
+
+\subsubsection{Data sources}
+Occurrence records are compiled from GBIF, and climate covariates are extracted from CHELSA to define species-level niche positions.
+
+\subsection{Equation}
+We use a two-species Lotka-Volterra competition model as the conceptual basis for interpreting coexistence versus priority effects.
+\begin{equation}
+\frac{dN_i}{dt} = r_i N_i \left(1 - \frac{\alpha_{i1}N_1 + \alpha_{i2}N_2}{K_i}\right)
+\label{equ:LV}
+\end{equation}
+
+\section{Results}
+
+\subsection{Coexistence and priority-effects parameter space}
+The first result visualizes how combinations of demographic rates and interaction coefficients map to coexistence versus priority effects under the model framework.
+\input{content/fig-coexistence.tex}
+
+\subsection{Environmental niches along climate space}
+The second result presents species occurrences and niche centroids in climate space to contextualize how environmental differentiation relates to potential interaction outcomes.
+\input{content/fig-grassland.tex}
+
+\section{Discussion}
+Placeholder: interpret how climate niche differentiation and interaction parameter space jointly explain coexistence outcomes, and outline implications under climate change.
+
+\end{document}

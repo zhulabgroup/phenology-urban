@@ -1,0 +1,9 @@
+% Custom macros
+\newcommand{\eg}{e.g.\@}
+\newcommand{\ie}{i.e.\@}
+\newcommand{\titlestyle}[1]{{\bfseries \boldmath #1}}
+
+% Citation counter for total reference count
+\newtotcounter{citnum}
+\def\oldbibitem{} \let\oldbibitem=\bibitem
+\def\bibitem{\stepcounter{citnum}\oldbibitem}
