@@ -41,3 +41,5 @@ inst/doc
 .RDataTmp
 .env
 history_database
+.Rhistory
+.vscode/extensions.json
