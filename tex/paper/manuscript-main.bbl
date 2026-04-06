@@ -1,4 +1,4 @@
-\begin{thebibliography}{20}
+\begin{thebibliography}{22}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
@@ -69,6 +69,14 @@ Siyu Liu, Martin Brandt, Thomas Nord-Larsen, Jerome Chave, Florian Reiner, Nico 
 \newblock \emph{Science Advances}, 9\penalty0 (37):\penalty0 eadh4097, 2023.
 \newblock \doi{10.1126/sciadv.adh4097}.
 
+\bibitem[Zhang et~al.(2025)Zhang, Brandt, Tong, Tong, Zhang, Reiner, Li, Tian, Yue, Zhou, Chen, Xiao, and Fensholt]{zhang2025naturecities}
+Xiaoxin Zhang, Martin Brandt, Xiaoye Tong, Xiaowei Tong, Wenmin Zhang, Florian Reiner, Sizhuo Li, Feng Tian, Yuemin Yue, Weiqi Zhou, Bin Chen, Xiangming Xiao, and Rasmus Fensholt.
+\newblock A strong but uneven increase in urban tree cover in {China} over the recent decade.
+\newblock \emph{Nature Cities}, 2\penalty0 (5):\penalty0 460--469, May 2025.
+\newblock ISSN 2731-9997.
+\newblock \doi{10.1038/s44284-025-00227-9}.
+\newblock URL \url{https://www.nature.com/articles/s44284-025-00227-9}.
+
 \bibitem[Neyns et~al.(2024)Neyns, Efthymiadis, Libin, and Canters]{Neyns2024UFUG}
 Robbe Neyns, Kyriakos Efthymiadis, Pieter Libin, and Frank Canters.
 \newblock Fusion of multi-temporal {PlanetScope} data and very high-resolution aerial imagery for urban tree species mapping.
@@ -127,5 +135,11 @@ Jonathan~B. Losos.
 \newblock Phylogenetic perspectives on community ecology.
 \newblock \emph{Ecology}, 77\penalty0 (5):\penalty0 1344--1354, 1996.
 \newblock \doi{10.2307/2265532}.
+
+\bibitem[Karger et~al.(2017)Karger, Conrad, Böhner, Kawohl, Kreft, Soria-Auza, Zimmermann, Linder, and Kessler]{Karger2017SciData}
+Dirk~Nikolaus Karger, Olaf Conrad, Jürgen Böhner, Tobias Kawohl, Holger Kreft, Rodrigo~Wilber Soria-Auza, Niklaus~E. Zimmermann, H.~Peter Linder, and Michael Kessler.
+\newblock Climatologies at high resolution for the earth’s land surface areas.
+\newblock \emph{Scientific Data}, 4\penalty0 (1):\penalty0 170122, 2017.
+\newblock \doi{10.1038/sdata.2017.122}.
 
 \end{thebibliography}

@@ -1,30 +1,34 @@
 \section{Results}
 
 \subsection{Widespread intra-urban variation in phenology}
-Combinations of demographic rates and interaction coefficients map to distinct regions of coexistence versus priority effects under the Lotka-Volterra framework. The stability-instability inequality structures the boundary between outcomes across the parameter space.
 
-(see Fig. \ref{fig2:variance}).
+We first demonstrate pervasive heterogeneity in phenological timing within urban environments: across all city–species combinations, intra-urban variance constitutes a substantial fraction of total phenological variability and is comparable to, or greater than, inter-urban variance, confirming that urban phenology cannot be treated as a uniform signal (Fig.\ref{fig2:variance}).
+
+Specifically, the proportion of intra-urban variance ranged from 4.21\% to 73.73\% and 0.08\% to 63.73\%, for SOS and EOS, respectively. As for relative contribution, 85 species were more dominated by intra-urban variance and 169 species by inter-urban variance for SOS. As for EOS, 137 species were dominated by intra-urban variance and 118 species by inter-urban variance. For example, Pistacia chinensis and Quercus alba showed predominantly intra-urban variance in SOS and EOS, respectively (Fig.\ref{fig2:variance} b, e), with within-city interquartile ranges (IQR) often spanning broad portions of the phenological distribution and exceeding the range among city-level medians. In contrast, Plantanus occidentalis and Tilia cordata were dominated by inter-urban variance in SOS and EOS, respectively (Fig.\ref{fig2:variance} b, e), with phenological distributions varying widely among cities.
+
+We further visualized the within-city variation and the across-city spread of median phenological timing using the IQR as a proxy for variation (Fig.\ref{fig2:variance} e-f). Most points cluster around or above the 1:1 line, indicating that within-city IQRs often match or exceed the across-city ranges, particularly for EOS timing (Fig.\ref{fig2:variance} f), which indicates that intra-urban heterogeneity is pronounced.
 
 \input{content/fig2-variance.tex}
 
 \subsection{Phenology responds to fine-scale temperature heterogeneity}
-Species occurrences and niche centroids in climate space show clear environmental differentiation among grassland species along temperature and precipitation gradients, contextualizing how niche separation relates to potential interaction outcomes.
 
-(see Fig. \ref{fig3:nycexample}).
+Consistent with our hypothesis for Question 2, we find that temperature effects on phenology are pervasive at the individual-tree level but strongly species-specific in both direction and magnitude. Moreover, EOS responses are more consistent among species than SOS responses, with predominantly positive effects suggesting delayed senescence under warmer urban conditions (Fig.\ref{fig4:heatmap}).
 
+As an illustrative city-level example of our temperature-sensitivity estimation, results from New York City show pronounced within-city spatial heterogeneity in phenology and a clear phenological sensitivity pattern derived from the species-specific spatial models (Fig.\ref{fig4:heatmap}). Across all species in New York City (n = 96), phenological temperature sensitivity was highly consistent in direction (Fig.\ref{fig3:nycexample} d–e). For SOS, 79 species (52 significant) showed negative temperature effects, with significant estimates clustering around -0.08 days $^\circ$C$^{-1}$. Thus, a 1 $^\circ$C increase in local temperature was associated with an advancement of SOS by approximately 0.08 days. In contrast, 72 species (53 significant) exhibited positive temperature sensitivity in EOS timing, with significant estimates centered at +1.15 days $^\circ$C$^{-1}$, corresponding to a 1.15 day delay in senescence per 1 $^\circ$C warming. Together, these patterns indicate that tree phenology varies systematically with local temperature gradients within New York City.
 \input{content/fig3-nycexample.tex}
 
-Species occurrences and niche centroids in climate space show clear environmental differentiation among grassland species along temperature and precipitation gradients, contextualizing how niche separation relates to potential interaction outcomes.
-
-(see Fig. \ref{fig4:heatmap}).
-
+Species-specific phenological response types varied widely across cities, with substantial variation in both the direction and significance (Fig.\ref{fig4:heatmap}). For SOS, 51.5\% of species–city combinations respond negatively to micro-temperature (30.7\% significant), indicating earlier leaf-out under warmer microclimate conditions. However, the magnitude and significance of SOS responses vary substantially among species and cities, revealing considerable inconsistency in spring phenological sensitivity across species and cities (Fig.\ref{fig4:heatmap} a). In contrast, EOS responses are more consistent across species, with 66.5\% of species–city combinations species exhibiting positive responses (47.4\% significant). This pattern indicates that higher intra-urban air temperatures are generally associated with delayed leaf senescence (Fig.\ref{fig4:heatmap} b).
 \input{content/fig4-heatmap.tex}
 
 \subsection{Phenological responses vary with climatic context}
-Species occurrences and niche centroids in climate space show clear environmental differentiation among grassland species along temperature and precipitation gradients, contextualizing how niche separation relates to potential interaction outcomes.
 
-(see Fig. \ref{fig5:marginal}).
+To further understand why the magnitude and direction of phenological responses vary among species and cities, we analyzed the relationships between phenological sensitivity and urban climatic context. Our results show that urban microclimate effects on phenology are constrained by regional climate context: elevated microclimatic temperatures tend to delay spring phenology in hot cities and accelerate fall senescence in dry cities (Fig.\ref{fig5:marginal}, Table 1).
 
+Phenological sensitivity varies spatially across CONUS cities (Fig.\ref{fig5:marginal}). Regionally, cities in warmer and drier regions, e.g. California, Texas and Florida, warmer microclimatic conditions are generally associated with delayed spring phenology and advanced fall senescence. By contrast, cities across much of the central and eastern United States show the opposite pattern, with earlier spring onset and delayed fall senescence under warmer microclimatic conditions (Fig.\ref{fig5:marginal} a-b). Consistent with Fig.\ref{fig4:heatmap}, EOS showed stronger and more consistent responses to microclimatic warming than SOS, despite substantial interspecific variation. 
+
+Analyses of the 10 most common species further indicate that species responses to microclimate warming are strongly constrained by background climate. For SOS, higher microclimatic temperatures tend to advance leaf-out for species planted in colder cities, but delay SOS for species growing in hot cities, with the crossover point occurring at around 10 °C of mean annual temperature (bio1; Fig.\ref{fig5:marginal} c). In contrast, higher microclimatic temperatures tend to delay the EOS for species in wetter cities, but advance EOS in drier cities, with the crossover point occurring at around 1,000 mm of mean annual precipitation (bio12; Fig.\ref{fig5:marginal} d). 
+
+These patterns are robust across analytical approaches, as multivariate phylogenetic generalized linear mixed models yield consistent results across all species (Table 1). For SOS, temperature sensitivity was negatively associated with mean annual precipitation (mean = $-$0.0991, 95\% credible interval [$-$0.151, $-$0.0475]) and positively associated with mean annual temperature (mean = 0.168, 95\% credible interval [0.108, 0.228]), suggesting moisture and thermal constraints on spring phenology. For EOS, temperature sensitivity showed a strong positive relationship with mean annual precipitation (mean = 0.676, [0.603, 0.753]), suggesting that warmer microclimates delayed senescence in wetter cities but advanced senescence in drier cities.
 \input{content/fig5-marginal.tex}
 
 \begin{table}[htbp]
