@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.28 (TeX Live 2025) (preloaded format=pdflatex 2025.6.1)  6 APR 2026 13:05
+This is pdfTeX, Version 3.141592653-2.6-1.40.28 (TeX Live 2025) (preloaded format=pdflatex 2025.6.1)  6 APR 2026 13:17
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -868,4 +868,74 @@ Package pdftex.def Info: ../../temp/fig-main/fig2-variance.png  used on input li
 <../../temp/fig-main/fig3-nycexample.png, id=52, 744.6pt x 602.25pt>
 File: ../../temp/fig-main/fig3-nycexample.png Graphic file (type png)
 <use ../../temp/fig-main/fig3-nycexample.png>
-Package pdftex.def Info: ../../temp/fig-main/fig3-nycexample.p
+Package pdftex.def Info: ../../temp/fig-main/fig3-nycexample.png  used on input line 3.
+(pdftex.def)             Requested size: 422.77664pt x 341.95357pt.
+) (./content/fig4-heatmap.tex
+<../../temp/fig-main/fig4-heatmap.png, id=53, 1517.67pt x 971.484pt>
+File: ../../temp/fig-main/fig4-heatmap.png Graphic file (type png)
+<use ../../temp/fig-main/fig4-heatmap.png>
+Package pdftex.def Info: ../../temp/fig-main/fig4-heatmap.png  used on input line 3.
+(pdftex.def)             Requested size: 422.77664pt x 270.62024pt.
+)
+
+[12]
+
+[13 <../../temp/fig-main/fig3-nycexample.png>]
+
+[14 <../../temp/fig-main/fig4-heatmap.png>] (./content/fig5-marginal.tex
+<../../temp/fig-main/fig5-marginal.png, id=66, 1131.135pt x 728.613pt>
+File: ../../temp/fig-main/fig5-marginal.png Graphic file (type png)
+<use ../../temp/fig-main/fig5-marginal.png>
+Package pdftex.def Info: ../../temp/fig-main/fig5-marginal.png  used on input line 3.
+(pdftex.def)             Requested size: 422.77664pt x 272.32866pt.
+)) (./content/main4-discussion.tex) (./manuscript-main.bbl
+
+[15]
+
+[16 <../../temp/fig-main/fig5-marginal.png>]
+
+[17]
+
+[18]
+
+[19]
+LaTeX Font Info:    Trying to load font information for OMS+ntxtlf on input line 112.
+LaTeX Font Info:    No file OMSntxtlf.fd. on input line 112.
+
+
+LaTeX Font Warning: Font shape `OMS/ntxtlf/m/n' undefined
+(Font)              using `OMS/cmsy/m/n' instead
+(Font)              for symbol `textbar' on input line 112.
+
+
+
+[20]) (./content/main5-backmatter.tex
+
+[21])
+
+[22] (./manuscript-main.aux)
+ ***********
+LaTeX2e <2024-11-01> patch level 2
+L3 programming layer <2020/03/25>
+ ***********
+
+
+LaTeX Font Warning: Some font shapes were not available, defaults substituted.
+
+ ) 
+Here is how much of TeX's memory you used:
+ 8611 strings out of 471510
+ 127820 string characters out of 5517893
+ 499697 words of memory out of 5000000
+ 34992 multiletter control sequences out of 15000+600000
+ 728594 words of font info for 241 fonts, out of 8000000 for 9000
+ 36 hyphenation exceptions out of 8191
+ 79i,12n,83p,1724b,360s stack positions out of 10000i,1000n,20000p,200000b,200000s
+</Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/newtx/NewTXBMI.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/newtx/NewTXMI.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/newtx/NewTXMI7.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/tex-gyre/qhvr.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/newtx/txexs.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/newtx/txmiaX.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/newtx/txsys.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/newtx/ztmb.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/newtx/ztmr.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/newtx/ztmri.pfb>
+Output written on manuscript-main.pdf (22 pages, 8243814 bytes).
+PDF statistics:
+ 146 PDF objects out of 1000 (max. 8388607)
+ 89 compressed objects within 1 object stream
+ 0 named destinations out of 1000 (max. 500000)
+ 26 words of extra memory for PDF output out of 10000 (max. 10000000)
+
