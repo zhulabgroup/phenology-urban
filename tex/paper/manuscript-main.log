@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.28 (TeX Live 2025) (preloaded format=pdflatex 2025.6.1)  5 APR 2026 15:13
+This is pdfTeX, Version 3.141592653-2.6-1.40.28 (TeX Live 2025) (preloaded format=pdflatex 2025.6.1)  5 APR 2026 22:05
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -324,6 +324,15 @@ Package graphics Info: Driver file: pdftex.def on input line 106.
 )
 \Gin@req@height=\dimen178
 \Gin@req@width=\dimen179
+) (/Users/jializ/Library/TinyTeX/texmf-dist/tex/latex/natbib/natbib.sty
+Package: natbib 2010/09/13 8.31b (PWD, AO)
+\bibhang=\skip56
+\bibsep=\skip57
+LaTeX Info: Redefining \cite on input line 694.
+\c@NAT@ctr=\count308
+) (/Users/jializ/Library/TinyTeX/texmf-dist/tex/latex/url/url.sty
+\Urlmuskip=\muskip18
+Package: url 2013/09/16  ver 3.4  Verb mode for urls, etc.
 ) (/Users/jializ/Library/TinyTeX/texmf-dist/tex/latex/lineno/lineno.sty
 Package: lineno 2025/05/13 line numbers on paragraphs v5.5
  (/Users/jializ/Library/TinyTeX/texmf-dist/tex/latex/kvoptions/kvoptions.sty
@@ -333,26 +342,26 @@ Package: ltxcmds 2023-12-04 v1.26 LaTeX kernel commands for general use (HO)
 ) (/Users/jializ/Library/TinyTeX/texmf-dist/tex/latex/kvsetkeys/kvsetkeys.sty
 Package: kvsetkeys 2022-10-05 v1.19 Key value parser (HO)
 ))
-\linenopenalty=\count308
+\linenopenalty=\count309
 \output=\toks28
-\linenoprevgraf=\count309
+\linenoprevgraf=\count310
 \linenumbersep=\dimen180
 \linenumberwidth=\dimen181
-\c@linenumber=\count310
-\c@pagewiselinenumber=\count311
-\c@LN@truepage=\count312
-\c@internallinenumber=\count313
-\c@internallinenumbers=\count314
+\c@linenumber=\count311
+\c@pagewiselinenumber=\count312
+\c@LN@truepage=\count313
+\c@internallinenumber=\count314
+\c@internallinenumbers=\count315
 \quotelinenumbersep=\dimen182
 \bframerule=\dimen183
 \bframesep=\dimen184
 \bframebox=\box55
-\@LN@amsmath@ams@eqpen=\count315
+\@LN@amsmath@ams@eqpen=\count316
 )) (/Users/jializ/Library/TinyTeX/texmf-dist/tex/latex/totcount/totcount.sty
 Package: totcount 2011/01/25 v1.2 package for gettingthe total value of LaTeX counters
 ) (./config/macros.tex
-\c@citnum=\count316
-\c@citnum@totc=\count317
+\c@citnum=\count317
+\c@citnum@totc=\count318
 )
 LaTeX Font Info:    Trying to load font information for OT1+ntxtlf on input line 6.
  (/Users/jializ/Library/TinyTeX/texmf-dist/tex/latex/newtx/ot1ntxtlf.fd
@@ -403,8 +412,8 @@ Package epstopdf-base Info: Redefining graphics rule for `.eps' on input line 48
  (/Users/jializ/Library/TinyTeX/texmf-dist/tex/latex/latexconfig/epstopdf-sys.cfg
 File: epstopdf-sys.cfg 2010/07/13 v1.3 Configuration of (r)epstopdf for TeX Live
 ))
-\c@mv@tabular=\count318
-\c@mv@boldtabular=\count319
+\c@mv@tabular=\count319
+\c@mv@boldtabular=\count320
 LaTeX Info: Command `\dddot' is already robust on input line 6.
 LaTeX Info: Command `\ddddot' is already robust on input line 6.
 
@@ -782,117 +791,147 @@ Overfull \hbox (8.81317pt too wide) in paragraph at lines 25--26
 
 
 [6]
+
+[7]
 LaTeX Font Info:    Font shape `OT1/minntx/b/n' will be
-(Font)              scaled to size 12.0pt on input line 67.
+(Font)              scaled to size 12.0pt on input line 79.
 LaTeX Font Info:    Font shape `OT1/minntx/b/n' will be
-(Font)              scaled to size 8.8pt on input line 67.
+(Font)              scaled to size 8.8pt on input line 79.
 LaTeX Font Info:    Font shape `OT1/minntx/b/n' will be
-(Font)              scaled to size 6.6pt on input line 67.
+(Font)              scaled to size 6.6pt on input line 79.
 LaTeX Font Info:    Font shape `OML/ntxmi/b/it' will be
-(Font)              scaled to size 12.0pt on input line 67.
+(Font)              scaled to size 12.0pt on input line 79.
 LaTeX Font Info:    Font shape `OML/ntxmi/b/it' will be
-(Font)              scaled to size 8.8pt on input line 67.
+(Font)              scaled to size 8.8pt on input line 79.
 LaTeX Font Info:    Font shape `OML/ntxmi/b/it' will be
-(Font)              scaled to size 6.6pt on input line 67.
+(Font)              scaled to size 6.6pt on input line 79.
 LaTeX Font Info:    Font shape `LMS/ntxsy/b/n' will be
-(Font)              scaled to size 12.0pt on input line 67.
+(Font)              scaled to size 12.0pt on input line 79.
 LaTeX Font Info:    Font shape `LMS/ntxsy/b/n' will be
-(Font)              scaled to size 8.8pt on input line 67.
+(Font)              scaled to size 8.8pt on input line 79.
 LaTeX Font Info:    Font shape `LMS/ntxsy/b/n' will be
-(Font)              scaled to size 6.6pt on input line 67.
+(Font)              scaled to size 6.6pt on input line 79.
 LaTeX Font Info:    Font shape `LMX/ntxexx/b/n' will be
-(Font)              scaled to size 12.0pt on input line 67.
+(Font)              scaled to size 12.0pt on input line 79.
 LaTeX Font Info:    Font shape `LMX/ntxexx/b/n' will be
-(Font)              scaled to size 8.8pt on input line 67.
+(Font)              scaled to size 8.8pt on input line 79.
 LaTeX Font Info:    Font shape `LMX/ntxexx/b/n' will be
-(Font)              scaled to size 6.6pt on input line 67.
+(Font)              scaled to size 6.6pt on input line 79.
 LaTeX Font Info:    Font shape `U/ntxmia/b/it' will be
-(Font)              scaled to size 12.0pt on input line 67.
+(Font)              scaled to size 12.0pt on input line 79.
 LaTeX Font Info:    Font shape `U/ntxmia/b/it' will be
-(Font)              scaled to size 8.8pt on input line 67.
+(Font)              scaled to size 8.8pt on input line 79.
 LaTeX Font Info:    Font shape `U/ntxmia/b/it' will be
-(Font)              scaled to size 6.6pt on input line 67.
+(Font)              scaled to size 6.6pt on input line 79.
 LaTeX Font Info:    Font shape `U/ntxsym/b/n' will be
-(Font)              scaled to size 12.0pt on input line 67.
+(Font)              scaled to size 12.0pt on input line 79.
 LaTeX Font Info:    Font shape `U/ntxsym/b/n' will be
-(Font)              scaled to size 8.8pt on input line 67.
+(Font)              scaled to size 8.8pt on input line 79.
 LaTeX Font Info:    Font shape `U/ntxsym/b/n' will be
-(Font)              scaled to size 6.6pt on input line 67.
+(Font)              scaled to size 6.6pt on input line 79.
 LaTeX Font Info:    Font shape `U/ntxsyc/b/n' will be
-(Font)              scaled to size 12.0pt on input line 67.
+(Font)              scaled to size 12.0pt on input line 79.
 LaTeX Font Info:    Font shape `U/ntxsyc/b/n' will be
-(Font)              scaled to size 8.8pt on input line 67.
+(Font)              scaled to size 8.8pt on input line 79.
 LaTeX Font Info:    Font shape `U/ntxsyc/b/n' will be
-(Font)              scaled to size 6.6pt on input line 67.
+(Font)              scaled to size 6.6pt on input line 79.
 LaTeX Font Info:    Font shape `U/ntxexa/b/n' will be
-(Font)              scaled to size 12.0pt on input line 67.
+(Font)              scaled to size 12.0pt on input line 79.
 LaTeX Font Info:    Font shape `U/ntxexa/b/n' will be
-(Font)              scaled to size 8.8pt on input line 67.
+(Font)              scaled to size 8.8pt on input line 79.
 LaTeX Font Info:    Font shape `U/ntxexa/b/n' will be
-(Font)              scaled to size 6.6pt on input line 67.
+(Font)              scaled to size 6.6pt on input line 79.
 LaTeX Font Info:    Font shape `OT1/ntxtlf/m/n' will be
-(Font)              scaled to size 8.8pt on input line 67.
+(Font)              scaled to size 8.8pt on input line 79.
 LaTeX Font Info:    Font shape `OT1/ntxtlf/m/n' will be
-(Font)              scaled to size 6.6pt on input line 67.
+(Font)              scaled to size 6.6pt on input line 79.
+
+Overfull \hbox (1.17563pt too wide) in paragraph at lines 81--82
+\OT1/minntx/m/n/12 pre-sea-son av-er-age tem-per-a-ture, pre-cip-i-ta-tion and short-wave ra-di-a-tion. $[] \U/ntxmia/m/it/12 = \LMS/ntxsy/m/n/12 ¹\OML/ntxmi/m/it/12 ^^L[]; ^^L[]; ^^L[]; ^^L[]\LMS/ntxsy/m/n/12 º[]$
+ []
 
 
-[7]) (./content/main3-results.tex (./content/fig2-variance.tex
-<../../temp/fig-main/fig2-variance.png, id=36, 694.449pt x 466.689pt>
+
+[8]
+
+[9]) (./content/main3-results.tex (./content/fig2-variance.tex
+<../../temp/fig-main/fig2-variance.png, id=43, 694.449pt x 466.689pt>
 File: ../../temp/fig-main/fig2-variance.png Graphic file (type png)
 <use ../../temp/fig-main/fig2-variance.png>
 Package pdftex.def Info: ../../temp/fig-main/fig2-variance.png  used on input line 3.
 (pdftex.def)             Requested size: 422.77664pt x 284.1173pt.
-) (./content/fig3-nycexample.tex
-<../../temp/fig-main/fig3-nycexample.png, id=38, 744.6pt x 602.25pt>
+)
+
+[10]
+
+[11 <../../temp/fig-main/fig2-variance.png>] (./content/fig3-nycexample.tex
+<../../temp/fig-main/fig3-nycexample.png, id=52, 744.6pt x 602.25pt>
 File: ../../temp/fig-main/fig3-nycexample.png Graphic file (type png)
 <use ../../temp/fig-main/fig3-nycexample.png>
 Package pdftex.def Info: ../../temp/fig-main/fig3-nycexample.png  used on input line 3.
 (pdftex.def)             Requested size: 422.77664pt x 341.95357pt.
-)
-
-[8]
-
-[9 <../../temp/fig-main/fig2-variance.png>]
-
-[10 <../../temp/fig-main/fig3-nycexample.png>] (./content/fig4-heatmap.tex
-<../../temp/fig-main/fig4-heatmap.png, id=51, 1517.67pt x 971.484pt>
+) (./content/fig4-heatmap.tex
+<../../temp/fig-main/fig4-heatmap.png, id=53, 1517.67pt x 971.484pt>
 File: ../../temp/fig-main/fig4-heatmap.png Graphic file (type png)
 <use ../../temp/fig-main/fig4-heatmap.png>
 Package pdftex.def Info: ../../temp/fig-main/fig4-heatmap.png  used on input line 3.
 (pdftex.def)             Requested size: 422.77664pt x 270.62024pt.
-) (./content/fig5-marginal.tex
-<../../temp/fig-main/fig5-marginal.png, id=52, 1131.135pt x 728.613pt>
+)
+
+[12 <../../temp/fig-main/fig3-nycexample.png>]
+
+[13 <../../temp/fig-main/fig4-heatmap.png>] (./content/fig5-marginal.tex
+<../../temp/fig-main/fig5-marginal.png, id=63, 1131.135pt x 728.613pt>
 File: ../../temp/fig-main/fig5-marginal.png Graphic file (type png)
 <use ../../temp/fig-main/fig5-marginal.png>
 Package pdftex.def Info: ../../temp/fig-main/fig5-marginal.png  used on input line 3.
 (pdftex.def)             Requested size: 422.77664pt x 272.32866pt.
-)) (./content/main4-discussion.tex) (./content/main5-backmatter.tex
+)) (./content/main4-discussion.tex) (./manuscript-main.bbl
 
-[11 <../../temp/fig-main/fig4-heatmap.png>]
+[14 <../../temp/fig-main/fig5-marginal.png>]
 
-[12 <../../temp/fig-main/fig5-marginal.png>]
+[15]
 
-[13])
+[16]
 
-[14] (./manuscript-main.aux)
+[17]
+LaTeX Font Info:    Trying to load font information for OMS+ntxtlf on input line 104.
+LaTeX Font Info:    No file OMSntxtlf.fd. on input line 104.
+
+
+LaTeX Font Warning: Font shape `OMS/ntxtlf/m/n' undefined
+(Font)              using `OMS/cmsy/m/n' instead
+(Font)              for symbol `textbar' on input line 104.
+
+) (./content/main5-backmatter.tex
+
+[18]
+
+[19])
+
+[20] (./manuscript-main.aux)
  ***********
 LaTeX2e <2024-11-01> patch level 2
 L3 programming layer <2020/03/25>
  ***********
+
+
+LaTeX Font Warning: Some font shapes were not available, defaults substituted.
+
  ) 
 Here is how much of TeX's memory you used:
- 8087 strings out of 471510
- 120383 string characters out of 5517893
- 492896 words of memory out of 5000000
- 34479 multiletter control sequences out of 15000+600000
- 728337 words of font info for 240 fonts, out of 8000000 for 9000
+ 8605 strings out of 471510
+ 127658 string characters out of 5517893
+ 499462 words of memory out of 5000000
+ 34986 multiletter control sequences out of 15000+600000
+ 728594 words of font info for 241 fonts, out of 8000000 for 9000
  36 hyphenation exceptions out of 8191
- 79i,12n,83p,1724b,352s stack positions out of 10000i,1000n,20000p,200000b,200000s
-</Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/newtx/NewTXBMI.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/newtx/NewTXMI.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/newtx/NewTXMI7.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/tex-gyre/qhvr.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/newtx/txexs.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/newtx/txmiaX.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/newtx/txsys.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/newtx/ztmb.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/newtx/ztmr.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/newtx/ztmri.pfb>
-Output written on manuscript-main.pdf (14 pages, 8211246 bytes).
+ 79i,12n,83p,1724b,356s stack positions out of 10000i,1000n,20000p,200000b,200000s
+</Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/newtx/NewTXBMI.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/newtx/NewTXMI.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/newtx/NewTXMI7.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/tex-gyre/qhvr.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/newtx/txexs.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/newtx/txmiaX.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/newtx/txsys.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/newtx/ztmb.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/newtx/ztmr.pfb></Users/jializ/Library/TinyTeX/texmf-dist/fonts/type1/public/newtx/ztmri.pfb>
+Output written on manuscript-main.pdf (20 pages, 8238067 bytes).
 PDF statistics:
- 116 PDF objects out of 1000 (max. 8388607)
- 69 compressed objects within 1 object stream
+ 140 PDF objects out of 1000 (max. 8388607)
+ 85 compressed objects within 1 object stream
  0 named destinations out of 1000 (max. 500000)
  26 words of extra memory for PDF output out of 10000 (max. 10000000)
 
