@@ -7,6 +7,9 @@ $pdf_mode = 1;
 # Put all output (including PDF) in build directory first
 $out_dir = 'build';
 
+# Allow BibTeX to find shared bibliography files in parent directories.
+$ENV{'BIBINPUTS'} = '.:..:' . ($ENV{'BIBINPUTS'} // '');
+
 # Emulate aux directory behavior
 $emulate_aux = 1;
 
