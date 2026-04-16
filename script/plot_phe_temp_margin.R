@@ -56,12 +56,12 @@ search_boundary <- function(city) {
   return(boundary)
 }
 
-plot_phe_temp_margin <- function(city = "NewYork", species = "Acer rubrum", phe_type = "SOS", year = 2023){
+plot_phe_temp_margin <- function(city = "NewYork", species = "Acer rubrum", phe_type = "SOS", year = 2022){
   source(here("script/spatial_stats_model/prepare_model_input.R"))
   model_input_sf <-  prepare_data(city = city, source = "Grid", taxa_col= "canonicalname", phe_type = phe_type)|>
     filter(canonicalname == species) |>
     filter(year == !!year)
-  
+  phe_metric <- "doy"
   x <- model_input_sf[[phe_metric]]
   q <- stats::quantile(x, probs = c(0.25, 0.75), na.rm = TRUE)
   iqr <- diff(q)
@@ -99,24 +99,26 @@ plot_phe_temp_margin <- function(city = "NewYork", species = "Acer rubrum", phe_
   clipped_over <- temp_tif |>
     # crop(temp_tif, vect(tree_location)) |>
     project(crs(city_boundary), res = 0.009)  # transform to WGS84 for plotting
-  tree_location <- tree_location|>
-    st_transform(crs(city_boundary))
   city_v <- vect(city_boundary)
   clipped <- crop(clipped_over, city_v) |> mask(city_v)
   temp_df <- as.data.frame(clipped, xy = TRUE) |>
     rename_with(~ "value", .cols = 3)
   
+  tree_location <- tree_location|>
+    st_transform(crs(city_boundary))  
   bbox_tree <- st_bbox(tree_location)
   bbox_city <- st_bbox(city_boundary)
-  
-  
-  # the larger bbox
-  xlim <- c(min(bbox_tree["xmin"], bbox_city["xmin"]), max(bbox_tree["xmax"], bbox_city["xmax"]))
-  ylim <- c(min(bbox_tree["ymin"], bbox_city["ymin"]), max(bbox_tree["ymax"], bbox_city["ymax"]))
-  if(city == "Sacramento"){
-    xlim <- c(bbox_city["xmin"], bbox_city["xmax"])
-    ylim <- c(bbox_city["ymin"], bbox_city["ymax"])
-  }
+  # 
+  # 
+  # # the larger bbox
+  # xlim <- c(min(bbox_tree["xmin"], bbox_city["xmin"]), max(bbox_tree["xmax"], bbox_city["xmax"]))
+  # ylim <- c(min(bbox_tree["ymin"], bbox_city["ymin"]), max(bbox_tree["ymax"], bbox_city["ymax"]))
+  # if(city == "Sacramento"){
+  #   xlim <- c(bbox_city["xmin"], bbox_city["xmax"])
+  #   ylim <- c(bbox_city["ymin"], bbox_city["ymax"])
+  # }
+  xlim <- c(bbox_city["xmin"], bbox_city["xmax"])
+  ylim <- c(bbox_city["ymin"], bbox_city["ymax"])
   lims <- fix_map_ratio(xlim, ylim, ratio = 1.3)
   
   if (phe_type == "SOS") {
@@ -271,16 +273,15 @@ plot_phe_temp_margin <- function(city = "NewYork", species = "Acer rubrum", phe_
   
   ####################### Prediction map #######################
   
-  pred_tree_location <- temp_df |>
-    left_join(read_rds("~/phenology-urban/data/raw/CONUS/Daymet/example_pred_city/", city, "prcp_monthly_2022.rds"), by = c("x", "y")) |>
-    left_join(read_rds("~/phenology-urban/data/raw/CONUS/Daymet/example_pred_city/", city, "srad_monthly_2022.rds"), by = c("x", "y")) |>
+  pred_tree_location <- read_rds(paste0("~/phenology-urban/data/raw/CONUS/Daymet/example_pred_city/", city, "/pred_monthly_2022.rds")) |>
     mutate(
       doy_pred = b0 +
         b_temp * value +
         b_prcp * prcp +
         b_srad * srad +
         u_year
-    )
+    ) |>
+    st_as_sf(coords = c("x", "y"), crs = 4326)
   doy_rast_pred <- {
     x <- terra::extract(
       clipped,

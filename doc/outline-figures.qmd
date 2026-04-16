@@ -1057,18 +1057,18 @@ ggsave("~/phenology-urban/temp/figure_agu/phenology_temperature_cities2.png", p,
 
 ```{r}
 source(here("script/plot_phe_temp_margin.R"))
-city = c("NewYork", "TP", "Stockton", "LosAngeles", "Seattle", "Sacramento", "WashingtonDC", "SanFrancisco")
+cities = c("NewYork", "TP", "Stockton", "LosAngeles", "Seattle", "Sacramento", "WashingtonDC", "SanFrancisco")
 species = c(
   "Acer rubrum", "Acer rubrum",
   "Betula pendula", "Betula pendula",
   "Liquidambar styraciflua", "Liquidambar styraciflua",
   "Acer rubrum","Acer rubrum")
-phe_type = c("SOS", "SOS", "SOS", "SOS", "EOS", "EOS", "EOS", "EOS")
+phe_types = c("SOS", "SOS", "SOS", "SOS", "EOS", "EOS", "EOS", "EOS")
 
 for (i in seq_along(city)) {
-  c <- city[i]
+  c <- cities[i]
   s <- species[i]
-  p <- phe_type[i]
+  p <- phe_types[i]
   cat("Processing:", c, "-", s, "-", p, "\n")
   result <- plot_phe_temp_margin(city = c, species = s, phe_type = p, year = 2022)
   
