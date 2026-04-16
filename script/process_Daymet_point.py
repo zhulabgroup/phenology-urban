@@ -118,6 +118,6 @@ for doy_file in doy_files:
 
     print("Finished downloading", len(all_results), "locations.")
     final_df = pd.concat(all_results, ignore_index=True)
-    final_df.to_csv(out_file, index=False)  # 保持你的 CSV 输出
+    final_df.to_csv(out_file, index=False)  #
     print("Saved to:", out_file)
 

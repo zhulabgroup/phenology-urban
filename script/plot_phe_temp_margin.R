@@ -96,7 +96,8 @@ plot_phe_temp_margin <- function(city = "NewYork", species = "Acer rubrum", phe_
   tree_location <- tree_location|>
     st_transform(crs(temp_tif))
   
-  clipped_over <- crop(temp_tif, vect(tree_location)) |>
+  clipped_over <- temp_tif |>
+    # crop(temp_tif, vect(tree_location)) |>
     project(crs(city_boundary), res = 0.009)  # transform to WGS84 for plotting
   tree_location <- tree_location|>
     st_transform(crs(city_boundary))
@@ -268,18 +269,21 @@ plot_phe_temp_margin <- function(city = "NewYork", species = "Acer rubrum", phe_
     length.out = 200
   )
   
-  pred_tree_location <- tree_location |>
+  ####################### Prediction map #######################
+  
+  pred_tree_location <- temp_df |>
+    left_join(read_rds("~/phenology-urban/data/raw/CONUS/Daymet/example_pred_city/", city, "prcp_monthly_2022.rds"), by = c("x", "y")) |>
+    left_join(read_rds("~/phenology-urban/data/raw/CONUS/Daymet/example_pred_city/", city, "srad_monthly_2022.rds"), by = c("x", "y")) |>
     mutate(
       doy_pred = b0 +
-        b_temp * .data[[temp_col]] +
-        b_prcp * .data[[prcp_col]] +
-        b_srad * .data[[srad_col]] +
+        b_temp * value +
+        b_prcp * prcp +
+        b_srad * srad +
         u_year
     )
-  
   doy_rast_pred <- {
     x <- terra::extract(
-      clipped_over,
+      clipped,
       vect(pred_tree_location |> filter(!is.na(doy_pred))),
       cells = TRUE
     ) |>
@@ -292,7 +296,7 @@ plot_phe_temp_margin <- function(city = "NewYork", species = "Acer rubrum", phe_
       summarise(doy_pred = median(doy_pred, na.rm = TRUE), .groups = "drop") |>
       filter(!is.na(cell))
     
-    r <- rast(clipped_over)
+    r <- rast(clipped)
     values(r) <- NA_real_
     values(r)[x$cell] <- x$doy_pred
     r
