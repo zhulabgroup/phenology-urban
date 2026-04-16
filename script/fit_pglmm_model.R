@@ -105,7 +105,10 @@ fit_uni <- function(phe_type, input_data, city_feature, species_name, clim = "me
         q50  = quantile(estimate, 0.50,  na.rm = TRUE),
         q975 = quantile(estimate, 0.975, na.rm = TRUE),
         .groups = "drop"
-      )
+      ) %>%
+      mutate(species_name = species_name,
+             phe_type = phe_type,
+             size = nrow(df_phe))
     model_summary <- boot_summary
     full_data <- boot_fits
     
