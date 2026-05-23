@@ -45,7 +45,7 @@ This document outlines the figures that will be generated in the urban phenology
 
 # Data and methods
 
-## Study area map
+## Supp_Fig.1
 
 Distribution of city samples. The geometry location of selected cities. The size of the circle represents the number of trees in the city/number of species. The PCA location of selected cities. Or some separate figures to show the distribution of characteristics.
 
@@ -231,7 +231,7 @@ ggsave("~/phenology-urban/temp/figure_agu/conus.png", p_area, width = 12, height
 
 ## Variation of phenology across cities
 
-### Step by step
+### Main_Fig.1 a,c
 
 one species across cities, raw DOY histogram -> IQR boxplot -> IQR scatterplot (within and scross)
 
@@ -319,12 +319,6 @@ eos_plots$sp_boxplot_SOS
 ggsave("~/phenology-urban/temp/figure_agu/variance/eos_conus.png", eos_plots$doy_map, width = 17, height = 10, dpi = 500, units = "cm")
 ggsave("~/phenology-urban/temp/figure_agu/variance/eos_cities.png", cities, width = 3, height = 8.5, dpi = 500)
 ggsave("~/phenology-urban/temp/figure_agu/variance/eos_box.png", eos_plots$sp_boxplot_SOS, width = 10, height = 2, dpi = 500)
-
-
-
-
-
-
 
 
 ggsave("~/phenology-urban/temp/figure_agu/variance_sos.png", plot_sos, width = 15.5, height = 16.5, dpi = 500, units = "cm")
@@ -436,7 +430,7 @@ city_IQR_scatter <- ggplot(summary_data |>
 
 ```
 
-### Use random-effect model to partition variance
+### Main_Fig.1 b,d
 
 ```{r lmer}
 library(lme4)
@@ -1076,7 +1070,7 @@ ggsave("~/phenology-urban/temp/figure_agu/phenology_temperature_cities2.png", p,
 
 ## The respones of phenology to temperature variation
 
-### Step by step
+### Main_Fig.2
 
 ```{r}
 source(here("script/plot_phe_temp_margin.R"))
@@ -1630,7 +1624,7 @@ overlap_city_species_range_model <- overlap_city_species_range |>
   select(-bio1, -bio12)# larger value: further away from the edge 
 ```
 
-### heatmap
+### Main_Fig.3 heatmap
 
 ```{r}
 #| label: fig-heatmap
@@ -1666,7 +1660,7 @@ p_heat_xy
 ggsave("~/phenology-urban/temp/figure_supp/fig3-heatmap-freq.png", p_heat_xy, width = 21.5, height = 16, dpi = 500)
 ```
 
-### spatial map
+### Main_Fig.4 a,b spatial map
 
 ```{r}
 #| include: false
@@ -1876,7 +1870,7 @@ ggsave(
 ```
 
 
-### Marginal
+### Main_Fig.4 c,d Marginal
 
 ```{r}
 species_vec <- c(
