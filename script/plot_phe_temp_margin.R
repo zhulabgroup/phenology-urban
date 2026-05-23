@@ -26,9 +26,10 @@ search_boundary <- function(city) {
     "Seattle" = st_read(here("data/raw/Example_city/ST/seattle_boundary/CityUGA.shp")) %>%
       filter(CITY_NM == "Seattle"),
     "Houston" = st_read(here("data/raw/Example_city/HT/HGAC_City_Boundaries/HGAC_City_Boundaries.shp")) %>%
-      filter(NAME == "Houston"),  # change to some distance
-    "TP" = st_read(here("data/raw/Example_city/TP/Municipal_Boundary/Municipal_Boundary.shp")) %>%
-      filter(NAME == "Tampa"),
+      filter(NAME == "Houston") |>
+      st_make_valid(),  # change to some distance
+    "TP" = st_read(here("data/raw/Example_city/TP/Tampa_Planning_Districts/Tampa_Planning_Districts.shp")) %>%
+      st_make_valid() |> st_union(),
     "Denver" = st_read(here("data/raw/Example_city/DV/DRCOG_Municipalities/DRCOG_Municipalities.shp")) %>%
       filter(city == "Denver"),
     "Austin" = st_read(here("data/raw/Example_city/AT/TxDOT_City_Boundaries/Cities.shp")) %>%
@@ -48,8 +49,15 @@ search_boundary <- function(city) {
     "Sacramento" = st_read(here("data/raw/Example_city/Sacramento/City_and_County_Boundary/City_and_County_Boundary.shp")) |>
       filter(CITY_NAME == "SACRAMENTO") |>
       st_make_valid(),
-    "Atlanta" = st_read(here("data/raw/Example_city/Atlanta/Official_Neighborhoods_-_Open_Data/Official_Neighborhoods_-_Open_Data.shp")) |>
-      st_make_valid() |> st_union(),
+    "Atlanta" = st_read(here("data/raw/Example_city/Atlanta/Quadrants/Quadrants.shp")) |>
+      st_make_valid() |> st_union()  |>
+      nngeo::st_remove_holes(),
+    "NewOrleans" = st_read(here("data/raw/Example_city/NewOrleans/Orleans Parish Boundary_20260416/geo_export_2201ea0f-3a1c-4066-aec3-a8e995d07a7a.shp")),
+    "Portland" = st_read(here("data/raw/Example_city/Portland/City_Boundaries/City_Boundaries.shp")) |>
+      filter(CITYNAME == "Portland") |>
+      st_make_valid(),
+    "Bloomington" = st_read(here("data/raw/Example_city/Bloomington/Bloomington Municipal Boundary_20260421/geo_export_951c8648-2ab5-41e2-820c-1a4d268e2537.shp")),
+    "Norfolk" = st_read(here("data/raw/Example_city/Norfolk/City_Limit/City_Limit_-_City_of_Norfolk.shp")),
     stop("Invalid city abbreviation.")
   )
   boundary <- st_transform(boundary, crs = 4326)  # ensure WGS84
@@ -144,11 +152,29 @@ plot_phe_temp_margin <- function(city = "NewYork", species = "Acer rubrum", phe_
       n.breaks = 5 
     ) +
     scale_x_continuous(
-      n.breaks = 3
+      n.breaks = 3,
+      labels = function(x) {
+        lab <- ifelse(
+          x < 0,
+          paste0(sprintf("%.2f", abs(x)), "°W"),
+          paste0(sprintf("%.2f", x), "°E")
+        )
+        lab[seq_along(lab) > 2] <- ""
+        lab
+      }
     ) +
     labs(x = "Longitude", y = "Latitude") +
     theme_minimal() +
-    coord_sf(xlim = lims$xlim, ylim = lims$ylim, expand = FALSE) +
+    coord_sf(xlim = lims$xlim, ylim = lims$ylim, expand = FALSE,
+             clip = "off"   # important
+    ) +
+    annotation_scale(
+      location = "tr",
+      width_hint = 0.4,
+      text_cex = 1.3,
+      unit_category = "metric",
+      pad_y = unit(-0.7, "cm")
+    ) +
     theme(
       axis.text = element_text(size = 12),
       axis.title = element_text(size = 14),
@@ -163,6 +189,7 @@ plot_phe_temp_margin <- function(city = "NewYork", species = "Acer rubrum", phe_
   map_temp <- ggplot() +
     geom_sf(data = city_boundary, fill = "grey90", color = "black") +
     geom_tile(data = temp_df, aes(x = x, y = y, fill = value)) +
+    geom_sf(data = tree_location, color = "grey78", size = 0.01, alpha = 0.9) +
     scale_fill_viridis_c(
       name = legend_temp_name,
       option = "inferno",
@@ -173,7 +200,18 @@ plot_phe_temp_margin <- function(city = "NewYork", species = "Acer rubrum", phe_
         label.position = "bottom"
       )) +
     scale_y_continuous(n.breaks = 5) +
-    scale_x_continuous(n.breaks = 3) +
+    scale_x_continuous(
+      n.breaks = 3,
+      labels = function(x) {
+        lab <- ifelse(
+          x < 0,
+          paste0(sprintf("%.2f", abs(x)), "°W"),
+          paste0(sprintf("%.2f", x), "°E")
+        )
+        lab[seq_along(lab) > 2] <- ""
+        lab
+      }
+    ) +
     labs(x = "Longitude", y = "Latitude") +
     theme_minimal() +
     coord_sf(xlim = lims$xlim, ylim = lims$ylim, expand = FALSE) +
@@ -216,6 +254,7 @@ plot_phe_temp_margin <- function(city = "NewYork", species = "Acer rubrum", phe_
   map_phe_gridded <- ggplot() +
     geom_sf(data = city_boundary, fill = "grey90", color = "black") +
     geom_tile(data = phe_gridded_df, aes(x = x, y = y, fill = value)) +
+    geom_sf(data = tree_location, color = "grey78", size = 0.01, alpha = 0.9) +
     scale_fill_viridis_c(name = legend_phe_name,
                          breaks = range(phe_gridded_df$value, na.rm = TRUE),
                          labels = round(range(phe_gridded_df$value, na.rm = TRUE), 0),
@@ -227,11 +266,29 @@ plot_phe_temp_margin <- function(city = "NewYork", species = "Acer rubrum", phe_
       n.breaks = 5 
     ) +
     scale_x_continuous(
-      n.breaks = 3
+      n.breaks = 3,
+      labels = function(x) {
+        lab <- ifelse(
+          x < 0,
+          paste0(sprintf("%.2f", abs(x)), "°W"),
+          paste0(sprintf("%.2f", x), "°E")
+        )
+        lab[seq_along(lab) > 2] <- ""
+        lab
+      }
     ) +
     labs(x = "Longitude", y = "Latitude") +
     theme_minimal() +
-    coord_sf(xlim = lims$xlim, ylim = lims$ylim, expand = FALSE) +
+    coord_sf(xlim = lims$xlim, ylim = lims$ylim, expand = FALSE,
+             clip = "off"   # important
+    ) +
+    annotation_scale(
+      location = "tr",
+      width_hint = 0.4,
+      text_cex = 1.3,
+      unit_category = "metric",
+      pad_y = unit(-0.7, "cm")
+    ) +
       theme(
         axis.text = element_text(size = 12),
         axis.title = element_text(size = 18),
@@ -249,6 +306,8 @@ plot_phe_temp_margin <- function(city = "NewYork", species = "Acer rubrum", phe_
   
   b0     <- phe_fitted$res$summary.fixed["Intercept", "mean"]
   b_temp <- phe_fitted$res$summary.fixed["temp",      "mean"]
+  lwr_temp <- phe_fitted$res$summary.fixed["temp", "0.025quant"]
+  upr_temp <- phe_fitted$res$summary.fixed["temp", "0.975quant"]
   b_prcp <- phe_fitted$res$summary.fixed["prcp",      "mean"]
   b_srad <- phe_fitted$res$summary.fixed["srad",      "mean"]
   u_year <- phe_fitted$res$summary.random$year[phe_fitted$res$summary.random$year$ID==year,"mean"]
@@ -308,6 +367,7 @@ plot_phe_temp_margin <- function(city = "NewYork", species = "Acer rubrum", phe_
   map_phe_gridded_pred <- ggplot() +
     geom_sf(data = city_boundary, fill = "grey90", color = "black") +
     geom_tile(data = pred_phe_gridded_df, aes(x = x, y = y, fill = value)) +
+    geom_sf(data = tree_location, color = "grey78", size = 0.01, alpha = 0.9) +
     scale_fill_viridis_c(name = paste0("Modelled ", legend_phe_name),
                          breaks = range(pred_phe_gridded_df$value, na.rm = TRUE),
                          labels = round(range(pred_phe_gridded_df$value, na.rm = TRUE), 0),
@@ -319,11 +379,31 @@ plot_phe_temp_margin <- function(city = "NewYork", species = "Acer rubrum", phe_
       n.breaks = 5 
     ) +
     scale_x_continuous(
-      n.breaks = 3
+      n.breaks = 3,
+      labels = function(x) {
+        lab <- ifelse(
+          x < 0,
+          paste0(sprintf("%.2f", abs(x)), "°W"),
+          paste0(sprintf("%.2f", x), "°E")
+        )
+        lab[seq_along(lab) > 2] <- ""
+        lab
+      }
     ) +
     labs(x = "Longitude", y = "Latitude") +
     theme_minimal() +
-    coord_sf(xlim = lims$xlim, ylim = lims$ylim, expand = FALSE) +
+    coord_sf(
+      xlim = lims$xlim, ylim = lims$ylim,
+      expand = FALSE,
+      clip = "off"   # important
+    ) +
+    annotation_scale(
+      location = "tr",
+      width_hint = 0.4,
+      text_cex = 1.3,
+      unit_category = "metric",
+      pad_y = unit(-0.7, "cm")
+    ) +
     theme(
       axis.text = element_text(size = 12),
       axis.title = element_text(size = 18),
@@ -384,15 +464,15 @@ plot_phe_temp_margin <- function(city = "NewYork", species = "Acer rubrum", phe_
            phe_type == "EOS" ~ "End-of-season (DOY)"
          )) +
     theme_classic() +
-    annotate(
-      "text",
-      x = Inf, y = Inf,     
-      label = paste0("hat(beta)[Temp] == ", round(b_temp, 2)),
-      hjust = 1.1, vjust = 1.1, 
-      size  = 7,
-      color = text_color,
-      parse = TRUE
-    )+
+    # annotate(
+    #   "text",
+    #   x = Inf, y = Inf,     
+    #   label = paste0("hat(beta)[T] == ", round(b_temp, 2)),
+    #   hjust = 1.1, vjust = 1.1, 
+    #   size  = 7,
+    #   color = text_color,
+    #   parse = TRUE
+    # )+
     theme(
       axis.text = element_text(size = 12),
       axis.title = element_text(size = 14),
@@ -434,8 +514,9 @@ plot_phe_temp_margin <- function(city = "NewYork", species = "Acer rubrum", phe_
   
   map_panels_gridded_model <- map_temp + map_phe_gridded_pred + 
     plot_annotation(
-      title = bquote(.(city)* "," ~ .(year)),
-      subtitle = bquote(hat(beta)[Temp] == .(round(b_temp, 2)) ~~~ .(interpret_text)),
+      title = bquote(.(city)* "," ~ .(year) ~~~ .(interpret_text)),
+      subtitle = bquote(hat(beta)[T] == .(round(b_temp, 2)) ~
+                          "[" * .(round(lwr_temp, 2)) * "," ~ .(round(upr_temp, 2)) * "]" ),
       theme = theme(
         plot.title = element_text(size = 22),
         plot.subtitle = element_text(color = text_color, size = 22)
@@ -445,8 +526,9 @@ plot_phe_temp_margin <- function(city = "NewYork", species = "Acer rubrum", phe_
   
   map_panels_gridded <- map_temp + map_phe_gridded + 
     plot_annotation(
-      title = bquote(.(city)* "," ~ .(year)),
-      subtitle = bquote(hat(beta)[Temp] == .(round(b_temp, 2)) ~~~ .(interpret_text)),
+      title = bquote(.(city)* "," ~ .(year) ~~~ .(interpret_text)),
+      subtitle = bquote(hat(beta)[T] == .(round(b_temp, 2)) ~
+                          "[" * .(round(lwr_temp, 2)) * "," ~ .(round(upr_temp, 2)) * "]" ),
       theme = theme(
         plot.title = element_text(size = 22),
         plot.subtitle = element_text(color = text_color, size = 22)
@@ -456,8 +538,9 @@ plot_phe_temp_margin <- function(city = "NewYork", species = "Acer rubrum", phe_
   
   map_panels <- map_temp + map_phe + 
     plot_annotation(
-      title = bquote(.(city)* "," ~ .(year)),
-      subtitle = bquote(hat(beta)[Temp] == .(round(b_temp, 2)) ~~~ .(interpret_text)),
+      title = bquote(.(city)* "," ~ .(year) ~~~ .(interpret_text)),
+      subtitle = bquote(hat(beta)[T] == .(round(b_temp, 2)) ~
+                          "[" * .(round(lwr_temp, 2)) * "," ~ .(round(upr_temp, 2)) * "]" ),
       theme = theme(
         plot.title = element_text(size = 22),
         plot.subtitle = element_text(color = text_color, size = 22)
