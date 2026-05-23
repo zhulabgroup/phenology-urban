@@ -519,6 +519,13 @@ plot_weighted_fit <- function(df, phe = "SOS") {
     geom_linerange(aes(xmin = p5, xmax = p95, color = city), linewidth = 0.5, alpha = 0.3) +
     geom_point(aes(color = city), alpha = 0.3, size = 1) +
     geom_abline(slope = 1, intercept = 0, color = "grey50", linetype = "dashed") +
+    geom_smooth(
+      method = "lm",
+      formula = y ~ x + 0,
+      se = FALSE,
+      color = "black",
+      linewidth = 0.7
+    ) +
     annotate("text",
              x = min(df$mean, na.rm = TRUE),
              y = max(df$doy, na.rm = TRUE),
@@ -581,7 +588,7 @@ p = cowplot::plot_grid(
   rel_widths = c(1,0.05, 0.18,0.05)
 )
 p
-ggsave("~/phenology-urban/temp/figure_agu/validate_ps_npn.png", p, width = 12, height = 4.5, dpi = 500)
+ggsave("~/phenology-urban/temp/figure_supp/validate_ps_npn.png", p, width = 12, height = 4.5, dpi = 500)
 ```
 
 The comparison results are similar to those of @ps_npn_zhao, where the PS-derived MOS (middle of spring) is generally lower than the ground-observed MOS, while the MOF (middle of fall) shows a more balanced distribution.
