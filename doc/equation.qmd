@@ -35,35 +35,35 @@ where:
 All random effects were assumed to be independent and normally distributed:
 
 $$
-y_{j,m,n,t}
-= \mu_m
-+ u_{m,n}
-+ v_{m,j(n)}
-+ w_{m,t}
-+ \varepsilon_{i,m,n,t},
+y_{i,n,t}
+= \mu
++ u_{n}
++ v_{i(n)}
++ w_{t}
++ \varepsilon_{i,n,t},
 $$
 $$
-u_{m,n} \sim \mathcal{N}(0, \sigma^2_{\mathrm{inter},m}),
-$$
-
-$$
-v_{m,j(n)} \sim \mathcal{N}(0, \sigma^2_{\mathrm{intra},m}),
+u_{n} \sim \mathcal{N}(0, \sigma^2_{\mathrm{between}}),
 $$
 
 $$
-w_{m,t} \sim \mathcal{N}(0, \sigma^2_{\mathrm{year},m}),
+v_{i(n)} \sim \mathcal{N}(0, \sigma^2_{\mathrm{within}}),
 $$
 
 $$
-\varepsilon_{j,m,n,t} \sim \mathcal{N}(0, \sigma^2_{\mathrm{residual},m}).
+w_{t} \sim \mathcal{N}(0, \sigma^2_{\mathrm{year}}),
+$$
+
+$$
+\varepsilon_{i,n,t} \sim \mathcal{N}(0, \sigma^2_{\mathrm{residual}}).
 $$
 
 The total phenological variance for species $m$ was computed as:
 
 $$
 \sigma^2_{\mathrm{total},m}
-= \sigma^2_{\mathrm{inter},m}
-+ \sigma^2_{\mathrm{intra},m}
+= \sigma^2_{\mathrm{between},m}
++ \sigma^2_{\mathrm{within},m}
 + \sigma^2_{\mathrm{year},m}
 + \sigma^2_{\mathrm{residual},m}.
 $$
@@ -71,48 +71,50 @@ $$
 The proportional contributions of inter-urban and intra-urban variability were calculated as:
 
 $$
-\mathrm{Prop}_{\mathrm{inter},m}
-= \frac{\sigma^2_{\mathrm{inter},m}}{\sigma^2_{\mathrm{total},m}},
+\mathrm{P}_{\mathrm{between},m}
+= \frac{\sigma^2_{\mathrm{between},m}}{\sigma^2_{\mathrm{total},m}},
 \qquad
-\mathrm{Prop}_{\mathrm{intra},m}
-= \frac{\sigma^2_{\mathrm{intra},m}}{\sigma^2_{\mathrm{total},m}}.
+\mathrm{P}_{\mathrm{within},m}
+= \frac{\sigma^2_{\mathrm{within},m}}{\sigma^2_{\mathrm{total},m}}.
 $$
 
 The relative contributions of spatial components were further defined as:
 $$
-\sigma^2_{\mathrm{total},m}
-= \sigma^2_{\mathrm{inter},m}
-+ \sigma^2_{\mathrm{intra},m}
-+ \sigma^2_{\mathrm{year},m}
-+ \sigma^2_{\mathrm{residual},m}.
+\hat{\sigma}^2_{\mathrm{total}}
+= \hat{\sigma}^2_{\mathrm{between}}
++ \hat{\sigma}^2_{\mathrm{within}}
++ \hat{\sigma}^2_{\mathrm{year}}
++ \hat{\sigma}^2_{\mathrm{residual}}.
 $$
 $$
-\mathrm{Prop}^{*}_{\mathrm{inter},m}
-= \frac{\sigma^2_{\mathrm{inter},m}}
-{\sigma^2_{\mathrm{intra},m} + \sigma^2_{\mathrm{inter},m}},
+\mathrm{P}_{\mathrm{between}}
+= \frac{\hat{\sigma}^2_{\mathrm{between}}}
+{\hat{\sigma}^2_{\mathrm{within}} + \hat{\sigma}^2_{\mathrm{between}}},
 \qquad
-\mathrm{Prop}^{*}_{\mathrm{intra},m}
-= \frac{\sigma^2_{\mathrm{intra},m}}
-{\sigma^2_{\mathrm{intra},m} + \sigma^2_{\mathrm{inter},m}}.
+\mathrm{P}_{\mathrm{within}}
+= \frac{\hat{\sigma}^2_{\mathrm{within}}}
+{\hat{\sigma}^2_{\mathrm{within}} + \hat{\sigma}^2_{\mathrm{between}}}.
 $$
 
 
 
 ## Model 1
 
-$$y(\mathbf{s}_i, \mathbf{t}) = \mathbf{x}_{\mathbf{s}_i,\mathbf{t}} \boldsymbol{\beta} + w(\mathbf{s}_i) + u(\mathbf{t}) + \epsilon(\mathbf{s}_i, \mathbf{t})$$
+$$y(\mathbf{s}, t) = \mathbf{x}_{\mathbf{s},{t}} \boldsymbol{\beta}  + w(\mathbf{s}) + u(t)+ \varepsilon_{\mathbf{s},t}$$
 
-$$\mathbf{x}_{\mathbf{s}_i,\mathbf{t}} = [1, \text{Temp}_{\mathbf{s}_i,\mathbf{t}}, \text{Prcp}_{\mathbf{s}_i,\mathbf{t}}, \text{Srad}_{\mathbf{s}_i,\mathbf{t}}]$$
+$$\mathbf{x}_{\mathbf{s},t} = [1, \text{T}_{\mathbf{s},t}, \text{P}_{\mathbf{s},t}, \text{R}_{\mathbf{s},t}]$$
 
-$$\boldsymbol{\beta} = (\beta_0, \beta_{\text{Temp}}, \beta_{\text{Prcp}}, \beta_{\text{Srad}})^\top$$
-
-$$\boldsymbol{\beta} \sim \mathcal{N}(\mathbf{0}, \sigma_\beta^2 \mathbf{I})$$
+$$\boldsymbol{\beta} = (\beta_0, \beta_{\text{T}}, \beta_{\text{P}}, \beta_{\text{R}})^\top$$
 
 $$w(\mathbf{s}) \sim \text{GP}\!\left(0,\; C(\mathbf{s},\mathbf{s}')\right)$$
 
-$$u(\mathbf{t}) \stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma_u^2)$$
+$$u(t) \stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma_u^2)$$
 
-$$\epsilon(\mathbf{s}_i, \mathbf{t}) \stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma^2_\varepsilon)$$
+$$\varepsilon_{\mathbf{s},t} \stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma_\varepsilon^2)$$
+
+$$\beta_k \sim \mathcal{N}(0, \sigma_\beta^2), \quad k \in \{0, {\text{T}}, {\text{P}}, {\text{R}}\}$$
+
+<!-- $$\epsilon(\mathbf{s}, t) \stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma^2_\varepsilon)$$ -->
 
 ## Safety margin
 
@@ -126,17 +128,20 @@ $$S_{\mathrm{bio12},m,n}
 
 ## Model 2
 
-$$\theta_{m,n} = \mathbf{z}_{m, n} \boldsymbol{\lambda} +b_{m} + \epsilon_{m,n}$$
+$$\beta_{{\text{T}},m,n}^{(r)} = \mathbf{z}_{n} \boldsymbol{b} +\lambda_{m} + \varepsilon_{m,n}^{(r)} $$
 
-$$\mathbf{z}_{m,n} = [1, \mathrm{bio1}_{n}, \mathrm{bio12}_{n}]$$
 
-$$\boldsymbol{\lambda} = (\lambda_0,\lambda_1,\lambda_2)^\top$$
+$$\mathbf{z}_{n} = [1, \mathrm{MAT}_{n}, \mathrm{MAP}_{n}]$$
 
-$$\boldsymbol{\lambda} \sim \mathcal{N}\!\left(\mathbf{0}, \sigma_\lambda^2 \mathbf{I}\right)$$
+$$\boldsymbol{b} = (b_0,b_{\mathrm{MAT}},b_{\mathrm{MAP}})^\top$$
 
-$$\mathbf{b} = (b_1, \dots, b_M)^\top \sim \mathcal{MVN}\!\left(\mathbf{0},\; \sigma^2_{\mathrm{phy}}\,\mathbf{A}\right)$$
+$$\boldsymbol{\lambda} = (\lambda_1, \dots, \lambda_M)^\top$$
 
-$$\epsilon_{m,n} \stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma^2_\varepsilon)$$
+$$\boldsymbol{\lambda} \sim \mathcal{MVN}\!\left(\mathbf{0},\; \sigma^2_{\mathrm{phy}}\,\mathbf{A}\right)$$
+$$\varepsilon_{m,n}^{(r)} \stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma^2_{\beta_\text{T}}))$$
+
+$$b_k \sim \mathcal{N}(0, \sigma_b^2), \quad k \in \{0, \mathrm{MAT}, \mathrm{MAP}\}$$
+
 
 For visualization:
 
