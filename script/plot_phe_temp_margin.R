@@ -486,12 +486,6 @@ plot_phe_temp_margin <- function(city = "NewYork", species = "Acer rubrum", phe_
   map_phe <- map_phe + theme(axis.title.y = element_blank(),
                              axis.text.y = element_blank())
   
-  if (city == "TP"){
-    city <- "Tampa"
-  } else if (city == "DT"){
-    city <- "Detroit"
-  }
-  
   interpret_text <- if (b_temp > 0) {
     if (phe_type == "SOS") {
       "Warmer microclimate, later spring."
@@ -511,10 +505,10 @@ plot_phe_temp_margin <- function(city = "NewYork", species = "Acer rubrum", phe_
   } else {
     paste0("In ", city, ", there is no association between ", season, " temperature and ", phe_type, ".")
   }
-  
+  city_text = city_label[city]
   map_panels_gridded_model <- map_temp + map_phe_gridded_pred + 
     plot_annotation(
-      title = bquote(.(city)* "," ~ .(year) ~~~ .(interpret_text)),
+      title = bquote(.(city_text)* "," ~ .(year) ~~~ .(interpret_text)),
       subtitle = bquote(hat(beta)[T] == .(round(b_temp, 2)) ~
                           "[" * .(round(lwr_temp, 2)) * "," ~ .(round(upr_temp, 2)) * "]" ),
       theme = theme(
@@ -526,7 +520,7 @@ plot_phe_temp_margin <- function(city = "NewYork", species = "Acer rubrum", phe_
   
   map_panels_gridded <- map_temp + map_phe_gridded + 
     plot_annotation(
-      title = bquote(.(city)* "," ~ .(year) ~~~ .(interpret_text)),
+      title = bquote(.(city_text)* "," ~ .(year) ~~~ .(interpret_text)),
       subtitle = bquote(hat(beta)[T] == .(round(b_temp, 2)) ~
                           "[" * .(round(lwr_temp, 2)) * "," ~ .(round(upr_temp, 2)) * "]" ),
       theme = theme(
@@ -538,7 +532,7 @@ plot_phe_temp_margin <- function(city = "NewYork", species = "Acer rubrum", phe_
   
   map_panels <- map_temp + map_phe + 
     plot_annotation(
-      title = bquote(.(city)* "," ~ .(year) ~~~ .(interpret_text)),
+      title = bquote(.(city_text)* "," ~ .(year) ~~~ .(interpret_text)),
       subtitle = bquote(hat(beta)[T] == .(round(b_temp, 2)) ~
                           "[" * .(round(lwr_temp, 2)) * "," ~ .(round(upr_temp, 2)) * "]" ),
       theme = theme(
