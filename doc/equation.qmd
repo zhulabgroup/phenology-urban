@@ -35,19 +35,19 @@ where:
 All random effects were assumed to be independent and normally distributed:
 
 $$
-y_{i,n,t}
+y_{i,j,t}
 = \mu
-+ u_{n}
-+ v_{i(n)}
++ u_{j}
++ v_{i(j)}
 + w_{t}
-+ \varepsilon_{i,n,t},
++ \varepsilon_{i,j,t},
 $$
 $$
-u_{n} \sim \mathcal{N}(0, \sigma^2_{\mathrm{between}}),
+u_{j} \sim \mathcal{N}(0, \sigma^2_{\mathrm{between}}),
 $$
 
 $$
-v_{i(n)} \sim \mathcal{N}(0, \sigma^2_{\mathrm{within}}),
+v_{i(j)} \sim \mathcal{N}(0, \sigma^2_{\mathrm{within}}),
 $$
 
 $$
@@ -55,27 +55,27 @@ w_{t} \sim \mathcal{N}(0, \sigma^2_{\mathrm{year}}),
 $$
 
 $$
-\varepsilon_{i,n,t} \sim \mathcal{N}(0, \sigma^2_{\mathrm{residual}}).
+\varepsilon_{i,j,t} \sim \mathcal{N}(0, \sigma^2_{\mathrm{residual}}).
 $$
 
 The total phenological variance for species $m$ was computed as:
 
 $$
-\sigma^2_{\mathrm{total},m}
-= \sigma^2_{\mathrm{between},m}
-+ \sigma^2_{\mathrm{within},m}
-+ \sigma^2_{\mathrm{year},m}
-+ \sigma^2_{\mathrm{residual},m}.
+\sigma^2_{\mathrm{total}}
+= \sigma^2_{\mathrm{between}}
++ \sigma^2_{\mathrm{within}}
++ \sigma^2_{\mathrm{year}}
++ \sigma^2_{\mathrm{residual}}.
 $$
 
 The proportional contributions of inter-urban and intra-urban variability were calculated as:
 
 $$
-\mathrm{P}_{\mathrm{between},m}
-= \frac{\sigma^2_{\mathrm{between},m}}{\sigma^2_{\mathrm{total},m}},
+P_{\mathrm{between}}
+= \frac{\sigma^2_{\mathrm{between}}}{\sigma^2_{\mathrm{total}}},
 \qquad
-\mathrm{P}_{\mathrm{within},m}
-= \frac{\sigma^2_{\mathrm{within},m}}{\sigma^2_{\mathrm{total},m}}.
+P_{\mathrm{within}}
+= \frac{\sigma^2_{\mathrm{within}}}{\sigma^2_{\mathrm{total}}}.
 $$
 
 The relative contributions of spatial components were further defined as:
@@ -87,11 +87,11 @@ $$
 + \hat{\sigma}^2_{\mathrm{residual}}.
 $$
 $$
-\mathrm{P}_{\mathrm{between}}
+P_{\mathrm{between}}
 = \frac{\hat{\sigma}^2_{\mathrm{between}}}
 {\hat{\sigma}^2_{\mathrm{within}} + \hat{\sigma}^2_{\mathrm{between}}},
 \qquad
-\mathrm{P}_{\mathrm{within}}
+P_{\mathrm{within}}
 = \frac{\hat{\sigma}^2_{\mathrm{within}}}
 {\hat{\sigma}^2_{\mathrm{within}} + \hat{\sigma}^2_{\mathrm{between}}}.
 $$
@@ -112,7 +112,7 @@ $$u(t) \stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma_u^2)$$
 
 $$\varepsilon_{\mathbf{s},t} \stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma_\varepsilon^2)$$
 
-$$\beta_k \sim \mathcal{N}(0, \sigma_\beta^2), \quad k \in \{0, {\text{T}}, {\text{P}}, {\text{R}}\}$$
+$$\beta_{\ell} \sim \mathcal{N}(0, \sigma_\beta^2), \quad {\ell} \in \{0, {\text{T}}, {\text{P}}, {\text{R}}\}$$
 
 <!-- $$\epsilon(\mathbf{s}, t) \stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma^2_\varepsilon)$$ -->
 
@@ -128,19 +128,19 @@ $$S_{\mathrm{bio12},m,n}
 
 ## Model 2
 
-$$\beta_{{\text{T}},m,n}^{(r)} = \mathbf{z}_{n} \boldsymbol{b} +\lambda_{m} + \varepsilon_{m,n}^{(r)} $$
+$$\beta_{{\text{T}},j,k}^{(r)} = \mathbf{z}_{j} \boldsymbol{b} +\lambda_{k} + \varepsilon_{j,k}^{(r)} $$
 
 
-$$\mathbf{z}_{n} = [1, \mathrm{MAT}_{n}, \mathrm{MAP}_{n}]$$
+$$\mathbf{z}_{j} = [1, \mathrm{MAT}_{j}, \mathrm{MAP}_{j}]$$
 
 $$\boldsymbol{b} = (b_0,b_{\mathrm{MAT}},b_{\mathrm{MAP}})^\top$$
 
-$$\boldsymbol{\lambda} = (\lambda_1, \dots, \lambda_M)^\top$$
+$$\boldsymbol{\lambda} = (\lambda_1, \dots, \lambda_K)^\top$$
 
 $$\boldsymbol{\lambda} \sim \mathcal{MVN}\!\left(\mathbf{0},\; \sigma^2_{\mathrm{phy}}\,\mathbf{A}\right)$$
-$$\varepsilon_{m,n}^{(r)} \stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma^2_{\beta_\text{T}}))$$
+$$\varepsilon_{j,k}^{(r)} \stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma^2_{\beta_\text{T}})$$
 
-$$b_k \sim \mathcal{N}(0, \sigma_b^2), \quad k \in \{0, \mathrm{MAT}, \mathrm{MAP}\}$$
+$$b_{\ell} \sim \mathcal{N}(0, \sigma_b^2), \quad {\ell} \in \{0, \mathrm{MAT}, \mathrm{MAP}\}$$
 
 
 For visualization:
