@@ -1,6 +1,6 @@
 # remotes::install_local("~/batchplanet", dependencies = TRUE, build_vignettes = FALSE, force = TRUE)
 
-library(batchplanet)
+library(BatchPlanet)
 
 # matching_npn <- readRDS("C:/Users/feixi/Desktop/PlanetScope/City_tree/Tree_point/summary/matching_npn.rds")
 # npn_points <- readRDS("C:/Users/feixi/Desktop/PlanetScope/CONUS/npn_points.rds") |>
@@ -52,19 +52,19 @@ library(batchplanet)
 
 tree_dir <- "~/lab-data/datasets/vegetation/PS/CONUS_urban/Tree_point/"
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
-tree_df <- rds_files[25] |> #25
+tree_df <- rds_files |> #25
   map_dfr(read_rds) |>
   mutate(taxa = if_else(genus == "Validation", "Validation", gsub(" ", "", taxa))) 
 
-dir_data <- "/scratch/zhukai_root/zhukai0/jializ/PS/CONUS_urban/"
-setting <- set_planetscope_parameters(
-  api_key = set_api_key(),
-  item_name = "PSScene",
-  asset = "ortho_analytic_4b_sr",
-  product_bundle = "analytic_sr_udm2",
-  cloud_lim = 1,
-  harmonized = T
-)
+dir_data <- "/Volumes/seas-zhukai/datasets/vegetation/PS/CONUS_urban/"
+# setting <- set_planetscope_parameters(
+#   api_key = set_api_key(),
+#   item_name = "PSScene",
+#   asset = "ortho_analytic_4b_sr",
+#   product_bundle = "analytic_sr_udm2",
+#   cloud_lim = 1,
+#   harmonized = T
+# )
 
 # order_planetscope_imagery_batch(dir = dir_data, df_coordinates = tree_df, v_year = 2016:2024, setting = setting)
 # Then wait until all orders success
@@ -73,18 +73,18 @@ site_list <- tree_df |>
   distinct(site) |>
   pull()
 
-n_split = 4
-year_splits <- split(2016:2024, cut(seq_along(2016:2024), n_split, labels = FALSE))
-for (site in site_list){
-  tree_df_site <- tree_df |> filter(site == !!site)
-  big_genera <- names(which(table(tree_df_site$genus) > 2000))
-  tree_df2 <- tree_df_site |>
-    mutate(group = if_else(genus %in% big_genera & !is.na(taxa) & nzchar(taxa),
-                           taxa,
-                           genus
-    )) |>
-    dplyr::select(site, id, lon, lat, group)
-  update_group <- unique(tree_df2$group)
+# n_split = 4
+# year_splits <- split(2016:2024, cut(seq_along(2016:2024), n_split, labels = FALSE))
+for (site in site_list[1]){
+  # tree_df_site <- tree_df |> filter(site == !!site)
+  # big_genera <- names(which(table(tree_df_site$genus) > 2000))
+  # tree_df2 <- tree_df_site |>
+  #   mutate(group = if_else(genus %in% big_genera & !is.na(taxa) & nzchar(taxa),
+  #                          taxa,
+  #                          genus
+  #   )) |>
+  #   dplyr::select(site, id, lon, lat, group)
+  # update_group <- unique(tree_df2$group)
 
   # message("Downloading time series...")
   # for (j in 4:length(year_splits)){
@@ -121,10 +121,10 @@ for (site in site_list){
   # clean_planetscope_time_series_batch(dir = dir_data, v_site = site, num_cores = 12, calculate_evi = T) #
 
   message("Processing time series...")
-  df_thres <- set_thresholds(thres_up = 0.5, thres_down = 0.5)
-  calculate_phenological_metrics_batch(dir = dir_data, v_year = 2017:2023, v_site = site, df_thres = df_thres, var_index = "evi",
+  df_thres <- set_thresholds(thres_up = c(0.3, 0.5, 0.8), thres_down = c(0.3, 0.5, 0.8))
+  calculate_season_metrics_batch(dir = dir_data, v_year = 2017:2023, v_site = site, df_thres = df_thres, var_index = "evi",
                                        min_days = 1, check_seasonality = T, extend_to_previous_year = 275,
-                                       extend_to_next_year = 90, num_cores = 30)
+                                       extend_to_next_year = 90, num_cores = 1)
 }
 
 # > ?retrieve_planetscope_time_series_batch
