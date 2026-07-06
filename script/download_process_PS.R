@@ -1,6 +1,7 @@
 # remotes::install_local("~/batchplanet", dependencies = TRUE, build_vignettes = FALSE, force = TRUE)
 
 library(BatchPlanet)
+library(tidyverse)
 
 # matching_npn <- readRDS("C:/Users/feixi/Desktop/PlanetScope/City_tree/Tree_point/summary/matching_npn.rds")
 # npn_points <- readRDS("C:/Users/feixi/Desktop/PlanetScope/CONUS/npn_points.rds") |>
@@ -56,7 +57,7 @@ tree_df <- rds_files |> #25
   map_dfr(read_rds) |>
   mutate(taxa = if_else(genus == "Validation", "Validation", gsub(" ", "", taxa))) 
 
-dir_data <- "/Volumes/seas-zhukai/datasets/vegetation/PS/CONUS_urban/"
+dir_data <- "~/lab-data/datasets/vegetation/PS/CONUS_urban/"
 # setting <- set_planetscope_parameters(
 #   api_key = set_api_key(),
 #   item_name = "PSScene",
@@ -75,7 +76,7 @@ site_list <- tree_df |>
 
 # n_split = 4
 # year_splits <- split(2016:2024, cut(seq_along(2016:2024), n_split, labels = FALSE))
-for (site in site_list[1]){
+for (site in c(site_list[2:77], "StGeorge", "StLouis")){
   # tree_df_site <- tree_df |> filter(site == !!site)
   # big_genera <- names(which(table(tree_df_site$genus) > 2000))
   # tree_df2 <- tree_df_site |>
@@ -124,7 +125,7 @@ for (site in site_list[1]){
   df_thres <- set_thresholds(thres_up = c(0.3, 0.5, 0.8), thres_down = c(0.3, 0.5, 0.8))
   calculate_season_metrics_batch(dir = dir_data, v_year = 2017:2023, v_site = site, df_thres = df_thres, var_index = "evi",
                                        min_days = 1, check_seasonality = T, extend_to_previous_year = 275,
-                                       extend_to_next_year = 90, num_cores = 1)
+                                       extend_to_next_year = 90, num_cores = 30)
 }
 
 # > ?retrieve_planetscope_time_series_batch
