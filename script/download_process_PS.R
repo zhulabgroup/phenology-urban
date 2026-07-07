@@ -76,7 +76,7 @@ site_list <- tree_df |>
 
 # n_split = 4
 # year_splits <- split(2016:2024, cut(seq_along(2016:2024), n_split, labels = FALSE))
-for (site in c(site_list[2:77], "StGeorge", "StLouis")){
+for (site in c(site_list[10:77], "StGeorge", "StLouis")){
   # tree_df_site <- tree_df |> filter(site == !!site)
   # big_genera <- names(which(table(tree_df_site$genus) > 2000))
   # tree_df2 <- tree_df_site |>
@@ -122,10 +122,10 @@ for (site in c(site_list[2:77], "StGeorge", "StLouis")){
   # clean_planetscope_time_series_batch(dir = dir_data, v_site = site, num_cores = 12, calculate_evi = T) #
 
   message("Processing time series...")
-  df_thres <- set_thresholds(thres_up = c(0.3, 0.5, 0.8), thres_down = c(0.3, 0.5, 0.8))
+  df_thres <- set_thresholds(thres_up = c(0.2, 0.4, 0.5, 0.6, 0.8), thres_down = c(0.2, 0.4, 0.5, 0.6, 0.8))
   calculate_season_metrics_batch(dir = dir_data, v_year = 2017:2023, v_site = site, df_thres = df_thres, var_index = "evi",
                                        min_days = 1, check_seasonality = T, extend_to_previous_year = 275,
-                                       extend_to_next_year = 90, num_cores = 30)
+                                       extend_to_next_year = 90, num_cores = 15)
 }
 
 # > ?retrieve_planetscope_time_series_batch
