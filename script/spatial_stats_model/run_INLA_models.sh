@@ -19,10 +19,12 @@
 #          "$WORKING_DIR/intermediate/jags_mod.rds"
 #    The `-si` option in `ln` will prompt for confirmation before replacing any existing link or file.
 
+set -uo pipefail
 
 # Define the R script and input/output files
 WORKING_DIR=../phenology-urban/
 R_SCRIPT_INLA=../phenology-urban/script/spatial_stats_model/inla_alg/run_inla_all_models.R
+OUTPUT_DIR=${WORKING_DIR}/temp/slurm_logs
 
 # Load necessary modules
 module load Rgeospatial/4.2.0-2023-04-25
