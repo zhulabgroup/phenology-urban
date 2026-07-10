@@ -1,13 +1,13 @@
 #!/bin/bash
-#SBATCH --job-name=cities_INLA_nooutlier_52_60
+#SBATCH --job-name=cities_INLA_sensitive
 #SBATCH --account=zhukai0                   # Account name
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err
-#SBATCH --array=1-9
+#SBATCH --array=1
 #SBATCH --time=4:00:00
 #SBATCH --partition=standard
-#SBATCH --mem=30G
-#SBATCH --cpus-per-task=1
+#SBATCH --mem=5G
+#SBATCH --cpus-per-task=11
 #SBATCH --mail-user=jializ@umich.edu        # Where to send mail
 #SBATCH --mail-type=BEGIN,END               # Mail notifications at the start and end of the job
 
@@ -20,25 +20,9 @@
 #    The `-si` option in `ln` will prompt for confirmation before replacing any existing link or file.
 
 
-# Define combinations of chains and iterations
-CITIES=("Norfolk"      "Oakland"      "OklahomaCity" "Philadelphia" "Pittsburgh"   "Portland"     "Providence"   "Reading"      "Riverside")
-
-# Get the combination for this array job
-CHAIN_INDEX=$((SLURM_ARRAY_TASK_ID - 1))
-CITY=${CITIES[$CHAIN_INDEX]}
-
 # Define the R script and input/output files
 WORKING_DIR=../phenology-urban/
-R_INPUT_DIR=../phenology-urban/data/
 R_SCRIPT_INLA=../phenology-urban/script/spatial_stats_model/inla_alg/run_inla_all_models.R
-R_OUTPUT_DIR=../phenology-urban/data/proc/model_output/final_models_clean_outlier/
-
-# Export variables to be used in the R script
-export R_INPUT_DIR
-export R_OUTPUT_DIR
-export CITY
-
-echo "Running model for $CITY"
 
 # Load necessary modules
 module load Rgeospatial/4.2.0-2023-04-25
@@ -78,9 +62,3 @@ echo "Time Limit: $SLURM_TIMELIMIT" >> $job_info
 echo "Start Time: $(date -d @$start_time '+%Y-%m-%d %H:%M:%S')" >> $job_info
 echo "End Time: $(date -d @$end_time '+%Y-%m-%d %H:%M:%S')" >> $job_info
 echo "Duration: $formatted_duration" >> $job_info
-
-# Move Slurm output and error files to the output directory
-# Move Slurm output and error files to the output directory
-mv slurm_job${SLURM_JOB_ID}_task${SLURM_ARRAY_TASK_ID}.out $R_OUTPUT_DIR/
-mv slurm_job${SLURM_JOB_ID}_task${SLURM_ARRAY_TASK_ID}.err $R_OUTPUT_DIR/
-

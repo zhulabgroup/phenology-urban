@@ -1,48 +1,61 @@
-run_inla_species = function(model_input_all, r_output_dir, phe_type, city, fitting_type = "doy"){
+run_inla_species = function(model_input_all, r_output_dir, phe_type, city, fitting_type = "doy",
+                            n_cores = 1){
 # options(repos = c(
 #   INLA = "https://inla.r-inla-download.org/R/testing",
 #   getOption("repos")
 # ))
 # install.packages("inlabru")
 # install.packages("INLA",repos=c(getOption("repos"),INLA="https://inla.r-inla-download.org/R/stable"), dep=TRUE)
-  
-  species_list <- unique(model_input_all$canonicalname)
-  # boundary <- switch(
-  #   city,
-  #   "NewYork" = st_read("~/urban-cooling/data/raw/WU/NY/Untitled/nybb_dissolved.shp"),
-  #   "DT" = st_read("~/urban-cooling/data/raw/WU/DT/City_of_Detroit_Boundary/City_of_Detroit_Boundary.shp"),
-  #   "ST" = st_read("~/urban-cooling/data/raw/WU/ST/seattle_boundary/CityUGA.shp") %>%
-  #     filter(CITY_NM == "Seattle"),
-  #   "HT" = st_read("~/urban-cooling/data/raw/WU/HT/HGAC_City_Boundaries/HGAC_City_Boundaries.shp") %>%
-  #     filter(NAME == "Houston"),  # change to some distance
-  #   "TP" = st_read("~/urban-cooling/data/raw/WU/TP/Municipal_Boundary/Municipal_Boundary.shp") %>%
-  #     filter(NAME == "Tampa"),
-  #   "DV" = st_read("~/urban-cooling/data/raw/WU/DV/DRCOG_Municipalities/DRCOG_Municipalities.shp") %>%
-  #     filter(city == "Denver"),
-  #   "AT" = st_read("~/urban-cooling/data/raw/WU/AT/TxDOT_City_Boundaries/Cities.shp") %>%
-  #     filter(CITY_NM == "Austin"),
-  #   stop("Invalid city abbreviation.")
-  # )
+  folder_path <- paste0(r_output_dir, "spatial_spde/",city,"/canonicalname/")
+  if (!dir.exists(folder_path)) {
+    dir.create(folder_path, recursive = TRUE)
+  }
   failed_sp <- c()
-  for (species in species_list) {
+  species_list <- unique(model_input_all$canonicalname)
+  Sys.setenv(OMP_NUM_THREADS = "1", OPENBLAS_NUM_THREADS = "1", MKL_NUM_THREADS = "1",
+             VECLIB_MAXIMUM_THREADS = "1", NUMEXPR_NUM_THREADS = "1")
+  
+  cl <- parallel::makeCluster(n_cores, outfile = "")
+  on.exit(parallel::stopCluster(cl), add = TRUE)
+  
+  `%dopar%` <- foreach::`%dopar%`
+  model_split <- split(
+    model_input_all,
+    model_input_all$canonicalname,
+    drop = TRUE
+  )
+  status <- foreach::foreach(
+    species = names(model_split), model_input_sf = unname(model_split),
+    .combine = rbind,
+    .packages = c("INLA", "tidyverse", "sf"),
+    .inorder = FALSE
+  ) %dopar% {
+    Sys.setenv(
+      OMP_NUM_THREADS = "1",
+      OPENBLAS_NUM_THREADS = "1",
+      MKL_NUM_THREADS = "1",
+      VECLIB_MAXIMUM_THREADS = "1",
+      NUMEXPR_NUM_THREADS = "1"
+    )
+    sf::sf_use_s2(FALSE)
+    cat(sprintf("Worker PID %d running species: %s\n", Sys.getpid(), species))
     tryCatch({
-      folder_path <- paste0(r_output_dir, "spatial_spde/",city,"/canonicalname/")
-      if (!dir.exists(folder_path)) {
-        dir.create(folder_path, recursive = TRUE)
-      }
       species_clean <- gsub(" ", "_", species)
       model_path <- paste0(folder_path, species_clean, "_", phe_type, ".rds")
-      
       cat(sprintf("\n Running INLA for species: %s, phe_type: %s, city: %s\n", 
                   species, phe_type, city))
       
-      if (str_detect(phe_type, "^[SE]OS")) {
-        phe_metric <- "doy"
+      ######################################## Set input ######################################## 
+      
+      phe_metric <- if (fitting_type == "start") {
+        "start"
+      } else if (fitting_type == "end") {
+        "end"
+      } else if (stringr::str_detect(phe_type, "^[SE]OS")) {
+        "doy"
       } else {
-        phe_metric <- "doy_diff"
+        "doy_diff"
       }
-      model_input_sf <- model_input_all %>%
-        filter(canonicalname == species)
       
       x <- model_input_sf[[phe_metric]]
       q <- stats::quantile(x, probs = c(0.25, 0.75), na.rm = TRUE)
@@ -50,14 +63,7 @@ run_inla_species = function(model_input_all, r_output_dir, phe_type, city, fitti
       lo  <- q[1] - 1.5 * iqr
       hi  <- q[2] + 1.5 * iqr
       model_input_sf <- model_input_sf %>%
-        filter(is.na(.data[[phe_metric]]) |
-                 dplyr::between(.data[[phe_metric]], lo, hi))
-      
-      if (fitting_type == "start"){
-        phe_metric = "start"
-      } else if (fitting_type == "end"){
-        phe_metric = "end"
-      }
+        filter(!is.na(.data[[phe_metric]]), dplyr::between(.data[[phe_metric]], lo, hi))
       
       model_input_sf <- model_input_sf %>%
         st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
@@ -68,20 +74,24 @@ run_inla_species = function(model_input_all, r_output_dir, phe_type, city, fitti
       model_input <- model_input_sf %>% 
         st_drop_geometry()
       
-      if (nrow(model_input) < 30) {
-        message(paste("Not enough unique coordinates for taxon:", species, "with", nrow(model_input), "unique points. Skipping..."))
-        next  # Skip the current iteration of the loop
-      }
       if (file.exists(model_path)) {
-        cat(sprintf("\n File already exists for species: %s, phe_type: %s, city: %s. Skipping INLA run.\n", 
-                    species, phe_type, city))
-        next  # Skip the current iteration of the loop
-      } # if the file exists, skip to the next iteration 
+        data.frame(
+          species = species,
+          status = "already_exists",
+          error = NA_character_
+        )
+      } else if (nrow(model_input) < 30) {
+        data.frame(
+          species = species,
+          status = "insufficient_data",
+          error = NA_character_
+        )
+      } else {
+      
       ### Prediction (In-sample)
       prediction <- model_input
       coorp <- cbind(prediction$lon, prediction$lat) 
       
-      # Load required libraries
       ######################################## Prepare the mesh and spde ######################################## 
       
       ### Build the mesh 
@@ -101,8 +111,8 @@ run_inla_species = function(model_input_all, r_output_dir, phe_type, city, fitti
       mesh <- inla.mesh.2d(boundary = domain, loc = coord,
                            max.edge = c(max_edge_inner, max_edge_outer), 
                            cutoff = cutoff_rec)  # prevent close points from being connected
-      plot(mesh)
-      points(coord, col = "red", pch = 20)
+      # plot(mesh)
+      # points(coord, col = "red", pch = 20)
       ### Build the spde 
       
       spde <- inla.spde2.matern(mesh = mesh, alpha = 2, constr = TRUE)
@@ -188,21 +198,36 @@ run_inla_species = function(model_input_all, r_output_dir, phe_type, city, fitti
         value = pred_mean, variable = "pred_mean", true_value = model_input[[phe_metric]]
       )
       
-      list(mesh = mesh,
+      model_output <- list(mesh = mesh,
            res = res,
            spde = spde,
            stk.full = stk.full,
            fix_effect = fix_effect,
            compare = compare,
-           species = species) %>%
-        write_rds(model_path, compress = "gz")
+           species = species)
+      write_rds(model_output, model_path, compress = "gz")
+      rm(model_output)
+      gc()
+      data.frame(
+        species = species,
+        status = "success",
+        error = NA_character_
+      )
+      }
     }, error = function(e){
-      message("Something wrong", species)
-      failed_sp <- c(failed_sp, species)
+      data.frame(
+        species = species,
+        status = "failed",
+        error = conditionMessage(e)
+      )
     })
-    
   }
-  message("Failed species, ", failed_sp)
+  message(
+    "Success: ", sum(status$status == "success"),
+    "; existing: ", sum(status$status == "already_exists"),
+    "; failed: ", sum(status$status == "failed")
+  )
+  return(status)
 }
 
 

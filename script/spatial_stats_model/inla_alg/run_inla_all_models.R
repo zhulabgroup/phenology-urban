@@ -1,13 +1,18 @@
 ################################## package loading ##################################
 library(zhulabtools)
 
-load_packages(c("here", "rgbif", "dplyr","lubridate", "ggplot2", "sf","sp", 
-                "readr", "purrr", "stringr","glue", "tidyr", "broom","lme4", 
-                "broom.mixed", "coda", "patchwork", "terra", "stats", "viridis"))
+load_packages(c("here", "rgbif", "ggplot2", "sf","sp",
+                "glue", "tidyverse", "broom","lme4", "viridis",
+                "broom.mixed", "coda", "patchwork", "terra", "stats",
+                "foreach", "doParallel"))
 select <- dplyr::select
 ## Rscript.r
 options(inla.call = "inla")
 library(INLA)
+
+source(here("script/spatial_stats_model/prepare_model_input.R"))
+source(here("script/spatial_stats_model/inla_alg/run_sp_inla.R"))
+
 ################################## parameter loading ##################################
 
 # Read file paths from environment variables
@@ -22,8 +27,15 @@ tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
 cities <- gsub("\\.rds$", "", basename(rds_files))
 
-source(here("script/spatial_stats_model/prepare_model_input.R"))
+# r_output_dir <- paste0(r_output_dir, "inla_start/")
+# r_output_dir <- paste0(r_output_dir, "inla_end/")
+# r_output_dir_min <- paste0(r_output_dir, "inla_min/")
+# r_output_dir_max <- paste0(r_output_dir, "inla_max/")
+# r_output_dir <- paste0(r_output_dir, "inla_standardize/")
+# r_output_dir <- paste0(r_output_dir, "inla_gsl/")
+r_output_dir <- paste0(r_output_dir, "inla_sensitive/")
 
+standardize <- FALSE
 
 ################################## Preparing standardization function ##################################
 # remove_outliers_iqr <- function(df, value_col) {
@@ -82,39 +94,33 @@ source(here("script/spatial_stats_model/prepare_model_input.R"))
 # }
 
 ################################## run spatial model ##################################
-source(here("script/spatial_stats_model/inla_alg/run_sp_inla.R"))
 
-# r_output_dir <- paste0(r_output_dir, "inla_start/")
-# r_output_dir <- paste0(r_output_dir, "inla_end/")
-# r_output_dir_min <- paste0(r_output_dir, "inla_min/")
-# r_output_dir_max <- paste0(r_output_dir, "inla_max/")
-# r_output_dir <- paste0(r_output_dir, "inla_standardize/")
-# r_output_dir <- paste0(r_output_dir, "inla_gsl/")
-r_output_dir <- paste0(r_output_dir, "inla_sensitive/")
+##### Supplementary analysis for SOS/EOS
+# for (city in cities) {
+#   for (phe_type in c("GSL_range_season")) {
+#     model_input_all <- prepare_data(city, source = "Grid_GSL", taxa_col= "canonicalname", phe_type = phe_type)
+#     
+#     if (standardize) {
+#       model_input_all <- standardize_with_params(
+#         model_input_all,
+#         params = std_params[[phe_type]],
+#         vars = get_vars_to_std(model_input_all)
+#       )
+#     }
+#     run_inla_species(model_input_all, r_output_dir, phe_type, city)
+#   }
+# }
 
-standardize <- FALSE
-
-for (city in cities[1:27]) {
-  for (phe_type in c("GSL_range_season")) {
-    model_input_all <- prepare_data(city, source = "Grid_GSL", taxa_col= "canonicalname", phe_type = phe_type)
-    
-    if (standardize) {
-      model_input_all <- standardize_with_params(
-        model_input_all,
-        params = std_params[[phe_type]],
-        vars = get_vars_to_std(model_input_all)
-      )
-    }
-    run_inla_species(model_input_all, r_output_dir, phe_type, city)
-  }
-}
+##### Sensitivity analysis for SOS/EOS threshold
 
 for (city in c("Berkeley")) {
-  for (phe_type in c("SOS_04", "SOS_06", "EOS_04", "EOS_06")) {
+  for (phe_type in c("SOS_06", "EOS_04", "EOS_06")) {
     model_input_all <- prepare_data(city, source = "Grid", taxa_col= "canonicalname", phe_type = phe_type)
-    run_inla_species(model_input_all, r_output_dir, phe_type, city)
+    run_inla_species(model_input_all, r_output_dir, phe_type, city, n_cores = 10)
   }
 }
+
+##### Formal analysis for SOS/EOS 
 
 # for (phe_type in c("SOS", "EOS")) {
 #   model_input_all <- prepare_data(city, source = "Grid", taxa_col= "canonicalname", phe_type = phe_type)
