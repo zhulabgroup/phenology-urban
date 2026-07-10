@@ -113,8 +113,8 @@ standardize <- FALSE
 
 ##### Sensitivity analysis for SOS/EOS threshold
 
-for (city in c("Berkeley")) {
-  for (phe_type in c("SOS_06", "EOS_04", "EOS_06")) {
+for (city in cities) {
+  for (phe_type in c("SOS_04", "SOS_06", "EOS_04", "EOS_06")) {
     model_input_all <- prepare_data(city, source = "Grid", taxa_col= "canonicalname", phe_type = phe_type)
     batch_status <- run_inla_species(model_input_all, r_output_dir, phe_type, city, n_cores = 10)
     print(batch_status)
