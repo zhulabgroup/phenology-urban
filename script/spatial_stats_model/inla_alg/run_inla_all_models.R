@@ -11,16 +11,16 @@ library(INLA)
 ################################## parameter loading ##################################
 
 # Read file paths from environment variables
-r_input_dir <- Sys.getenv("R_INPUT_DIR")
-r_output_dir <- Sys.getenv("R_OUTPUT_DIR")
-city <- Sys.getenv("CITY")
+# r_input_dir <- Sys.getenv("R_INPUT_DIR")
+# r_output_dir <- Sys.getenv("R_OUTPUT_DIR")
+# city <- Sys.getenv("CITY")
 # 
-# r_input_dir <- "~/phenology-urban/data/"
-# r_output_dir <- "~/phenology-urban/data/proc/model_output/final_models_clean_outlier/"
-# 
-# tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
-# rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
-# cities <- gsub("\\.rds$", "", basename(rds_files))
+r_input_dir <- "~/phenology-urban/data/"
+r_output_dir <- "~/phenology-urban/data/proc/model_output/final_models_clean_outlier/"
+
+tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
+rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
+cities <- gsub("\\.rds$", "", basename(rds_files))
 
 source(here("script/spatial_stats_model/prepare_model_input.R"))
 
@@ -73,28 +73,30 @@ source(here("script/spatial_stats_model/prepare_model_input.R"))
 # })
 # write_rds(std_params, ("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla_standardize/inla_standardization_params.rds"))
 
-std_params <- read_rds("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla_standardize/inla_standardization_params.rds")
-standardize_with_params <- function(df, params, vars) {
-  for (v in vars) {
-    df[[v]] <- (df[[v]] - params$mu[[v]]) / params$sd[[v]]
-  }
-  df
-}
+# std_params <- read_rds("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla_standardize/inla_standardization_params.rds")
+# standardize_with_params <- function(df, params, vars) {
+#   for (v in vars) {
+#     df[[v]] <- (df[[v]] - params$mu[[v]]) / params$sd[[v]]
+#   }
+#   df
+# }
 
 ################################## run spatial model ##################################
 source(here("script/spatial_stats_model/inla_alg/run_sp_inla.R"))
 
-r_output_dir <- paste0(r_output_dir, "inla_start/")
-r_output_dir <- paste0(r_output_dir, "inla_end/")
-r_output_dir_min <- paste0(r_output_dir, "inla_min/")
-r_output_dir_max <- paste0(r_output_dir, "inla_max/")
+# r_output_dir <- paste0(r_output_dir, "inla_start/")
+# r_output_dir <- paste0(r_output_dir, "inla_end/")
+# r_output_dir_min <- paste0(r_output_dir, "inla_min/")
+# r_output_dir_max <- paste0(r_output_dir, "inla_max/")
+# r_output_dir <- paste0(r_output_dir, "inla_standardize/")
+# r_output_dir <- paste0(r_output_dir, "inla_gsl/")
+r_output_dir <- paste0(r_output_dir, "inla_sensitive/")
 
-r_output_dir <- paste0(r_output_dir, "inla_standardize/")
-standardize <- TRUE
+standardize <- FALSE
 
-for (city in cities) {
-  for (phe_type in c("SOS", "EOS")) {
-    model_input_all <- prepare_data(city, source = "Grid", taxa_col= "canonicalname", phe_type = phe_type)
+for (city in cities[1:27]) {
+  for (phe_type in c("GSL_range_season")) {
+    model_input_all <- prepare_data(city, source = "Grid_GSL", taxa_col= "canonicalname", phe_type = phe_type)
     
     if (standardize) {
       model_input_all <- standardize_with_params(
@@ -103,6 +105,13 @@ for (city in cities) {
         vars = get_vars_to_std(model_input_all)
       )
     }
+    run_inla_species(model_input_all, r_output_dir, phe_type, city)
+  }
+}
+
+for (city in c("Berkeley")) {
+  for (phe_type in c("SOS_04", "SOS_06", "EOS_04", "EOS_06")) {
+    model_input_all <- prepare_data(city, source = "Grid", taxa_col= "canonicalname", phe_type = phe_type)
     run_inla_species(model_input_all, r_output_dir, phe_type, city)
   }
 }

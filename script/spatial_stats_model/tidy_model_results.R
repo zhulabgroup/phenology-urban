@@ -3,7 +3,7 @@
 tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
 cities <- gsub("\\.rds$", "", basename(rds_files))
-phe_types <- c("SOS", "EOS")
+phe_types <- c("GSL_range_season")
 
 prepare_coef_summary <- function(r_output_dir, phe_type){
   pattern = paste0(phe_type,"\\.rds$")
@@ -32,10 +32,10 @@ prepare_coef_summary <- function(r_output_dir, phe_type){
   write_rds(coef_summary, paste0(r_output_dir, phe_type, "_summary.rds"))
 }
 
-for (city in cities) { 
+for (city in cities[2:76]) { 
   message(paste0("Processing city: ", city))
-  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla_standardize/spatial_spde/", city, "/canonicalname/")
-  for (phe_type in c("SOS", "EOS")){
+  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla_gsl/spatial_spde/", city, "/canonicalname/")
+  for (phe_type in phe_types){
     prepare_coef_summary(r_output_dir, phe_type)
   }
 }
