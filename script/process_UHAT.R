@@ -2,7 +2,7 @@ library(zhulabtools)
 load_packages(c("tidyverse", "ggplot2", "sf", "lubridate", "terra", "patchwork", "scales", "viridis", "leaflet"))
 select <- dplyr::select
 # output directory
-out_dir <- "~/lab-data/datasets/climate/UHAT/clean_minmax"
+out_dir <- "~/lab-data/datasets/climate/UHAT/clean_GSL"
 tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
 cities <- gsub("\\.rds$", "", basename(rds_files))
@@ -88,10 +88,8 @@ for (city in cities) {
   raw_uhat <- read_csv(uhat_file)
   UHAT_climate <- raw_uhat |>
     mutate(season = case_when(
-      month(time) %in% 3:5 ~ "spring",
-      month(time) %in% 6:8 ~ "summer",
-      month(time) %in% 9:11 ~ "fall",
-      month(time) %in% c(12, 1, 2) ~ "winter"
+      month(time) %in% 3:8 ~ "growing",
+      month(time) %in% c(9, 10, 11, 12, 1, 2) ~ "dormant"
     )) |>
     mutate(year = year(time),
            year = if_else(month(time) == 12, year + 1, year)) |>
@@ -118,8 +116,8 @@ for (city in cities) {
   )
   r_template <- terra::rast(tifs[1])
   
-  seasons_to_do <- c("summer", "winter")
-  temp_type <- c("tmin", "tmax")
+  seasons_to_do <- c("growing", "dormant")
+  temp_type <- c("tavg")
   # years present for those seasons
   years_to_do <- UHAT_climate %>%
     filter(season %in% seasons_to_do) %>%
