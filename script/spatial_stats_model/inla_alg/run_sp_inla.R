@@ -17,7 +17,7 @@ run_inla_species = function(model_input_all, r_output_dir, phe_type, city, fitti
   
   cl <- parallel::makeCluster(n_cores, outfile = "")
   on.exit(parallel::stopCluster(cl), add = TRUE)
-  
+  doParallel::registerDoParallel(cl)
   `%dopar%` <- foreach::`%dopar%`
   model_split <- split(
     model_input_all,
