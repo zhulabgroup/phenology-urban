@@ -21,7 +21,7 @@ prepare_data <- function(city, source, taxa_col, phe_type) {
       tree_climate <- read_rds(input_dir) |>
         st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F) |>
         st_transform(crs = 5070)
-    } else if (grepl("Grid", source)) { # UHAT and Daymet
+    } else if (source == "Grid") { # UHAT and Daymet
        input_dir <- list.files(,
         path = paste0("~/phenology-urban/data/proc/tree_climate/", source, "/"), # For example NY
         pattern = paste0("^", city, ".*\\.rds$"),
@@ -32,6 +32,19 @@ prepare_data <- function(city, source, taxa_col, phe_type) {
                 srad_summer = Daymet_srad_summer, srad_winter = Daymet_srad_winter) |>
          st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F) |>
          st_transform(crs = 5070)
+    } else if (source == "Grid_GSL") { # UHAT and Daymet
+      input_dir <- list.files(,
+                              path = paste0("~/phenology-urban/data/proc/tree_climate/", source, "/"), # For example NY
+                              pattern = paste0("^", city, ".*\\.rds$"),
+                              full.names = TRUE)
+      tree_climate <- read_rds(input_dir) |>
+        mutate(prcp_growing = 0.5* (Daymet_prcp_spring + Daymet_prcp_summer), 
+               srad_growing = 0.5* (Daymet_srad_spring + Daymet_srad_summer)) |>
+        select(id, taxa, lon, lat, year, 
+               temp_growing = UHAT_temp_growing,
+               prcp_growing, srad_growing) |>
+        st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F) |>
+        st_transform(crs = 5070)
     } else {
       stop("Invalid source. Must be 'WU' or 'Grid'.")
     }
@@ -58,7 +71,7 @@ prepare_data <- function(city, source, taxa_col, phe_type) {
       st_drop_geometry()
     
     #Join to phenology data
-    file_list <- list.files(path = "~/lab-data/datasets/vegetation/PS/CONUS_urban/doy/", pattern = paste0("^doy_",city,"_.*\\.rds$"), full.names = TRUE)
+    file_list <- list.files(path = "~/lab-data/datasets/vegetation/PS/CONUS_urban/v2_doy/", pattern = paste0("^doy_",city,"_.*\\.rds$"), full.names = TRUE)
     data_list <- file_list %>%
       purrr::map(~ read_rds(.x))
     all_doy <- bind_rows(data_list)
@@ -66,9 +79,7 @@ prepare_data <- function(city, source, taxa_col, phe_type) {
       left_join(all_doy, by = c("id", "year"))
     
     if (taxa_col == "canonicalname") {
-      model_input_all <- prepare_species_data(phe_type, tree_climate_phe)
-    } else if (taxa_col == "genus") {
-      model_input_all <- prepare_genus_data(phe_type, tree_climate_phe)
+      model_input_all <- prepare_species_phe(phe_type, tree_climate_phe)
     } else {
       stop("Invalid taxa_col. Must be 'canonicalname' or 'genus'.")
     }
@@ -76,7 +87,7 @@ prepare_data <- function(city, source, taxa_col, phe_type) {
 }
 
 
-prepare_species_data <- function(phe_type, tree_climate_phe) {
+prepare_species_phe <- function(phe_type, tree_climate_phe) {
   if (phe_type == "SOS") {
     phe_metric <- "doy"
     direction <- "up"
@@ -92,6 +103,68 @@ prepare_species_data <- function(phe_type, tree_climate_phe) {
     model_input <- tree_climate_phe %>%
       filter(direction == !!direction & thres == !!thres) %>%
       select(id, canonicalname = taxa, lon, lat, year, start, end, doy, hex_id, ends_with("summer")) %>%
+      drop_na()
+  } else if (str_detect(phe_type, "^SOS_\\d+$")) {
+    phe_metric <- "doy"
+    direction <- "up"
+    thres <- phe_type |>
+      str_extract("(?<=SOS_)\\d+") |>
+      as.numeric() / 10
+    model_input <- tree_climate_phe %>%
+      filter(direction == !!direction & thres == !!thres) %>%
+      select(id, canonicalname = taxa, lon, lat, year, start, end, doy, hex_id, ends_with("winter")) %>%
+      drop_na()
+  } else if (str_detect(phe_type, "^EOS_\\d+$")) {
+    phe_metric <- "doy"
+    direction <- "down"
+    thres <- phe_type |>
+      str_extract("(?<=EOS_)\\d+") |>
+      as.numeric() / 10
+    model_input <- tree_climate_phe %>%
+      filter(direction == !!direction & thres == !!thres) %>%
+      select(id, canonicalname = taxa, lon, lat, year, start, end, doy, hex_id, ends_with("summer")) %>%
+      drop_na()
+  }  else if (phe_type == "GSL_winter") {
+    phe_metric <- "doy_diff"
+    diff <- tree_climate_phe %>%
+      filter(thres == 0.5) %>%
+      group_by(id, year) %>%
+      summarise(
+        doy_diff = abs(diff(doy[order(thres)])),
+        .groups = "drop"
+      )
+    model_input = tree_climate_phe %>%
+      filter(direction == "up" & thres == 0.5) %>%
+      left_join(diff, by = c("year", "id")) %>%
+      select(id, canonicalname = taxa, lon, lat, year, doy_diff, hex_id, ends_with("winter")) %>%
+      drop_na()
+  } else if (phe_type == "GSL_summer") {
+    phe_metric <- "doy_diff"
+    diff <- tree_climate_phe %>%
+      filter(thres == 0.5) %>%
+      group_by(id, year) %>%
+      summarise(
+        doy_diff = abs(diff(doy[order(thres)])),
+        .groups = "drop"
+      )
+    model_input = tree_climate_phe %>%
+      filter(direction == "down" & thres == 0.5) %>%
+      left_join(diff, by = c("year", "id")) %>%
+      select(id, canonicalname = taxa, lon, lat, year, doy_diff, hex_id, ends_with("summer")) %>%
+      drop_na()
+  } else if (phe_type == "GSL_range_season") {
+    phe_metric <- "doy_diff"
+    diff <- tree_climate_phe %>%
+      filter(thres == 0.5) %>%
+      group_by(id, year) %>%
+      summarise(
+        doy_diff = abs(diff(doy[order(thres)])),
+        .groups = "drop"
+      )
+    model_input = tree_climate_phe %>%
+      filter(direction == "down" & thres == 0.5) %>%
+      left_join(diff, by = c("year", "id")) %>%
+      select(id, canonicalname = taxa, lon, lat, year, doy_diff, hex_id, ends_with("growing")) %>%
       drop_na()
   } else if (phe_type == "GreenUp") {
     phe_metric <- "doy_diff"
@@ -121,61 +194,6 @@ prepare_species_data <- function(phe_type, tree_climate_phe) {
       filter(direction == !!direction & thres == 0.2) %>%
       left_join(diff, by = c("year", "id")) %>%
       select(id, canonicalname = taxa, lon, lat, year, doy_diff, hex_id, ends_with("fall")) %>%
-      drop_na()
-  }
-  return(model_input)
-}
-
-prepare_genus_data <- function(phe_type, tree_climate_phe) {
-  if (phe_type == "SOS") {
-    phe_metric <- "doy"
-    direction <- "up"
-    thres <- 0.5
-    model_input <- tree_climate_phe %>%
-      filter(direction == !!direction & thres == !!thres) %>%
-      mutate(genus = str_extract(taxa, "^[^ ]+")) %>%
-      select(id, taxa, genus, lon, lat, year, start, end, doy, hex_id,  ends_with("winter")) %>%
-      drop_na()
-  } else if (phe_type == "EOS") {
-    phe_metric <- "doy"
-    direction <- "down"
-    thres <- 0.5
-    model_input <- tree_climate_phe %>%
-      filter(direction == !!direction & thres == !!thres) %>%
-      mutate(genus = str_extract(taxa, "^[^ ]+")) %>%
-      select(id, taxa, genus, lon, lat, year, start, end, doy, hex_id,  ends_with("summer")) %>%
-      drop_na()
-  } else if (phe_type == "GreenUp") {
-    phe_metric <- "doy_diff"
-    direction <- "up"
-    diff <- tree_climate_phe %>%
-      filter(direction == !!direction & thres %in% c(0.2, 0.8)) %>%
-      group_by(id, year) %>%
-      summarise(
-        doy_diff = abs(diff(doy[order(thres)])),
-        .groups = "drop"
-      )
-    model_input = tree_climate_phe %>%
-      filter(direction == !!direction & thres == 0.2) %>%
-      mutate(genus = str_extract(taxa, "^[^ ]+")) %>%
-      left_join(diff, by = c("year", "id")) %>%
-      select(id, taxa, genus, lon, lat, year, doy_diff, hex_id, ends_with("spring")) %>%
-      drop_na()
-    
-  } else {
-    direction <- "down"
-    diff <- tree_climate_phe %>%
-      filter(direction == !!direction & thres %in% c(0.2, 0.8)) %>%
-      group_by(id, year) %>%
-      summarise(
-        doy_diff = abs(diff(doy[order(thres)])),
-        .groups = "drop"
-      )
-    model_input = tree_climate_phe %>%
-      filter(direction == !!direction & thres == 0.2) %>%
-      mutate(genus = str_extract(taxa, "^[^ ]+")) %>%
-      left_join(diff, by = c("year", "id")) %>%
-      select(id, taxa, genus, lon, lat, year, doy_diff, hex_id, ends_with("fall")) %>%
       drop_na()
   }
   return(model_input)
