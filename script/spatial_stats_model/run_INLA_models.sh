@@ -4,7 +4,7 @@
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err
 #SBATCH --array=1
-#SBATCH --time=4:00:00
+#SBATCH --time=24:00:00
 #SBATCH --partition=standard
 #SBATCH --mem=15G
 #SBATCH --cpus-per-task=11
