@@ -1,5 +1,5 @@
 run_inla_species = function(model_input_all, r_output_dir, phe_type, city, fitting_type = "doy",
-                            n_cores = 1){
+                            n_cores = 15){
 # options(repos = c(
 #   INLA = "https://inla.r-inla-download.org/R/testing",
 #   getOption("repos")
