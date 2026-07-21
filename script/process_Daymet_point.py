@@ -30,7 +30,7 @@ VAR_LINE  = "variables:"
 DAYMET_VARIABLES = ['prcp']
 DAYMET_YEARS     = [str(year) for year in range(STARTYEAR, ENDYEAR + 1)]
 DAYMET_URL_STR = r'https://daymet.ornl.gov/single-pixel/api/data?lat={}&lon={}'
-doy_files = glob.glob(str(Path("/home/jializ/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input").expanduser() / f"*.rds"))
+doy_files = glob.glob(str(Path("/home/jializ/lab-data/datasets/vegetation/StreetTrees/cleaned_NPN").expanduser() / f"*.rds"))
 
 
 # In[3]:
@@ -90,7 +90,7 @@ for doy_file in doy_files:
     city = os.path.splitext(os.path.basename(doy_file))[0]
     print(f"Processing city: {city}")
 
-    out_dir  = Path.home() / "phenology-urban/data/raw/CONUS/Daymet/all_city_trees" / city
+    out_dir  = Path.home() / "phenology-urban/data/raw/CONUS/Daymet/NPN_city_trees" / city
     out_dir.mkdir(parents=True, exist_ok=True)
     out_file = out_dir / "prcp_monthly_2016_2024.csv"
     if out_file.exists():
