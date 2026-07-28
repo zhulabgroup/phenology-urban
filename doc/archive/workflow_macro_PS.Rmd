@@ -8,7 +8,6 @@ library(sp)
 library(raster)
 library(ggplot2)
 
-bearer <- "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJlbWFpbF9hZGRyZXNzIjoiamlhbGl6QHVtaWNoLmVkdSIsImlzcyI6IkFQUyBPQXV0aDIgQXV0aGVudGljYXRvciIsImlhdCI6MTcwNjU4MDAwNywibmJmIjoxNzA2NTgwMDA3LCJleHAiOjE4NjQyNjAwMDcsInVpZCI6ImppYWxpejk4IiwidG9rZW5DcmVhdG9yIjoiamlhbGl6OTgifQ.00pMRaYU0YJBfodt70ptBeZyfiAoSeVLsryGmTI0sq0"
 roi_sf <- sf::read_sf('data/raw/CONUS/boundary/us_boundarydissolve.shp')
 us_boundary <- st_transform(roi_sf, crs = st_crs(4326))
 
