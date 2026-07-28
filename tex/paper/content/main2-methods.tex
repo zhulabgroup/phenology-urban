@@ -1,99 +1,134 @@
-\section{Methods}
+\section{Materials and methods}
 
-\subsection{Retrieving individual tree phenology from PlanetScope}
-To characterize intra-urban heterogeneity in phenology at the individual-tree level, we compiled street tree inventories from cities across the CONUS to obtain exact locations of individual urban trees and harmonized species information as the study subjects. Using high-resolution PlanetScope imagery, we then extracted start-of-season (SOS) and end-of-season (EOS) phenological metrics for individual trees from enhanced vegetation index (EVI) time series.
+\subsection{Data sources}
 
-\subsubsection{Compiling urban tree inventories}
-To obtain the exact locations of individual urban trees and maximize coverage across representative U.S. cities, we compiled street tree inventories from cities across CONUS. We first standardized two published inventory datasets, including an assembling work by \citet{McCoy2022eLife}, and a database on OpenTrees.org. The dataset by McCoy et al., was assembled through Google searches and connections with relevant state officials, limited to the large U.S. cities by census population. This dataset provides detailed information on tree location, species, and health status. We retained only trees located within urban boundaries defined by TIGER/Line Files from the U.S. Census Bureau, excluding individuals with “dying” or “dead” conditions as well as duplicate records. This yielded inventories for 40 cities. OpenTrees.org is a public platform that aggregates tree inventories from municipalities worldwide. From this database, we selected 10 cities with clearly documented government data sources to complement McCoy's dataset. For these cities, we converted all coordinates to a standardized longitude-latitude format, removed duplicate records, and filtered trees by urban boundaries. 
+\subsubsection{Urban tree inventories}
 
-To improve the representation of urban diversity, we further conducted a PCA of climatic, demographic, and built-environment characteristics across more than 2,000 U.S. cities documented in TIGER/Line Files. We identified areas of principal component analysis (PCA) space not yet covered by the initial inventory set and added 26 additional cities through targeted searches and direct outreach. The PCA incorporated key climatic and urban structural variables, including mean annual temperature (\emph{bio1}), mean annual precipitation (\emph{bio12}), population density (\emph{pop\_density}), median building height (\emph{height\_median}), and the standard deviation of building height (\emph{height\_sd}). We employed population density data from WorldPop and a 3D settlement dataset published by \citet{Esch2022RSE}. The results suggest that the included cities occupy a wide and balanced portion of the full environmental space, indicating that the selected sites are broadly representative of urban conditions across CONUS (Fig.~1b).
+To obtain the exact locations and species identity of individual urban trees, we compiled municipal street-tree inventories across cities in the contiguous United States. We first standardized two published inventory datasets: an assembly by \citet{McCoy2022eLife} and a database on OpenTrees.org. The dataset compiled by McCoy et al., was assembled through Google searches and connections with relevant state officials, limited to the higher-populated U.S. cities. This dataset provides detailed information on tree location, species, and health status. We retained only trees located within urban boundaries defined by TIGER/Line Files from the U.S. Census Bureau, excluding individuals with “dying” or “dead” conditions as well as duplicate records. This yielded inventories for 40 cities. OpenTrees.org is a public platform that aggregates tree inventories from municipalities worldwide. We selected 10 cities from this database with clearly documented government data sources. For these cities, we standardized tree coordinates, removed duplicate records, and filtered trees by urban boundaries. To improve the representation of urban diversity, we further added 26 additional cities considering their climatic, demographic, and built-environment characteristics (Supplementary Note 1). The selected cities are broadly representative of urban conditions across the contiguous United States (Supplementary Fig. 1).
 
-To harmonize taxonomy, we matched species names to the GBIF backbone taxonomy using the R package rgbif \citep{Chamberlain2024rgbif}. For inventories reporting only common names, we converted them to scientific names with the R package taxize \citep{Chamberlain2025taxize}. In total, this produced a dataset of 4,121,889 trees, representing 505 genera and 1,502 species.
+To harmonize taxonomy, we matched species names to the GBIF backbone taxonomy using the R package rgbif \citep{Chamberlain2024rgbif}. For inventories reporting only common names, we converted them to scientific names with the R package taxize \citep{Chamberlain2025taxize}. We restricted our analysis to deciduous trees because their clear seasonal leaf phenology is readily detectable using remote sensing. Species were assigned to a categorical leaf phenology type (TraitID = 37) based on the most frequently observed classification in the TRY database \citep{Kattge2011GCB}. To ensure adequate sample sizes, we excluded species with fewer than 30 individuals per city. For species with more than 2,000 individuals in a city, we randomly downsampled to 2,000 trees \citep{psutka_sample_2019}. After processing, the final dataset included 1,663,951 street trees from 345 species across 76 cities in the contiguous United States (Supplementary Fig. 1, Supplementary Fig. 13).
 
-We restricted our analysis to deciduous trees, which exhibit clearer seasonal leaf phenology that is more readily detectable in remote sensing. Species were assigned to a categorical leaf phenology type (TraitID = 37) based on the most frequently observed classification in the TRY database \citep{Kattge2011GCB}. To ensure adequate sample sizes, we excluded species with fewer than 30 individuals per city. For species with more than 2,000 individuals in a city, we randomly downsampled to 2,000 trees \citep{psutka_sample_2019}. Study objects are 1,663,951 street trees from 345 species across 76 CONUS cities (Fig.\ref{fig1:map}, Supplementary Fig.5).
+\subsubsection{Individual tree phenology}
 
-\input{content/fig1-map.tex}
+We extracted SOS, EOS, and GSL phenological metrics for individual trees from PlanetScope-derived enhanced vegetation index (EVI) time series, following the general workflow of \citet{Song2025SRS}. The daily-temporal and 3-m spatial resolution satellite imagery from PlanetScope is particularly well positioned for high-resolution vegetation monitoring across broad spatial extents. Previous studies have shown the reliability of using PlanetScope imagery to detect phenological events of individual trees \citep{Moon2021RSE,Song2025SRS,Zhao2022RSE}, given that many canopy trees have crown diameters exceeding PlanetScope’s spatial resolution \citep{Dixon2025UFUG,Liu2023SciAdv,zhang2025naturecities}. This advantage is even more pronounced in urban settings, where the sparse distribution of urban trees against contrasting backgrounds enhances the detectability of their temporal phenological signals \citep{Liu2023SciAdv,Neyns2024UFUG}.
 
-\subsubsection{Extracting phenological metrics from PlanetScope}
+We retrieved PlanetScope imagery (ortho\_analytic\_4b\_sr) from 2017 to 2023 for all trees via the Planet API using the R package batchplanet \citep{Song2026}. Data were harmonized to Sentinel-2 for consistency \citep{kington_scene_2022}, and only daytime images (sun elevation $> 0$) were used. Reflectances in the red, green, blue, and near-infrared bands were extracted at tree coordinates for EVI calculation, with UDM2 masks applied to retain only clear pixels (no snow, ice, shadow, haze, or cloud, and classification confidence $\geq 80\%$). For days with multiple acquisitions, mean reflectances were computed.
 
-We extracted SOS and EOS phenological metrics for individual trees from PlanetScope-derived EVI time series, mainly following established methods in \citet{Song2025SRS}. The daily-temporal and 3-m spatial resolution satellite imagery from PlanetScope is particularly well positioned for fine- and large-scale for vegetation investigation. Previous studies have shown the reliability of using PlanetScope imagery to detect phenological events of individual trees \citep{Moon2021RSE,Song2025SRS}, given that many canopy trees have crown diameters exceeding PlanetScope's spatial resolution \citep{Dixon2025UFUG,Liu2023SciAdv,zhang2025naturecities}. This advantage is even more pronounced in urban settings, where the sparse distribution of urban trees against contrasting backgrounds enhances the detectability of their temporal phenological signals, despite variation in crown shape \citep{Liu2023SciAdv,Neyns2024UFUG}.
+To derive tree-level phenological metrics from PlanetScope imagery, we (i) computed the enhanced vegetation index (EVI) and removed implausible values outside the range of 0–1 \citep{huete_overview_2002}, (ii) extended and smoothed annual time series with weighted Whittaker smoothing to capture full green-up and green-down cycles \citep{kong_robust_2019}, (iii) identified and selected time series of EVI with significant seasonality using piecewise regression models, (iv) extracted the timing of SOS and EOS as the day of year when their growing season EVI curves first cross the 50\% green-up\/down threshold, with 40\% and 60\% thresholds evaluated in sensitivity analyses (Supplementary Note 6); and (v) calculated GSL as the interval between SOS and EOS.
 
-We retrieved PlanetScope imagery (ortho\_analytic\_4b\_sr) from 2017--2023 for all trees via the Planet API using the R package batchplanet \citep{Song2026}. Data were harmonized to Sentinel-2 for consistency (Kington \& Collison, 2022), and only daytime images (sun elevation $> 0$) were used. Reflectances in the red, green, blue, and near-infrared bands were extracted at tree coordinates for EVI calculation, with UDM2 masks applied to retain only clear pixels (no snow, ice, shadow, haze, or cloud, and classification confidence $\geq 80\%$). For days with multiple acquisitions, mean reflectances were computed.
+We validated PlanetScope-derived SOS and EOS against ground observations from the USA National Phenology Network (NPN, \citet{rosemartin2018usa} and National Ecological Observatory Network (NEON, \citet{Elmendorf2016Ecosphere}) (Supplementary Note 3). To align field-based observations with PlanetScope-derived phenology metrics, ground-based SOS and EOS were calculated from individual-level phenometrics (\citep{Xin2020IJAEOG}; \citep{Zhao2022RSE}). The validation dataset included 734 individual deciduous trees representing 123 species across 92 USA-NPN locations in 19 cities from 2016 to 2024, and 987 individual trees representing 37 species across 19 NEON sites from 2018 to 2022. PlanetScope-derived phenology metrics were generally consistent with the corresponding ground-based observations, with stronger agreement for SOS than for EOS, as indicated by higher correlation coefficients and lower RMSEs for SOS (Supplementary Fig. 2). These results suggest that PlanetScope time series capture meaningful phenological signals and support their application in urban areas.
 
-To derive tree-level phenological metrics from PlanetScope imagery, we followed the approach of Song et al. and used the R package batchplanet \citep{Song2025SRS, Song2026}. Specifically, we (i) computed the enhanced vegetation index (EVI) and removed implausible values, (ii) extended and smoothed annual time series with weighted Whittaker smoothing \citep{kong_robust_2019} to capture full green-up and green-down cycles, (iii) identified and selected time series of EVI with significant seasonality using piecewise regression models, and (iv) extracted the timing of SOS and EOS as the day of year when their growing season EVI curves first cross the green-up/down 50\% threshold. The phenological distribution is shown in Supplementary Fig. 6.
+\subsubsection{Climate datasets}
 
-To evaluate the accuracy of PlanetScope-derived phenology, we retrieved leaf-related phenophases observations in urban areas from the USA National Phenology Network (NPN) dataset \citep{rosemartin2018usa} for comparison. The comparison revealed general trend consistency, which suggested that PlanetScope time series can capture meaningful phenological signals, thereby providing confidence in its use in urban areas (Supplementary Note 1).
+To characterize intra-city climate conditions, we used the Urban High-resolution Air Temperature dataset, hereafter U-HAT \citep{Zhang2026NatureCommunications}. U-HAT provides daily near-surface, 2-m air temperature for 384 cities in the contiguous United States from 2013 to 2023 at 1-km spatial resolution. This novel dataset uses a transfer learning framework that integrates satellite land surface temperature, urban surface properties, atmospheric forcings, and urban station observations to estimate near-surface air temperature in cities. Previous evaluations showed that U-HAT better captures urban heat island effects and fine-scale thermal variation than alternative temperature products. Specifically, gridded weather datasets without urban correction (\eg, Daymet) systematically underestimate urban temperatures, while observations from urban personal weather stations (\eg, Weather Underground) are prone to outliers and data quality issues (Supplementary Note 3, Supplementary Fig. 4). 
 
-\subsection{Comparing intra- and inter-urban variation in phenology}
+For each tree and year, we extracted preseason air temperature from U-HAT. For SOS analyses, preseason temperature was defined as the mean winter temperature from December 1 to February 28 or 29. For EOS analyses, preseason temperature was defined as the mean summer temperature from June 1 to August 31. For GSL analyses, both winter and summer preseason temperature windows were considered separately. We use “fine-scale urban temperature” to refer to intra-city variation in 1-km near-surface air temperature, while recognizing that tree-scale thermal environments can vary at finer spatial scales. To account for other climatic influences on phenology, we also extracted preseason precipitation and preseason shortwave radiation from Daymet version 4 at 1-km spatial resolution \citep{thornton2021gridded}. These variables were calculated over the same preseason windows used for temperature.
 
-To quantify the magnitude of phenological variation (Question 1), we partitioned variance in spring and fall phenological timing into inter-urban, intra-urban, and across-year components. For each species m, we fitted a mixed-effects model with SOS or EOS as the response variable $y_{j,m,n,t}$ of tree $j$ in city $n$ and year $t$:
+We used mean annual temperature and mean annual precipitation to characterize the city-level baseline climate. These two bioclimatic variables were obtained from CHELSA v.1.2 climatologies at 30 arcsec spatial resolution \citep{Karger2017SciData}. For each city, we extracted values at sampled tree locations and averaged them across trees to represent the baseline climatic conditions experienced by the inventoried street-tree population in that city.
+
+\subsection{Statistical analyses}
+
+\subsubsection{Comparing intra-city and cross-city variation in phenology}
+
+To compare the relative contributions of different sources of phenological variation, we partitioned variance in SOS and EOS into cross-city, intra-city, and cross-year components. This analysis was conducted separately for each species that occurred in at least two cities. We used a mixed-effects model analogous to a variance-component ANOVA, while allowing nested observations across cities, individuals, and years.
+
+For each species $k$, we modeled phenological timing as shown in Equation~{eq:variance-model}. Because the model was fitted separately for each species, the species index $k$ is omitted from all terms for notational simplicity:
 \begin{align}
-y_{j,m,n,t}
-&= \mu_m
-+ u_{m,n}
-+ v_{m,j(n)}
-+ w_{m,t}
-+ \varepsilon_{i,m,n,t} \\
-u_{m,n} &\sim \mathcal{N}(0, \sigma^2_{\mathrm{inter},m}) \\
-v_{m,j(n)} &\sim \mathcal{N}(0, \sigma^2_{\mathrm{intra},m}) \\
-w_{m,t} &\sim \mathcal{N}(0, \sigma^2_{\mathrm{year},m}) \\
-\varepsilon_{j,m,n,t} &\sim \mathcal{N}(0, \sigma^2_{\mathrm{residual},m})
+y_{i,j,t}
+&= \mu
++ u_{j}
++ v_{i(j)}
++ w_{t}
++ \varepsilon_{i,j,t}
+\label{eq:variance-model}
+\end{align}
+where $y_{i,j,t}$ is the SOS or EOS of tree $i$ in city $j$ and year $t$. The parameter $\mu$ represents the species-specific intercept, or the overall mean phenological timing for species, averaged across cities, individual trees, and years. $u_{j}$ is the cross-city random effect for species. $v_{i(j)}$ is the intra-city (cross-individual) random effect, with individuals nested within cities. $w_{t}$ is the interannual random effect, $\varepsilon_{i,j,t}$ is the residual error (Eq.~\ref{eq:variance-model}).
+
+The random effects and residual error in were specified as:
+\begin{align}
+u_{j} &\sim \mathcal{N}(0, \sigma^2_{\mathrm{cross}}) \\
+v_{i(j)} &\sim \mathcal{N}(0, \sigma^2_{\mathrm{intra}}) \\
+w_{t} &\sim \mathcal{N}(0, \sigma^2_{\mathrm{year}}) \\
+\varepsilon_{i,j,t} &\sim \mathcal{N}(0, \sigma^2_{\mathrm{residual}})
+\label{eq:variance-distribute}
 \end{align}
 
-Where $u_{m,n}$ is the inter-urban (between-city) random effect for species $m$. $v_{m,j(n)}$ is the intra-urban (between-individual) random effect, with individuals nested within cities. $w_{m,t}$ is the interannual random effect, and $\varepsilon_{j,m,n,t}$ is the residual error.
-
-Then, we estimated the proportional contributions of inter-urban and intra-urban variance components relative to their combined variance, which were used to assess their relative importance:
+After fitting the model, we extracted the estimated variance components and calculated total variance (Eq.~\ref{eq:variance-sum}). To compare intra-city and cross-city contributions directly, we calculated the proportional contributions ($C$) of cross-city and intra-city variance components relative to their combined variance (Eq.~\ref{eq:variance-component}).
 \begin{align}
-\sigma^2_{\mathrm{total},m}
-&= \sigma^2_{\mathrm{inter},m}
-+ \sigma^2_{\mathrm{intra},m}
-+ \sigma^2_{\mathrm{year},m}
-+ \sigma^2_{\mathrm{residual},m} \\
-\mathrm{Prop}^{*}_{\mathrm{inter},m}
-&= \frac{\sigma^2_{\mathrm{inter},m}}
-{\sigma^2_{\mathrm{intra},m} + \sigma^2_{\mathrm{inter},m}},
+\hat{\sigma}^2_{\mathrm{total},m}
+= \hat{\sigma}^2_{\mathrm{cross},m}
++ \hat{\sigma}^2_{\mathrm{intra},m}
++ \hat{\sigma}^2_{\mathrm{year},m}
++ \hat{\sigma}^2_{\mathrm{residual},m}
+\label{eq:variance-sum} \\
+C_{\mathrm{cross},m}
+= \frac{\hat{\sigma}^2_{\mathrm{cross},m}}
+{\hat{\sigma}^2_{\mathrm{intra},m} + \hat{\sigma}^2_{\mathrm{cross},m}},
 \qquad
-\mathrm{Prop}^{*}_{\mathrm{intra},m}
-= \frac{\sigma^2_{\mathrm{intra},m}}
-{\sigma^2_{\mathrm{intra},m} + \sigma^2_{\mathrm{inter},m}}
+C_{\mathrm{intra},m}
+= \frac{\hat{\sigma}^2_{\mathrm{intra},m}}
+{\hat{\sigma}^2_{\mathrm{intra},m} + \hat{\sigma}^2_{\mathrm{cross},m}}
+\label{eq:variance-component}
 \end{align}
 
-\subsection{Inferring phenological response to urban thermal variation}
+We used these proportions to evaluate whether phenological variation within cities was comparable to or greater than variation among cities for each species.
 
-To understand the magnitude and direction of microclimate-driven phenological responses (Question 2), we quantified the sensitivity of individual-tree phenology to fine-scale thermal heterogeneity using spatial statistical models.
+\subsubsection{Estimating phenological associations with fine-scale urban temperature}
 
-To characterize thermal variation within cities, we first retrieved preseason temperature for each tree individual and year from the U-HAT dataset, which provides 1-km resolution urban air temperature estimates across CONUS cities (Zhang et al., 2025). We selected U-HAT because the evaluations have shown that it more accurately captures urban heat island effects and fine-scale thermal variation than alternative temperature products. Specifically, gridded weather datasets without urban correction (e.g., Daymet) systematically underestimate urban temperatures \citep{thornton2021gridded}, while observations from urban personal weather stations (e.g., Weather Underground) are prone to outliers and data quality issues \citep{weatherunderground} (Supplementary Note 2). Preseason temperature was defined as the mean winter temperature (December 1 to February 28/29) for SOS and the mean summer temperature (June 1 to August 31) for EOS. Additionally, preseason precipitation and shortwave radiation were retrieved from the Daymet dataset at 1-km spatial resolution and used as control variables.
+To estimate how individual-tree phenology was associated with fine-scale intra-city temperature variation (Question 2), we fitted spatial statistical models separately for each species–city combination. Spatial models extend standard regression by accounting for spatial autocorrelation among nearby observations, with correlation typically declining as geographic distance increases \citep{banerjee_basics_2025, finley_spbayes_2007}. This structure is applied because neighboring trees are more likely to share similar local environments, planting conditions, and management regimes, which can lead to similar phenological patterns. Accounting for this spatial structure allows us to better isolate phenological responses to temperature variation rather than confounding them with unmodeled spatial dependence.
 
-We then estimated phenological responses to thermal variation by employing spatial statistical models separately for each species within each city: 
+For each species–city combination ($k,j$), we modeled individual-tree phenology as a function of local climatic conditions while accounting for spatial and temporal dependence (Eq.~\ref{eq:spatial-model}). Because the model was fitted separately for each combination, the species and city indices $k$ and $j$ are omitted from all terms for notational simplicity:
 \begin{align}
-y(\mathbf{s}_i, \mathbf{t}) &= \mathbf{x}_{\mathbf{s}_i,\mathbf{t}} \boldsymbol{\beta} + w(\mathbf{s}_i) + u(\mathbf{t}) + \epsilon(\mathbf{s}_i, \mathbf{t}) \\
-\mathbf{x}_{\mathbf{s}_i,\mathbf{t}} &= [1, \text{Temp}_{\mathbf{s}_i,\mathbf{t}}, \text{Prcp}_{\mathbf{s}_i,\mathbf{t}}, \text{Srad}_{\mathbf{s}_i,\mathbf{t}}] \\
-\boldsymbol{\beta} &= (\beta_0, \beta_{\text{Temp}}, \beta_{\text{Prcp}}, \beta_{\text{Srad}})^\top \\
-\boldsymbol{\beta} &\sim \mathcal{N}(\mathbf{0}, \sigma_\beta^2 \mathbf{I}) \\
+y(\mathbf{s}, t) &= \mathbf{x}(\mathbf{s},t)^\top \boldsymbol{\beta} + w(\mathbf{s}) + u(t) + \epsilon(\mathbf{s}, t)
+\label{eq:spatial-model}
+\end{align}
+where $y(\mathbf{s}, t)$ is the observed annual phenological timing, measured as the day of year (DOY) of SOS, EOS, or GSL for a tree at geographic coordinate $\mathbf{s}$ in year $t$. $\mathbf{x}(\mathbf{s}, t)$ is the vector of fine-scale climate predictors. $\boldsymbol{\beta}$ is the vector of regression coefficients. $w(\mathbf{s})$ is the spatial random effect, and $u(t)$ is the temporal random effect. $\epsilon(\mathbf{s}, t)$ is the residual term.
+\begin{align}
+\mathbf{x}(\mathbf{s},t) &= (1, \text{T}(\mathbf{s},t), \text{P}(\mathbf{s},t), \text{R}(\mathbf{s},t))^\top \\
+\boldsymbol{\beta} &= (\beta_0, \beta_{\text{T}}, \beta_{\text{P}}, \beta_{\text{R}})^\top \\
 w(\mathbf{s}) &\sim \text{GP}\!\left(0,\; C(\mathbf{s},\mathbf{s}')\right) \\
-u(\mathbf{t}) &\stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma_u^2) \\
-\epsilon(\mathbf{s}_i, \mathbf{t}) &\stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma^2_\varepsilon)
+u(t) &\stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma_u^2) \\
+\epsilon(\mathbf{s}, t) &\stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma^2_\varepsilon)
+\label{eq:spatial-model-terms}
 \end{align}
 
-where $y(\mathbf{s}_i, \mathbf{t})$ represents the phenological event (e.g., SOS or EOS) at location $\mathbf{s}_i$ and time $\mathbf{t}$.  $\mathbf{x}_{\mathbf{s}_i,\mathbf{t}} = [1, \text{Temp}_{\mathbf{s}_i,\mathbf{t}}, \text{Prcp}_{\mathbf{s}_i,\mathbf{t}}, \text{Srad}_{\mathbf{s}_i,\mathbf{t}}]$ is the vector of predictors, where each variable represents the preseason average temperature, precipitation and shortwave radiation.  $\boldsymbol{\beta} = (\beta_0, \beta_{\text{Temp}}, \beta_{\text{Prcp}}, \beta_{\text{Srad}})^\top$ are the regression coefficients for the intercept and covariates. $\beta_{\text{Temp}}$ is the coefficient for the average temperature, which is the main interest in this study. $w(\mathbf{s}_i)$  is the spatial random effect, which accounts for spatial autocorrelation among locations. It is modeled using a Matérn covariance structure. We include it because we assume that neighboring trees are more likely to share similar characteristics and management regimes, which can lead to similar phenological patterns.  $u(\mathbf{t})$ is the temporal random effect, which captures the random year effect. $\epsilon(\mathbf{s}_i, \mathbf{t})$ represents the residual error term. 
+Here, $\text{T}(\mathbf{s},t)$, $\text{P}(\mathbf{s},t)$, $\text{R}(\mathbf{s},t)$ represent preseason temperature, precipitation, and shortwave radiation, respectively. The coefficient for the average temperature, $\beta_{\text{T}}$ is the phenological temperature sensitivity, which is the main interest in this study. The spatial random effect, $w(\mathbf{s})$, follows a Gaussian process with a Matérn covariance structure, $C(\mathbf{s}, \mathbf{s}')$. The year random effect $u(t)$ is modeled as an independent normal deviation with variance $\sigma_u^2$, capturing annual shifts in phenological timing shared across trees. The residual error term $\epsilon(\mathbf{s}, t)$ is modeled as independent and normally distributed, with $\sigma^2_\varepsilon$ representing the residual variance.
 
-To fit the spatial models, two approaches were used. The R package spBayes, used for testing, employs a low-rank predictive process approach, which reduces computational complexity by representing the spatial covariance structure through a limited number of knot locations \citep{Finley2015JSS}. In contrast, the R package INLA approximates the continuous Gaussian field as a Gaussian Markov Random Field (GMRF) by solving a stochastic partial differential equation (SPDE) using the finite element method \citep{Rue2009JRSSB}. The following results are based on the INLA approach. The results from spBayes and spmodel presented in the Supplementary Note 3 and 4.
-
-\subsection{Linking phenological responses with climatic context}
-
-To address the Question 3 of examining the relationship between phenological sensitivity and climatic context across all species, we conducted a subsequent analysis based on the regression coefficients from the species- and city-specific spatial models described above. Since phenological sensitivities may be partially structured by shared evolutionary history—reflecting phylogenetically conserved traits and physiological constraints—we modeled such relationship using a phylogenetic generalized linear mixed model (PGLMM) to account for non-independence among species \citep{Li2020MEE,Losos1996Ecology}: 
+We used a Bayesian hierarchical modeling framework to jointly estimate fixed climatic effects and latent spatial and temporal random effects, thereby formulating the model as a hierarchical spatial model. This approach also allows uncertainty in the temperature sensitivity estimates to be propagated into subsequent analyses. Weakly informative priors were assigned to the regression coefficients (Eq.~\ref{eq:sp-model-bayes-terms}).
 \begin{align}
-\theta_{m,n} &= \mathbf{z}_{m, n} \boldsymbol{\lambda} +b_{m} + \epsilon_{m,n} \\
-\mathbf{z}_{m,n} &= [1, \mathrm{bio1}_{n}, \mathrm{bio12}_{n}] \\
-\boldsymbol{\lambda} &= (\lambda_0,\lambda_1,\lambda_2)^\top \\
-\boldsymbol{\lambda} &\sim \mathcal{N}\!\left(\mathbf{0}, \sigma_\lambda^2 \mathbf{I}\right) \\
-\mathbf{b} = (b_1, \dots, b_M)^\top &\sim \mathcal{MVN}\!\left(\mathbf{0},\; \sigma^2_{\mathrm{phy}}\,\mathbf{A}\right) \\
-\epsilon_{m,n} &\stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma^2_\varepsilon)
+\beta_{\ell} \sim \mathcal{N}(0, \sigma_\beta^2), \quad {\ell} \in \{0, {\text{T}}, {\text{P}}, {\text{R}}\}
+\label{eq:sp-model-bayes-terms}
 \end{align}
 
-where $\theta_{m,n}$ represents an extracted posterior draw of the temperature sensitivity coefficients of phenology (e.g., SOS or EOS) for species m in city n. $\mathbf{z}_{m,n} = [1, \mathrm{bio1}_{n}, \mathrm{bio12}_{n}]$ is the vector of predictors, where each variable represents the city-level values of mean annual temperature and mean annual precipitation.
-These two bioclimatic variables are obtained from CHELSA v.1.2 climatologies at a high spatial resolution of 30\,arcsec \citep{Karger2017SciData}.
-For each city, we first extracted the bioclimatic variables at the location of each tree within the city, then calculated the city-level means of these variables to represent $\mathrm{bio1}_{n}$ and $\mathrm{bio12}_{n}$.
-$\boldsymbol{\lambda} = (\lambda_0,\lambda_1,\lambda_2)^\top$ are the regression coefficients for the intercept and covariates. $b_m$ is the random effect for species $m$ accounting for phylogenetic relatedness with covariance matrix $\mathbf{A}$. $\epsilon_{m,n}$ represents the residual error term.
+We implemented model fitting using the INLA package in R, which approximates the continuous spatial Gaussian field through the SPDE framework, enabling more efficient Bayesian inference \citep{Rue2009JRSSB}. 
 
-Final inference was obtained by aggregating parameter estimates across iterations. For visualization, we relied on univariate, single-species models to illustrate the bivariate patterns between temperature sensitivity and climatic context.
+To evaluate the robustness of our results to different model fitting frameworks, we also fitted comparable spatial models using two alternative approaches. First, we used the spBayes package in R, employing a low-rank predictive process approach to reduce computational complexity \citep{Finley2015JSS, finley_spbayes_2007}. Second, we fitted frequentist spatial linear models using the spmodel package in R, which estimates spatial covariance parameters using likelihood-based optimization \citep{dumelle_spmodel_2023}. Main-text results are based on the INLA approach, and the results from spBayes and spmodel are presented in Supplementary Notes 4 and 5.
+
+\subsubsection{Testing whether phenological sensitivities varied with regional climate}
+
+To evaluate whether phenological temperature sensitivities varied with regional climatic context (Question 3), we used the species–city temperature coefficients estimated from the spatial models described above as response variables. Because these coefficients were estimated with uncertainty, we propagated this uncertainty using a parametric resampling approach based on the approximate posterior distributions returned by INLA. Specifically, for each species–city coefficient, we sampled values from a normal distribution parameterized by its INLA posterior mean and standard deviation. Each draw produced one iteration-specific dataset of temperature sensitivities.
+For each iteration $r$, we modeled the sampled phenological sensitivity in Equation \ref{eq:pglmm-model}:
+\begin{align}
+    \beta_{{\text{T}},j,k}^{(r)} = \mathbf{z}_{j}^\top \boldsymbol{b} +\lambda_{k} + \varepsilon_{j,k}^{(r)}
+    \label{eq:pglmm-model}
+\end{align}
+where $\beta_{{\text{T}},j,k}^{(r)}$ represents the r-th posterior draw of the temperature coefficient estimated in Section 2.2.2 for species k in city j at iteration r. This coefficient represents the temperature sensitivity of phenological timing, SOS or EOS, and the posterior draws were obtained from the INLA approximation to the fitted species–city model. $\mathbf{z}_{j}$ is the vector of regional climatic predictors. $\boldsymbol{b}$ is the vector of regression coefficients. $\lambda_{k}$ represents the species-level random effect, and $\varepsilon_{j,k}^{(r)}$ is the residual term.
+\begin{align}
+    \mathbf{z}_{j} &= (1, \mathrm{MAT}_{j}, \mathrm{MAP}_{j})^\top \\
+    \boldsymbol{b} &= (b_0,b_{\mathrm{MAT}},b_{\mathrm{MAP}})^\top \\
+    \boldsymbol{\lambda} &= (\lambda_1, \dots, \lambda_K)^\top \\
+    \boldsymbol{\lambda} &\sim \mathcal{MVN}\!\left(\mathbf{0},\; \sigma^2_{\mathrm{phy}}\,\mathbf{A}\right) \\
+    \varepsilon_{j,k}^{(r)} &\stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma^2_{\beta_\text{T}})
+\end{align}
+
+The predictor vector $\mathbf{z}_{j}$ includes an intercept, mean annual temperature ($\mathrm{MAT}_{j}$), and mean annual precipitation ($\mathrm{MAP}_{j}$) for city $j$. $\boldsymbol{b}= (b_0, b_{\mathrm{MAT}},b_{\mathrm{MAP}})^\top$ are the regression coefficients for the intercept and covariates. The species-level random effect, $\lambda_k$, accounts for the possibility that closely related species may show similar phenological sensitivities due to shared evolutionary history \citep{Li2020MEE,Losos1996Ecology}. Collectively, the species-level random effects are assumed to follow a multivariate normal distribution with covariance proportional to the phylogenetic relatedness matrix $\mathbf{A}$. $\varepsilon_{j,k}^{(r)}$ is modeled as independent and normally distributed, with $\sigma^2_{\beta_\text{T}}$ representing the residual variance.
+
+We also used a Bayesian approach to jointly estimate climatic effects and phylogenetically structured species-level variation, allowing us to account for species non-independence while quantifying uncertainty in climate effects on phenological temperature sensitivity. Weakly informative priors were assigned to the regression coefficients $\boldsymbol{b}$ (Eq.~\ref{eq:pglmm-bayes-terms}). 
+\begin{align}
+    b_{\ell} \sim \mathcal{N}(0, \sigma_b^2), \quad {\ell} \in \{0, \mathrm{MAT}, \mathrm{MAP}\}
+    \label{eq:pglmm-bayes-terms}
+\end{align}
+
+Final inference was obtained by aggregating parameter estimates across 1,000 iterations. 
+
+For visualization, we also fitted relationships between temperature sensitivity and individual climatic variables for common species. These visualization models were not used as the primary basis for inference but helped illustrate bivariate patterns between temperature sensitivity and regional climate.
