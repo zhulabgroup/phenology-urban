@@ -1,9 +1,8 @@
 ####################### INLA model results tidy #######################
-
-tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
+tree_dir <- here("data/raw/StreetTrees/cleaned_ps_input/")
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
 cities <- gsub("\\.rds$", "", basename(rds_files))
-phe_types <- c("SOS_04", "SOS_06", "EOS_04", "EOS_06")
+phe_types <- c("SOS", "EOS")
 
 prepare_coef_summary <- function(r_output_dir, phe_type){
   pattern = paste0(phe_type,"\\.rds$")
@@ -33,60 +32,15 @@ prepare_coef_summary <- function(r_output_dir, phe_type){
   write_rds(coef_summary, paste0(r_output_dir, phe_type, "_summary.rds"))
 }
 
-for (city in cities[51]) {  #, 51
+for (city in cities) { 
   message(paste0("Processing city: ", city))
-  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla_sensitive/spatial_spde/", city, "/canonicalname/")
-  for (phe_type in c("EOS_06", "EOS_04")){
+  r_output_dir <- paste0(here("data/proc/model_output/final_models_clean_outlier/spatial_spde/"), city, "/canonicalname/")
+  for (phe_type in phe_types){
     prepare_coef_summary(r_output_dir, phe_type)
   }
 }
 
-plot_coef_sp_city <- function(r_output_dir, phe_type){
-  coef_summary <- read_rds(paste0(r_output_dir, phe_type, "_summary.rds"))
-  p_coef <-  ggplot(coef_summary, aes(x = factor(Factor, levels = rev(Factor)), 
-                                      y = Estimate,
-                                      colour = Color)) +
-    geom_point(aes(alpha = SigAlpha), position = position_dodge(w = 0.5), size = 3) +
-    geom_errorbar(aes(ymin = Lower, ymax = Upper, alpha = SigAlpha), 
-                  position = position_dodge(w = 0.5), 
-                  width = 0.2) +
-    geom_hline(yintercept = 0, linetype = 2) +
-    labs(x = NULL, y = "Estimate") +
-    coord_flip() +
-    scale_alpha_identity() +
-    scale_color_identity() +
-    theme(legend.position = "right") +
-    geom_text(aes(label = Sig, y = Upper + 0.05  ), hjust = -0.5, show.legend = FALSE) +
-    geom_text(aes(label = Estimate, y = Estimate  ), vjust = -0.7, show.legend = FALSE, size = 3) +
-    guides(alpha = "none") +
-    # add title
-    ggtitle(bquote(beta[Temp]~"for"~.(phe_type))) +
-    theme_minimal()
-  
-  return(list(
-    coef_summary_plot = p_coef
-  ))
-}
-
-
-city = "Albuquerque"
-r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/", city, "/canonicalname/")
-plots_coef <- list()
-assess_species <- data.frame()
-for (phe_type in phe_types) {
-  p1 <- plot_coef_sp_city(r_output_dir, phe_type)
-  plots_coef[[phe_type]] <- p1$coef_summary_plot
-  assess_species <- rbind(assess_species, p1$assess)
-}
-wrap_plots(plots_coef, ncol = 2)
-
-
 ############################### MCMC model result #########################
-
-tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
-rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
-cities <- gsub("\\.rds$", "", basename(rds_files))
-phe_types <- c("SOS", "EOS")
 
 prepare_coef_summary_mcmc <- function(r_output_dir, phe_type){
   files <- list.files(r_output_dir, pattern = paste0(phe_type, "\\.rds$"), full.names = TRUE)
@@ -125,10 +79,10 @@ prepare_coef_summary_mcmc <- function(r_output_dir, phe_type){
   write_rds(summary_data, paste0(r_output_dir, phe_type, "_summary.rds"))
 }
   
-for (city in cities[39]) { 
+for (city in cities) { 
   message(paste0("Processing city: ", city))
-  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/mcmc/spatial_mat/", city, "/canonicalname/")
-  for (phe_type in c("EOS")){
+  r_output_dir <- paste0(here("data/proc/model_output/final_models_clean_outlier/mcmc/spatial_mat/"), city, "/canonicalname/")
+  for (phe_type in phe_types){
     prepare_coef_summary_mcmc(r_output_dir, phe_type)
   }
 }

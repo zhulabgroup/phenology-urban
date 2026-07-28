@@ -13,44 +13,28 @@
 
 # Usage:
 # Submit the script to Slurm with:
-#    sbatch run_jags_array_slurm.sh
+#    sbatch run_sensitive_models.sh
 # When Slurm job array is completed, create a symbolic link to the desirable output with:
 #    ln -si "$WORKING_DIR/intermediate/slurm_job123456/jags_mod.rds" \
 #          "$WORKING_DIR/intermediate/jags_mod.rds"
 #    The `-si` option in `ln` will prompt for confirmation before replacing any existing link or file.
 
 
-# Define combinations of chains and iterations
-CITIES=("NewYork")
-
-# Get the combination for this array job
-CHAIN_INDEX=$((SLURM_ARRAY_TASK_ID - 1))
-CITY=${CITIES[$CHAIN_INDEX]}
+set -uo pipefail
 
 # Define the R script and input/output files
 WORKING_DIR=../phenology-urban/
-R_INPUT_DIR=../phenology-urban/data/
-R_SCRIPT_MCMC=../phenology-urban/script/spatial_stats_model/mcmc_alg/run_mcmc_all_models.R
-R_OUTPUT_DIR=../phenology-urban/data/proc/model_output/final_models_clean_outlier/
+R_SCRIPT_SEN=../phenology-urban/script/04_stats_model/fit_spatial/inla/run_sensitive_models.R
+OUTPUT_DIR=${WORKING_DIR}/temp/slurm_logs
 
-# Export variables to be used in the R script
-export R_INPUT_DIR
-export R_OUTPUT_DIR
-export CITY
-
-echo "Running model for $CITY"
-
-# Load necessary modules
-# module load Rgeospatial/4.2.0-2023-04-25
 # Only for spBayes
 module load Rgeospatial/4.4.0-2024-05-11
-
 
 # Record the start time
 start_time=$(date +%s)
 
 # Run the R script
-Rscript $R_SCRIPT_MCMC
+Rscript $R_SCRIPT_SEN
 
 
 # Record the end time and calculate duration

@@ -6,7 +6,7 @@
 prepare_data <- function(city, source, taxa_col, phe_type) {
   if (source == "WU_buffer") {
     input_dir <- list.files(
-      path = "~/phenology-urban/data/proc/tree_climate/WU_buffer/",
+      path = here("data/proc/tree_climate/WU_buffer/"),
       pattern = paste0("^", city, "_.*\\.rds$"),
       full.names = TRUE)
     tree_climate <- read_rds(input_dir) |>
@@ -14,8 +14,8 @@ prepare_data <- function(city, source, taxa_col, phe_type) {
       st_transform(crs = 5070)
     } else if (source == "WU_surface") {
       input_dir <- list.files(
-        # path = "~/phenology-urban/data/proc/tree_climate/WU_surface/",
-        path = paste0("~/phenology-urban/data/proc/urban/", city, "/WU_surface/"), # For example NY
+        # path = here("data/proc/tree_climate/WU_surface/"),
+        path = paste0(here("data/proc/urban/"), city, "/WU_surface/"), # For example NY
         pattern = paste0("^", city, ".*\\.rds$"),
         full.names = TRUE)
       tree_climate <- read_rds(input_dir) |>
@@ -23,7 +23,7 @@ prepare_data <- function(city, source, taxa_col, phe_type) {
         st_transform(crs = 5070)
     } else if (source == "Grid") { # UHAT and Daymet
        input_dir <- list.files(,
-        path = paste0("~/phenology-urban/data/proc/tree_climate/", source, "/"), # For example NY
+        path = paste0(here("data/proc/tree_climate/"), source, "/"), # For example NY
         pattern = paste0("^", city, ".*\\.rds$"),
         full.names = TRUE)
        tree_climate <- read_rds(input_dir) |>
@@ -34,7 +34,7 @@ prepare_data <- function(city, source, taxa_col, phe_type) {
          st_transform(crs = 5070)
     } else if (source == "Grid_GSL") { # UHAT and Daymet
       input_dir <- list.files(,
-                              path = paste0("~/phenology-urban/data/proc/tree_climate/", source, "/"), # For example NY
+                              path = paste0(here("data/proc/tree_climate/"), source, "/"), # For example NY
                               pattern = paste0("^", city, ".*\\.rds$"),
                               full.names = TRUE)
       tree_climate <- read_rds(input_dir) |>
@@ -47,7 +47,7 @@ prepare_data <- function(city, source, taxa_col, phe_type) {
         st_transform(crs = 5070)
     } else if (source == "Grid_NPN") { # UHAT and Daymet
       input_dir <- list.files(,
-                              path = paste0("~/phenology-urban/data/proc/tree_climate/", source, "/"), # For example NY
+                              path = paste0(here("data/proc/tree_climate/"), source, "/"), # For example NY
                               pattern = paste0("^", city, ".*\\.rds$"),
                               full.names = TRUE)
       tree_climate <- read_rds(input_dir) |>
@@ -63,7 +63,7 @@ prepare_data <- function(city, source, taxa_col, phe_type) {
   #Join to phenology data
   
     if (source == "Grid_NPN"){
-      file_list <- list.files(path = "~/lab-data/datasets/vegetation/StreetTrees/cleaned_NPN/", 
+      file_list <- list.files(path = here("data/raw/StreetTrees/cleaned_NPN/"), 
                               pattern = paste0(city,"\\.rds$"), full.names = TRUE)
       data_list <- file_list %>%
         purrr::map(~ read_rds(.x))
@@ -73,7 +73,7 @@ prepare_data <- function(city, source, taxa_col, phe_type) {
       tree_climate_phe <- tree_climate |>
         right_join(all_doy, by = c("id", "year"))
     } else {
-      file_list <- list.files(path = "~/lab-data/datasets/vegetation/PS/CONUS_urban/doy/", pattern = paste0("^doy_",city,"_.*\\.rds$"), full.names = TRUE)
+      file_list <- list.files(path = here("data/raw/StreetTrees/cleaned_ps_input/summary/"), pattern = paste0("^doy_",city,"_.*\\.rds$"), full.names = TRUE)
       data_list <- file_list %>%
         purrr::map(~ read_rds(.x))
       all_doy <- bind_rows(data_list)

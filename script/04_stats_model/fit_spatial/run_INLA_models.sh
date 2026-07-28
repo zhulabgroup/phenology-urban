@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=cities_INLA_sensitive
+#SBATCH --job-name=cities_INLA
 #SBATCH --account=zhukai0                   # Account name
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err
@@ -13,7 +13,7 @@
 
 # Usage:
 # Submit the script to Slurm with:
-#    sbatch run_jags_array_slurm.sh
+#    sbatch run_INLA_models.sh
 # When Slurm job array is completed, create a symbolic link to the desirable output with:
 #    ln -si "$WORKING_DIR/intermediate/slurm_job123456/jags_mod.rds" \
 #          "$WORKING_DIR/intermediate/jags_mod.rds"
@@ -23,13 +23,11 @@ set -uo pipefail
 
 # Define the R script and input/output files
 WORKING_DIR=../phenology-urban/
-R_SCRIPT_INLA=../phenology-urban/script/spatial_stats_model/inla_alg/run_inla_all_models.R
+R_SCRIPT_INLA=../phenology-urban/script/04_stats_model/fit_spatial/inla/run_inla_all_models.R
 OUTPUT_DIR=${WORKING_DIR}/temp/slurm_logs
 
 # Load necessary modules
 module load Rgeospatial/4.2.0-2023-04-25
-# Only for spBayes
-# module load Rgeospatial/4.4.0-2024-05-11
 
 
 # Record the start time
