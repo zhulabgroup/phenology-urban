@@ -45,39 +45,42 @@ prepare_data <- function(city, source, taxa_col, phe_type) {
                prcp_growing, srad_growing) |>
         st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F) |>
         st_transform(crs = 5070)
+    } else if (source == "Grid_NPN") { # UHAT and Daymet
+      input_dir <- list.files(,
+                              path = paste0("~/phenology-urban/data/proc/tree_climate/", source, "/"), # For example NY
+                              pattern = paste0("^", city, ".*\\.rds$"),
+                              full.names = TRUE)
+      tree_climate <- read_rds(input_dir) |>
+        select(id, lon, lat, year, temp_summer = UHAT_temp_summer, temp_winter = UHAT_temp_winter, 
+               prcp_summer = Daymet_prcp_summer, prcp_winter = Daymet_prcp_winter,
+               srad_summer = Daymet_srad_summer, srad_winter = Daymet_srad_winter) |>
+        st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F) |>
+        st_transform(crs = 5070)
     } else {
       stop("Invalid source. Must be 'WU' or 'Grid'.")
     }
-    
-    # Assign each point to a hexagon
-    xrange = diff(range(st_coordinates(tree_climate)[,1]))
-    yrange = diff(range(st_coordinates(tree_climate)[,2]))
-    diag_len = sqrt(xrange^2 +yrange^2)
-    hex_size <- diag_len/15
-    bbox <- st_bbox(tree_climate)
-    
-    hex_grid_geom <- st_make_grid(bbox, cellsize = hex_size, square = FALSE)
-    hex_grid <- st_sf(geometry = hex_grid_geom) |>
-      mutate(hex_id = row_number()) |>
-      mutate(centroid = st_centroid(geometry)) |>
-      mutate(
-        hex_lon = st_coordinates(centroid)[, 1],
-        hex_lat = st_coordinates(centroid)[, 2]
-      ) |>
-      select(-centroid)
-    tree_climate_hex <- st_join(tree_climate, hex_grid, join = st_within) %>%
-      mutate(hex_id = as.factor(hex_id)) |>
-      select(-hex_lon, -hex_lat) |>
-      st_drop_geometry()
-    
-    #Join to phenology data
-    file_list <- list.files(path = "~/lab-data/datasets/vegetation/PS/CONUS_urban/doy/", pattern = paste0("^doy_",city,"_.*\\.rds$"), full.names = TRUE)
-    data_list <- file_list %>%
-      purrr::map(~ read_rds(.x))
-    all_doy <- bind_rows(data_list)
-    tree_climate_phe <- tree_climate_hex |>
-      left_join(all_doy, by = c("id", "year"))
-    
+  
+  #Join to phenology data
+  
+    if (source == "Grid_NPN"){
+      file_list <- list.files(path = "~/lab-data/datasets/vegetation/StreetTrees/cleaned_NPN/", 
+                              pattern = paste0(city,"\\.rds$"), full.names = TRUE)
+      data_list <- file_list %>%
+        purrr::map(~ read_rds(.x))
+      all_doy <- bind_rows(data_list) |>
+        select(taxa, site, id, year, direction, doy = npn_doy) |>
+        mutate(thres = 0.5)
+      tree_climate_phe <- tree_climate |>
+        right_join(all_doy, by = c("id", "year"))
+    } else {
+      file_list <- list.files(path = "~/lab-data/datasets/vegetation/PS/CONUS_urban/doy/", pattern = paste0("^doy_",city,"_.*\\.rds$"), full.names = TRUE)
+      data_list <- file_list %>%
+        purrr::map(~ read_rds(.x))
+      all_doy <- bind_rows(data_list)
+      tree_climate_phe <- tree_climate |>
+        left_join(all_doy, by = c("id", "year"))
+    }
+
     if (taxa_col == "canonicalname") {
       model_input_all <- prepare_species_phe(phe_type, tree_climate_phe)
     } else {
@@ -94,7 +97,7 @@ prepare_species_phe <- function(phe_type, tree_climate_phe) {
     thres <- 0.5
     model_input <- tree_climate_phe %>%
       filter(direction == !!direction & thres == !!thres) %>%
-      select(id, canonicalname = taxa, lon, lat, year, start, end, doy, hex_id, ends_with("winter")) %>%
+      select(id, canonicalname = taxa, lon, lat, year, any_of(c("start", "end", "hex_id")), doy, ends_with("winter")) %>%
       drop_na()
   } else if (phe_type == "EOS") {
     phe_metric <- "doy"
@@ -102,7 +105,7 @@ prepare_species_phe <- function(phe_type, tree_climate_phe) {
     thres <- 0.5
     model_input <- tree_climate_phe %>%
       filter(direction == !!direction & thres == !!thres) %>%
-      select(id, canonicalname = taxa, lon, lat, year, start, end, doy, hex_id, ends_with("summer")) %>%
+      select(id, canonicalname = taxa, lon, lat, year, any_of(c("start", "end", "hex_id")), doy, ends_with("summer")) %>%
       drop_na()
   } else if (str_detect(phe_type, "^SOS_\\d+$")) {
     phe_metric <- "doy"

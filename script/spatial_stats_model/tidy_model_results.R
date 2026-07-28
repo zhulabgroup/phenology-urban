@@ -3,7 +3,7 @@
 tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
 cities <- gsub("\\.rds$", "", basename(rds_files))
-phe_types <- c("GSL_range_season")
+phe_types <- c("SOS_04", "SOS_06", "EOS_04", "EOS_06")
 
 prepare_coef_summary <- function(r_output_dir, phe_type){
   pattern = paste0(phe_type,"\\.rds$")
@@ -11,6 +11,7 @@ prepare_coef_summary <- function(r_output_dir, phe_type){
   coef_summary <- data.frame()
   # for one genus
   for (file in files) {
+    message(paste0("Processing file: ", file))
     model_data <- readRDS(file)
     species <- model_data$species
     # beta_names <- c("beta[0]", "beta[AvgTemp_mean]", "beta[Sum_mm_sum]", "beta[srad_mean]")
@@ -32,10 +33,10 @@ prepare_coef_summary <- function(r_output_dir, phe_type){
   write_rds(coef_summary, paste0(r_output_dir, phe_type, "_summary.rds"))
 }
 
-for (city in cities[2:76]) { 
+for (city in cities[51]) {  #, 51
   message(paste0("Processing city: ", city))
-  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla_gsl/spatial_spde/", city, "/canonicalname/")
-  for (phe_type in phe_types){
+  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla_sensitive/spatial_spde/", city, "/canonicalname/")
+  for (phe_type in c("EOS_06", "EOS_04")){
     prepare_coef_summary(r_output_dir, phe_type)
   }
 }
