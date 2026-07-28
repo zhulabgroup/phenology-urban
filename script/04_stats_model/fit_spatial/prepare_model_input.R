@@ -63,7 +63,7 @@ prepare_data <- function(city, source, taxa_col, phe_type) {
   #Join to phenology data
   
     if (source == "Grid_NPN"){
-      file_list <- list.files(path = here("data/raw/StreetTrees/cleaned_NPN/"), 
+      file_list <- list.files(path = here("data/raw/CONUS/StreetTrees/cleaned_NPN/"), 
                               pattern = paste0(city,"\\.rds$"), full.names = TRUE)
       data_list <- file_list %>%
         purrr::map(~ read_rds(.x))
@@ -73,7 +73,7 @@ prepare_data <- function(city, source, taxa_col, phe_type) {
       tree_climate_phe <- tree_climate |>
         right_join(all_doy, by = c("id", "year"))
     } else {
-      file_list <- list.files(path = here("data/raw/StreetTrees/cleaned_ps_input/summary/"), pattern = paste0("^doy_",city,"_.*\\.rds$"), full.names = TRUE)
+      file_list <- list.files(path = here("data/raw/CONUS/StreetTrees/cleaned_ps_input/summary/"), pattern = paste0("^doy_",city,"_.*\\.rds$"), full.names = TRUE)
       data_list <- file_list %>%
         purrr::map(~ read_rds(.x))
       all_doy <- bind_rows(data_list)
@@ -203,9 +203,9 @@ prepare_species_phe <- function(phe_type, tree_climate_phe) {
 }
 
 prepare_only_phe <- function(city, phe_type, taxon_col, summary = TRUE){
-  metadata <- read_csv("~/lab-data/datasets/vegetation/PS/urban/metadata.csv",  show_col_types = FALSE) %>%
+  metadata <- read_csv(here("data/raw/CONUS/StreetTrees/metadata.csv"),  show_col_types = FALSE) %>%
     filter(site == !!city)
-  file_list <- list.files(path = "~/lab-data/datasets/vegetation/PS/CONUS_urban/doy", pattern = paste0("^doy_",city,"_.*\\.rds$"), full.names = TRUE)
+  file_list <- list.files(path = here("data/raw/CONUS/PS/CONUS_urban/doy"), pattern = paste0("^doy_",city,"_.*\\.rds$"), full.names = TRUE)
   data_list <- file_list %>%
     purrr::map(~ readRDS(.x))
   all_doy <- bind_rows(data_list)
