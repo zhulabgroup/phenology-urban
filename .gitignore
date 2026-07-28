@@ -45,3 +45,7 @@ inst/doc
 history_database
 .Rhistory
 .vscode/extensions.json
+.positai
+.RDataTmp1
+.Rhistory
+.DS_Store
