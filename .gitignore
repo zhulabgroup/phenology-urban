@@ -10,10 +10,12 @@ data
 doc/**_cache/
 doc/**_files/
 # History files
-.Rhistory
 .Rapp.history
 # Session Data files
 .RData
+.RDataTmp1
+.Rhistory
+.DS_Store
 # User-specific files
 .Ruserdata
 # Example code in package build process
@@ -43,9 +45,5 @@ inst/doc
 .RDataTmp
 .env
 history_database
-.Rhistory
 .vscode/extensions.json
 .positai
-.RDataTmp1
-.Rhistory
-.DS_Store
