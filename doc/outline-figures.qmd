@@ -245,7 +245,7 @@ color_palette <- setNames(
   distinctColorPalette(length(cities)),
   cities
 )
-source(here("script/plot_raw_phe2.R"))
+source(here("script/plot_raw_phe.R"))
 
 # city_test = sos_city_input |> 
 #   mutate(year = as.factor(year))|>
