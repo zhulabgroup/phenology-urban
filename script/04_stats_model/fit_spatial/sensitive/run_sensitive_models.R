@@ -11,7 +11,7 @@ source(here("script/04_stats_model/fit_spatial/sensitive/alg_spbayes_mat.R"))
 r_input_dir <- here("data/")
 r_output_dir <- here("data/proc/model_output/final_models_clean_outlier/")
 
-tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
+tree_dir <- here("data/raw/CONUS/StreetTrees/cleaned_ps_input/")
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
 cities <- gsub("\\.rds$", "", basename(rds_files))
 

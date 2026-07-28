@@ -1,5 +1,5 @@
 ####################### INLA model results tidy #######################
-tree_dir <- here("data/raw/StreetTrees/cleaned_ps_input/")
+tree_dir <- here("data/raw/CONUS/StreetTrees/cleaned_ps_input/")
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
 cities <- gsub("\\.rds$", "", basename(rds_files))
 phe_types <- c("SOS", "EOS")
