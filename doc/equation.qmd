@@ -24,9 +24,9 @@ where:
 
 - $\mu_m$ is the species-specific mean phenological timing,
 
-- $u_{m,n}$ is the inter-urban (between-city) random effect for species $m$,
+- $u_{m,n}$ is the inter-urban (cross-city) random effect for species $m$,
 
-- $v_{m,j(n)}$ is the intra-urban (between-individual) random effect, with individuals nested within cities,
+- $v_{m,j(n)}$ is the intra-urban (cross-individual) random effect, with individuals nested within cities,
 
 - $w_{m,t}$ is the interannual random effect,
 
@@ -43,11 +43,11 @@ y_{i,j,t}
 + \varepsilon_{i,j,t},
 $$
 $$
-u_{j} \sim \mathcal{N}(0, \sigma^2_{\mathrm{between}}),
+u_{j} \sim \mathcal{N}(0, \sigma^2_{\mathrm{cross}}),
 $$
 
 $$
-v_{i(j)} \sim \mathcal{N}(0, \sigma^2_{\mathrm{within}}),
+v_{i(j)} \sim \mathcal{N}(0, \sigma^2_{\mathrm{intra}}),
 $$
 
 $$
@@ -62,8 +62,8 @@ The total phenological variance for species $m$ was computed as:
 
 $$
 \sigma^2_{\mathrm{total}}
-= \sigma^2_{\mathrm{between}}
-+ \sigma^2_{\mathrm{within}}
+= \sigma^2_{\mathrm{cross}}
++ \sigma^2_{\mathrm{intra}}
 + \sigma^2_{\mathrm{year}}
 + \sigma^2_{\mathrm{residual}}.
 $$
@@ -71,38 +71,38 @@ $$
 The proportional contributions of inter-urban and intra-urban variability were calculated as:
 
 $$
-P_{\mathrm{between}}
-= \frac{\sigma^2_{\mathrm{between}}}{\sigma^2_{\mathrm{total}}},
+P_{\mathrm{cross}}
+= \frac{\sigma^2_{\mathrm{cross}}}{\sigma^2_{\mathrm{total}}},
 \qquad
-P_{\mathrm{within}}
-= \frac{\sigma^2_{\mathrm{within}}}{\sigma^2_{\mathrm{total}}}.
+P_{\mathrm{intra}}
+= \frac{\sigma^2_{\mathrm{intra}}}{\sigma^2_{\mathrm{total}}}.
 $$
 
 The relative contributions of spatial components were further defined as:
 $$
 \hat{\sigma}^2_{\mathrm{total}}
-= \hat{\sigma}^2_{\mathrm{between}}
-+ \hat{\sigma}^2_{\mathrm{within}}
+= \hat{\sigma}^2_{\mathrm{cross}}
++ \hat{\sigma}^2_{\mathrm{intra}}
 + \hat{\sigma}^2_{\mathrm{year}}
 + \hat{\sigma}^2_{\mathrm{residual}}.
 $$
 $$
-P_{\mathrm{between}}
-= \frac{\hat{\sigma}^2_{\mathrm{between}}}
-{\hat{\sigma}^2_{\mathrm{within}} + \hat{\sigma}^2_{\mathrm{between}}},
+C_{\mathrm{cross}}
+= \frac{\hat{\sigma}^2_{\mathrm{cross}}}
+{\hat{\sigma}^2_{\mathrm{intra}} + \hat{\sigma}^2_{\mathrm{cross}}},
 \qquad
-P_{\mathrm{within}}
-= \frac{\hat{\sigma}^2_{\mathrm{within}}}
-{\hat{\sigma}^2_{\mathrm{within}} + \hat{\sigma}^2_{\mathrm{between}}}.
+C_{\mathrm{intra}}
+= \frac{\hat{\sigma}^2_{\mathrm{intra}}}
+{\hat{\sigma}^2_{\mathrm{intra}} + \hat{\sigma}^2_{\mathrm{cross}}}.
 $$
 
 
 
 ## Model 1
 
-$$y(\mathbf{s}, t) = \mathbf{x}_{\mathbf{s},{t}} \boldsymbol{\beta}  + w(\mathbf{s}) + u(t)+ \varepsilon_{\mathbf{s},t}$$
+$$y(\mathbf{s}, t) = \mathbf{x}(\mathbf{s},t)^\top \boldsymbol{\beta}  + w(\mathbf{s}) + u(t)+ \varepsilon(\mathbf{s},t)$$
 
-$$\mathbf{x}_{\mathbf{s},t} = [1, \text{T}_{\mathbf{s},t}, \text{P}_{\mathbf{s},t}, \text{R}_{\mathbf{s},t}]$$
+$$\mathbf{x}(\mathbf{s},t) = \left(1, \text{T}(\mathbf{s},t), \text{P}(\mathbf{s},t), \text{R}(\mathbf{s},t)\right)^\top$$
 
 $$\boldsymbol{\beta} = (\beta_0, \beta_{\text{T}}, \beta_{\text{P}}, \beta_{\text{R}})^\top$$
 
@@ -110,7 +110,7 @@ $$w(\mathbf{s}) \sim \text{GP}\!\left(0,\; C(\mathbf{s},\mathbf{s}')\right)$$
 
 $$u(t) \stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma_u^2)$$
 
-$$\varepsilon_{\mathbf{s},t} \stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma_\varepsilon^2)$$
+$$\varepsilon(\mathbf{s},t) \stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma_\varepsilon^2)$$
 
 $$\beta_{\ell} \sim \mathcal{N}(0, \sigma_\beta^2), \quad {\ell} \in \{0, {\text{T}}, {\text{P}}, {\text{R}}\}$$
 
@@ -128,10 +128,10 @@ $$S_{\mathrm{bio12},m,n}
 
 ## Model 2
 
-$$\beta_{{\text{T}},j,k}^{(r)} = \mathbf{z}_{j} \boldsymbol{b} +\lambda_{k} + \varepsilon_{j,k}^{(r)} $$
+$$\beta_{{\text{T}},j,k}^{(r)} = \mathbf{z}_{j}^\top \boldsymbol{b} +\lambda_{k} + \varepsilon_{j,k}^{(r)} $$
 
 
-$$\mathbf{z}_{j} = [1, \mathrm{MAT}_{j}, \mathrm{MAP}_{j}]$$
+$$\mathbf{z}_{j} = (1, \mathrm{MAT}_{j}, \mathrm{MAP}_{j})^\top$$
 
 $$\boldsymbol{b} = (b_0,b_{\mathrm{MAT}},b_{\mathrm{MAP}})^\top$$
 
