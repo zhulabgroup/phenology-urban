@@ -188,7 +188,7 @@ fit_uni <- function(phe_type, input_data, city_feature, species_name, clim = "me
 
 fit_multi_pglmm <- function(phe_type, input_data, city_feature, package, bootstrap, prcp, temp) {
   D <- input_data %>%
-    rename(species = Factor) %>%
+    # rename(species = Factor) %>%
     mutate(species = gsub("_", " ", species)) %>%
     filter(phe_type == !!phe_type,
            species %in% phylo_tree$tip.label) %>%

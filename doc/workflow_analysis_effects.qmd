@@ -217,8 +217,8 @@ ggplot(summary_all |> filter(phe_type == "SOS"), aes(x = "", y = prop, fill = ca
   theme(
     legend.position = "none",
     plot.title = element_text(hjust = 0.5),
-    panel.background = element_rect(fill = NA, color = NA),  # 去除面板背景
-    plot.background = element_rect(fill = NA, color = NA)    # 去除整个绘图背景
+    panel.background = element_rect(fill = NA, color = NA),
+    plot.background = element_rect(fill = NA, color = NA)  
   )
 
 ```
