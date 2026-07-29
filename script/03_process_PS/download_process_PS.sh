@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=download_process_doy_DV
-#SBATCH --account=zhukai0                   # Account name
+#SBATCH --account=[]                   # Account name
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err
 #SBATCH --array=1
@@ -8,16 +8,8 @@
 #SBATCH --partition=standard
 #SBATCH --mem=15G
 #SBATCH --cpus-per-task=16
-#SBATCH --mail-user=jializ@umich.edu        # Where to send mail
+#SBATCH --mail-user=[]        # Where to send mail
 #SBATCH --mail-type=BEGIN,END               # Mail notifications at the start and end of the job
-
-# Usage:
-# Submit the script to Slurm with:
-#    sbatch run_jags_array_slurm.sh
-# When Slurm job array is completed, create a symbolic link to the desirable output with:
-#    ln -si "$WORKING_DIR/intermediate/slurm_job123456/jags_mod.rds" \
-#          "$WORKING_DIR/intermediate/jags_mod.rds"
-#    The `-si` option in `ln` will prompt for confirmation before replacing any existing link or file.
 
 # Define the R script and input/output files
 WORKING_DIR=../phenology-urban/
