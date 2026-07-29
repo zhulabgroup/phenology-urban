@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=download_daymet_prcp
-#SBATCH --account=zhukai0                   # Account name
+#SBATCH --account=[]                   # Account name
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err
 #SBATCH --array=1
@@ -8,7 +8,7 @@
 #SBATCH --partition=standard
 #SBATCH --mem=10G
 #SBATCH --cpus-per-task=2
-#SBATCH --mail-user=jializ@umich.edu        # Where to send mail
+#SBATCH --mail-user=[]        # Where to send mail
 #SBATCH --mail-type=BEGIN,END               # Mail notifications at the start and end of the job
 
 # Usage:
