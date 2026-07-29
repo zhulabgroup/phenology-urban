@@ -1,4 +1,76 @@
-plot_species_raw_phe <- function(species, all_city_input, color_palette, phe_type, color_limits = NULL, highlight_city = NULL){
+pacman::p_load(terra, ggspatial)
+
+source(here("script/04_stats_model/fit_spatial/prepare_model_input.R"))
+
+fix_map_ratio <- function(xlim, ylim, ratio = 1.5) {
+  xmid <- mean(xlim)
+  ymid <- mean(ylim)
+  
+  xr <- diff(xlim)
+  yr <- diff(ylim)
+  
+  current_ratio <- xr / yr
+  
+  if (current_ratio < ratio) {
+    xr_new <- yr * ratio
+    xlim <- c(xmid - xr_new / 2, xmid + xr_new / 2)
+  } else {
+    yr_new <- xr / ratio
+    ylim <- c(ymid - yr_new / 2, ymid + yr_new / 2)
+  }
+  
+  list(xlim = xlim, ylim = ylim)
+}
+
+search_boundary <- function(city) {
+  boundary <- switch(
+    city,
+    "NewYork" = st_read(here("data/raw/Example_city/NY/boundary/nybb_dissolved.shp")),
+    "DT" = st_read(here("data/raw/Example_city/DT/City_of_Detroit_Boundary/City_of_Detroit_Boundary.shp")),
+    "Seattle" = st_read(here("data/raw/Example_city/ST/seattle_boundary/CityUGA.shp")) %>%
+      filter(CITY_NM == "Seattle"),
+    "Houston" = st_read(here("data/raw/Example_city/HT/HGAC_City_Boundaries/HGAC_City_Boundaries.shp")) %>%
+      filter(NAME == "Houston") |>
+      st_make_valid(),  # change to some distance
+    "TP" = st_read(here("data/raw/Example_city/TP/Tampa_Planning_Districts/Tampa_Planning_Districts.shp")) %>%
+      st_make_valid() |> st_union(),
+    "Denver" = st_read(here("data/raw/Example_city/DV/DRCOG_Municipalities/DRCOG_Municipalities.shp")) %>%
+      filter(city == "Denver"),
+    "Austin" = st_read(here("data/raw/Example_city/AT/TxDOT_City_Boundaries/Cities.shp")) %>%
+      filter(CITY_NM == "Austin"),
+    "Rochester" = st_read(here("data/raw/Example_city/Rochester/City_of_Rochester_Border/City_of_Rochester_Border.shp")),
+    "Stockton" = st_read(here("data/raw/Example_city/Stockton/City_Limits/geo_export_95d77263-4f44-4046-b5b9-23c00947fd1f.shp")) |>
+      filter(name == "STOCKTON"),
+    "LosAngeles" = st_read(here("data/raw/Example_city/LosAngeles/City_Boundary.shp")),
+    "SanFrancisco" = st_read(here("data/raw/Example_city/SF/Planning_Neighborhood_Groups_Map/geo_export_a4e97979-9d5a-4474-8af3-073be4dffae4.shp")) |>
+      st_make_valid() |> st_union(),
+    "Knoxville" = st_read(here("data/raw/Example_city/Knoxville/TN_City_Boundaries/TN_City_Boundaries.shp")) %>%
+      filter(NAME == "Knoxville"),
+    "WashingtonDC" = st_read(here("data/raw/Example_city/WashingtonDC/DC_Boundary/DC_Boundary.shp")),
+    "Columbus" = st_read(here("data/raw/Example_city/Columbus/Corporate_Boundary/Corporate_Boundary.shp")),
+    "Arlington" = st_read(here("data/raw/Example_city/Arlington/Municipal_Boundary/Municipal_Boundary.shp"))|> 
+      filter(MUNICIPALN == "ARLINGTON"),
+    "Sacramento" = st_read(here("data/raw/Example_city/Sacramento/City_and_County_Boundary/City_and_County_Boundary.shp")) |>
+      filter(CITY_NAME == "SACRAMENTO") |>
+      st_make_valid(),
+    "Atlanta" = st_read(here("data/raw/Example_city/Atlanta/Quadrants/Quadrants.shp")) |>
+      st_make_valid() |> st_union()  |>
+      nngeo::st_remove_holes(),
+    "NewOrleans" = st_read(here("data/raw/Example_city/NewOrleans/Orleans Parish Boundary_20260416/geo_export_2201ea0f-3a1c-4066-aec3-a8e995d07a7a.shp")),
+    "Portland" = st_read(here("data/raw/Example_city/Portland/City_Boundaries/City_Boundaries.shp")) |>
+      filter(CITYNAME == "Portland") |>
+      st_make_valid(),
+    "Bloomington" = st_read(here("data/raw/Example_city/Bloomington/Bloomington Municipal Boundary_20260421/geo_export_951c8648-2ab5-41e2-820c-1a4d268e2537.shp")),
+    "Norfolk" = st_read(here("data/raw/Example_city/Norfolk/City_Limit/City_Limit_-_City_of_Norfolk.shp")),
+    stop("Invalid city abbreviation.")
+  )
+  boundary <- st_transform(boundary, crs = 4326)  # ensure WGS84
+  return(boundary)
+}
+
+plot_species_raw_phe <- function(species, color_palette, phe_type, color_limits = NULL, highlight_city = NULL, year){
+  all_city_input <- read_rds(here(paste0("release/input/phenology/no_outlier/nooutlier_", phe_type, "_input.rds"))) |>
+    filter(year == !!year)
   phe_title <- case_when(
     phe_type == "SOS" ~ "Start-of-season",
     phe_type == "EOS" ~ "End-of-season"
@@ -31,7 +103,7 @@ plot_species_raw_phe <- function(species, all_city_input, color_palette, phe_typ
       upper_IQR_d = min(quantile(median_doy, 0.75, na.rm = TRUE), max(median_doy, na.rm = TRUE)),
       .groups = "drop")
   
-  sp_boxplot_SOS <- ggplot() +
+  sp_boxplot <- ggplot() +
     geom_rect(
       data = integ_city,
       aes(xmin = 0.5, xmax = length((all_city_input |>
@@ -83,14 +155,20 @@ plot_species_raw_phe <- function(species, all_city_input, color_palette, phe_typ
       legend.key.width  = unit(0.5, "cm"),   
       legend.title = element_text(size = 14, margin = margin(r = 10, b=10)), 
       legend.text  = element_text(size = 12),
-      legend.spacing.y = unit(0.1, "cm")
+      legend.spacing.y = unit(0.1, "cm"),
+      panel.background = element_rect(fill = "white", color = "black"),
+      # Grid lines
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      # Facet/strip placement
+      strip.placement = "outside"
     )
   
   
-  inventory_centroids <- readRDS(("~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/summary/inventory_centroids.rds")) |>
+  inventory_centroids <- readRDS(here("release/input/tree_list/summary/inventory_centroids.rds")) |>
     left_join(species_city, by = c("site" = "city")) |>
     filter(!is.na(median_doy))
-  boundary_us <- st_read(("~/lab-data/datasets/boundary/USAdministrative/US/us_boundarydissolve.shp"), quiet = T) |> 
+  boundary_us <- st_read(here("release/input/boundary/US/us_boundarydissolve.shp"), quiet = T) |> 
     st_transform(4326)
   
   doy_map <- ggplot() +
@@ -125,23 +203,20 @@ plot_species_raw_phe <- function(species, all_city_input, color_palette, phe_typ
       legend.spacing.y = unit(0.1, "cm"),
     )
   
-
-  return(list(sp_boxplot_SOS = sp_boxplot_SOS, doy_map = doy_map))
+  return(list(sp_boxplot = sp_boxplot, doy_map = doy_map))
 }
 
-plot_phe_one_city <- function(data_input, city = "NewYork", species = "Acer rubrum", phe_type = "SOS", year = 2022, color_limits = NULL){
-  source(here("script/spatial_stats_model/prepare_model_input.R"))
-  model_input_sf <-  data_input|>
-    filter(city == !!city) |>
+plot_phe_one_city <- function(city = "NewYork", species = "Acer rubrum", phe_type = "SOS", year = 2022, color_limits = NULL){
+  data_input <- prepare_data(city = city, phe_type = phe_type) |>
     filter(canonicalname == !!species) |>
     filter(year == !!year)
   phe_metric <- "doy"
-  x <- model_input_sf[[phe_metric]]
+  x <- data_input[[phe_metric]]
   q <- stats::quantile(x, probs = c(0.25, 0.75), na.rm = TRUE)
   iqr <- diff(q)
   lo  <- q[1]
   hi  <- q[2]
-  city_input <- model_input_sf  |>
+  city_input <- data_input  |>
     filter(is.na(.data[[phe_metric]]) |
              dplyr::between(.data[[phe_metric]], lo, hi))
   
@@ -156,15 +231,7 @@ plot_phe_one_city <- function(data_input, city = "NewYork", species = "Acer rubr
     st_intersection(city_boundary)
   bbox_tree <- st_bbox(tree_location)
   bbox_city <- st_bbox(city_boundary)
-  # 
-  # 
-  # # the larger bbox
-  # xlim <- c(min(bbox_tree["xmin"], bbox_city["xmin"]), max(bbox_tree["xmax"], bbox_city["xmax"]))
-  # ylim <- c(min(bbox_tree["ymin"], bbox_city["ymin"]), max(bbox_tree["ymax"], bbox_city["ymax"]))
-  # if(city == "Sacramento"){
-  #   xlim <- c(bbox_city["xmin"], bbox_city["xmax"])
-  #   ylim <- c(bbox_city["ymin"], bbox_city["ymax"])
-  # }
+  
   xlim <- c(bbox_city["xmin"], bbox_city["xmax"])
   ylim <- c(bbox_city["ymin"], bbox_city["ymax"])
   lims <- fix_map_ratio(xlim, ylim, ratio = 1.3)
