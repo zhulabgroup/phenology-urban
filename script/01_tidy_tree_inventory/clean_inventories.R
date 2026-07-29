@@ -1,10 +1,4 @@
-library(tidyverse)
-library(readr)
-library(rgbif)
-library(rtry)
-library(here)
-library(sf)
-
+pacman::p_load(rtry, rgbif)
 ################################# Rules #################################
 # Clean species name
 # Keep deciduous species
@@ -35,7 +29,7 @@ check <- read_rds(here(paste0(save_dir, "summary/species_phe_types.rds"))) |>
 ################################# NY DT DV HT ST TP AT #################################
 # Remove NY DV HT AT ST since they come from OpenTree  
 
-metadata <- read_csv("~/lab-data/datasets/vegetation/PS/urban/metadata.csv") |>
+metadata <- read_csv(here("data/raw/CONUS/StreetTrees/metadata.csv")) |>
   mutate(genus = str_extract(taxa, "^[^ ]+")) |>
   distinct(taxa, genus, lat, lon, site)
 
@@ -327,8 +321,8 @@ if(Boulder){
     pull(COMMONNAME)
   gbif_taxon_keys_common_swapped <- str_replace(
     gbif_taxon_keys_common,
-    "^([^,]+),\\s*(.+)$",   # 逗号前后分组
-    "\\2 \\1"              # 交换顺序
+    "^([^,]+),\\s*(.+)$",   
+    "\\2 \\1"              
   )
   comm2sci_list <- map(
     gbif_taxon_keys_common_swapped,
@@ -364,8 +358,8 @@ if(Boulder){
     filter(is.na(canonicalName)) |>
     mutate(new_common = str_replace(
       COMMONNAME,
-      "^([^,]+),\\s*(.+)$",   # 逗号前后分组
-      "\\2 \\1"              # 交换顺序
+      "^([^,]+),\\s*(.+)$", 
+      "\\2 \\1"
     )) |>
     left_join(comm2sci, by = c("new_common" = "verbatim_name")) |>
     filter(!is.na(scientific_name)) |>
@@ -435,8 +429,8 @@ if(Bozeman){
     pull(Common_Name)
   gbif_taxon_keys_common_swapped <- str_replace(
     gbif_taxon_keys_common,
-    "^([^,]+),\\s*(.+)$",   # 逗号前后分组
-    "\\2 \\1"              # 交换顺序
+    "^([^,]+),\\s*(.+)$",   
+    "\\2 \\1"              
   )
   comm2sci_list <- map(
     gbif_taxon_keys_common_swapped,
@@ -473,8 +467,8 @@ if(Bozeman){
     filter(is.na(canonicalName)) |>
     mutate(new_common = str_replace(
       Common_Name,
-      "^([^,]+),\\s*(.+)$",   # 逗号前后分组
-      "\\2 \\1"              # 交换顺序
+      "^([^,]+),\\s*(.+)$",   
+      "\\2 \\1"              
     )) |>
     left_join(comm2sci, by = c("new_common" = "verbatim_name")) |>
     filter(!is.na(scientific_name)) |>
@@ -548,8 +542,8 @@ if(Champaign){
     pull(COMMON)
   gbif_taxon_keys_common_swapped <- str_replace(
     gbif_taxon_keys_common,
-    "^([^,]+),\\s*(.+)$",   # 逗号前后分组
-    "\\2 \\1"              # 交换顺序
+    "^([^,]+),\\s*(.+)$",   
+    "\\2 \\1"              
   )
   comm2sci_list <- map(
     gbif_taxon_keys_common_swapped,
@@ -586,8 +580,8 @@ if(Champaign){
     filter(is.na(canonicalName)) |>
     mutate(new_common = str_replace(
       COMMON,
-      "^([^,]+),\\s*(.+)$",   # 逗号前后分组
-      "\\2 \\1"              # 交换顺序
+      "^([^,]+),\\s*(.+)$",   
+      "\\2 \\1"              
     )) |>
     left_join(comm2sci, by = c("new_common" = "verbatim_name")) |>
     filter(!is.na(scientific_name)) |>
@@ -1102,8 +1096,8 @@ if(Boise){
     pull(Common_Nam)
   gbif_taxon_keys_common_swapped <- str_replace(
     gbif_taxon_keys_common,
-    "^([^,]+),\\s*(.+)$",   # 逗号前后分组
-    "\\2 \\1"              # 交换顺序
+    "^([^,]+),\\s*(.+)$",   
+    "\\2 \\1"              
   )
   comm2sci_list <- map(
     gbif_taxon_keys_common_swapped,
@@ -1140,8 +1134,8 @@ if(Boise){
     filter(is.na(canonicalName)) |>
     mutate(new_common = str_replace(
       Common_Nam,
-      "^([^,]+),\\s*(.+)$",   # 逗号前后分组
-      "\\2 \\1"              # 交换顺序
+      "^([^,]+),\\s*(.+)$",   
+      "\\2 \\1"              
     )) |>
     left_join(comm2sci, by = c("new_common" = "verbatim_name")) |>
     filter(!is.na(scientific_name)) |>
@@ -1216,8 +1210,8 @@ if(Boston){
     pull(Common_Nam)
   gbif_taxon_keys_common_swapped <- str_replace(
     gbif_taxon_keys_common,
-    "^([^,]+),\\s*(.+)$",   # 逗号前后分组
-    "\\2 \\1"              # 交换顺序
+    "^([^,]+),\\s*(.+)$",   
+    "\\2 \\1"              
   )
   comm2sci_list <- map(
     gbif_taxon_keys_common_swapped,
@@ -1254,8 +1248,8 @@ if(Boston){
     filter(is.na(canonicalName)) |>
     mutate(new_common = str_replace(
       Common_Nam,
-      "^([^,]+),\\s*(.+)$",   # 逗号前后分组
-      "\\2 \\1"              # 交换顺序
+      "^([^,]+),\\s*(.+)$",   
+      "\\2 \\1"              
     )) |>
     left_join(comm2sci, by = c("new_common" = "verbatim_name")) |>
     filter(!is.na(scientific_name)) |>
@@ -1426,8 +1420,8 @@ if(Ithaca){
     pull(Common_Nam)
   gbif_taxon_keys_common_swapped <- str_replace(
     gbif_taxon_keys_common,
-    "^([^,]+),\\s*(.+)$",   # 逗号前后分组
-    "\\2 \\1"              # 交换顺序
+    "^([^,]+),\\s*(.+)$",   
+    "\\2 \\1"              
   )
   comm2sci_list <- map(
     gbif_taxon_keys_common_swapped,
@@ -1607,8 +1601,8 @@ if(Spokane){
   # If there is common name
   gbif_taxon_keys_common_swapped <- str_replace(
     raw_Spokane |> select(Common_Nam) |> distinct() |> pull(),
-    "^([^,]+),\\s*(.+)$",   # 逗号前后分组
-    "\\2 \\1"              # 交换顺序
+    "^([^,]+),\\s*(.+)$",   
+    "\\2 \\1"              
   )
   
   comm2sci_list <- map(
@@ -1643,8 +1637,8 @@ if(Spokane){
   common_name <-  raw_Spokane |> # get the first column of the data.frame
     mutate(new_common = str_replace(
       Common_Nam,
-      "^([^,]+),\\s*(.+)$",   # 逗号前后分组
-      "\\2 \\1"              # 交换顺序
+      "^([^,]+),\\s*(.+)$",   
+      "\\2 \\1"              
     )) |>
     left_join(comm2sci, by = c("new_common" = "verbatim_name")) |>
     filter(!is.na(scientific_name)) |>
@@ -2050,8 +2044,8 @@ if(Bloomington){
   # If there is common name
   gbif_taxon_keys_common_swapped <- str_replace(
     raw_Bloomington |> select(Common_Nam) |> distinct() |> pull(),
-    "^([^,]+),\\s*(.+)$",   # 逗号前后分组
-    "\\2 \\1"              # 交换顺序
+    "^([^,]+),\\s*(.+)$",   
+    "\\2 \\1"              
   )
   
   comm2sci_list <- map(
@@ -2086,8 +2080,8 @@ if(Bloomington){
   common_name <-  raw_Bloomington |> # get the first column of the data.frame
     mutate(new_common = str_replace(
       Common_Nam,
-      "^([^,]+),\\s*(.+)$",   # 逗号前后分组
-      "\\2 \\1"              # 交换顺序
+      "^([^,]+),\\s*(.+)$",   
+      "\\2 \\1"              
     )) |>
     left_join(comm2sci, by = c("new_common" = "verbatim_name")) |>
     filter(!is.na(scientific_name)) |>
@@ -2169,8 +2163,8 @@ if(Norfolk){
     pull(Common_Nam)
   gbif_taxon_keys_common_swapped <- str_replace(
     gbif_taxon_keys_common,
-    "^([^,]+),\\s*(.+)$",   # 逗号前后分组
-    "\\2 \\1"              # 交换顺序
+    "^([^,]+),\\s*(.+)$",   
+    "\\2 \\1"              
   )
   comm2sci_list <- map(
     gbif_taxon_keys_common_swapped,
@@ -2207,8 +2201,8 @@ if(Norfolk){
     filter(is.na(canonicalName)) |>
     mutate(new_common = str_replace(
       Common_Nam,
-      "^([^,]+),\\s*(.+)$",   # 逗号前后分组
-      "\\2 \\1"              # 交换顺序
+      "^([^,]+),\\s*(.+)$",   
+      "\\2 \\1"              
     )) |>
     left_join(comm2sci, by = c("new_common" = "verbatim_name")) |>
     filter(!is.na(scientific_name)) |>
@@ -2366,8 +2360,8 @@ if(UT){
     pull(Common_Nam)
   gbif_taxon_keys_common_swapped <- str_replace(
     gbif_taxon_keys_common,
-    "^([^,]+)-\\s*(.+)$",   # 逗号前后分组
-    "\\2 \\1"              # 交换顺序
+    "^([^,]+)-\\s*(.+)$",   
+    "\\2 \\1"              
   )
   comm2sci_list <- map(
     gbif_taxon_keys_common_swapped,
@@ -2402,8 +2396,8 @@ if(UT){
   common_name <-  raw_UT |> # get the first column of the data.frame
     mutate(new_common = str_replace(
       Common_Nam,
-      "^([^,]+)-\\s*(.+)$",   # 逗号前后分组
-      "\\2 \\1"              # 交换顺序
+      "^([^,]+)-\\s*(.+)$",
+      "\\2 \\1"
     )) |>
     left_join(comm2sci, by = c("new_common" = "verbatim_name")) |>
     filter(!is.na(scientific_name)) |>
@@ -2829,13 +2823,3 @@ if(Binghamton){
       write_rds(df, here(paste0(save_dir, site_name, ".rds")), compress = "gz")
     })
 }
-
-
-# add <- matching_npn |> 
-#   filter(city == "Seattle") |>
-#   select(site = city, lon, lat, id = new_id) |>
-#   mutate(taxa = "Validation",
-#          genus = "Validation")
-# update_seattle <- bind_rows(Seattle, add) |>
-#   arrange(id)
-# write_rds(update_seattle, "~/lab-data/datasets/vegetation/PS/CONUS_urban/Tree_point/Seattle.rds", compress = "gz")

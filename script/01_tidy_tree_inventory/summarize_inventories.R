@@ -1,10 +1,5 @@
-library(sf)
-library(dplyr)
-library(stringr)
-library(tools)
-
-inventory_dir <- "data/raw/CONUS/StreetTrees/cleaned_ps_input/"
-output_dir    <- "data/raw/CONUS/StreetTrees/cleaned_ps_input/summary/"
+inventory_dir <- here("release/input/tree_list/")
+output_dir    <- here("release/input/tree_list/summary/")
 
 file_list <- list.files(inventory_dir, pattern = "\\.rds$", full.names = TRUE)
 
