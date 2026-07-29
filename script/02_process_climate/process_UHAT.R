@@ -1,9 +1,7 @@
-library(zhulabtools)
-load_packages(c("tidyverse", "ggplot2", "sf", "lubridate", "terra", "patchwork", "scales", "viridis", "leaflet"))
-select <- dplyr::select
+pacman::p_load(terra)
 # output directory
-out_dir <- "~/lab-data/datasets/climate/UHAT/clean_GSL"
-tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
+out_dir <- here("~/lab-data/datasets/climate/UHAT/clean")
+tree_dir <- here("release/input/tree_list/")
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
 cities <- gsub("\\.rds$", "", basename(rds_files))
 
@@ -88,8 +86,10 @@ for (city in cities) {
   raw_uhat <- read_csv(uhat_file)
   UHAT_climate <- raw_uhat |>
     mutate(season = case_when(
-      month(time) %in% 3:8 ~ "growing",
-      month(time) %in% c(9, 10, 11, 12, 1, 2) ~ "dormant"
+      month(time) %in% 3:5 ~ "spring",
+      month(time) %in% 6:8 ~ "summer",
+      month(time) %in% 9:11 ~ "fall",
+      month(time) %in% c(12, 1, 2) ~ "winter"
     )) |>
     mutate(year = year(time),
            year = if_else(month(time) == 12, year + 1, year)) |>
@@ -116,7 +116,7 @@ for (city in cities) {
   )
   r_template <- terra::rast(tifs[1])
   
-  seasons_to_do <- c("growing", "dormant")
+  seasons_to_do <- c("spring", "summer", "fall", "winter")
   temp_type <- c("tavg")
   # years present for those seasons
   years_to_do <- UHAT_climate %>%
@@ -135,111 +135,3 @@ for (city in cities) {
     }
   }
 }
-
-
-################## Check results ##################
-
-
-plot_one <- function(city, out_dir, tree_dir,
-                             yr = 2020, 
-                             seas = "summer") {
-  f <- file.path(out_dir, paste0(city,"_",seas,"_",yr,".tif"))
-  stopifnot(file.exists(f))
-  r_aligned <- terra::rast(f)
-  dir_path <- "~/lab-data/datasets/climate/UHAT/grid"
-  tifs <- list.files(
-    dir_path,
-    pattern = "^MYD11A1\\..*LST_Day_1km\\.tif$",
-    full.names = TRUE
-  )
-  r_template <- terra::rast(tifs[1])
-  crs(r_aligned) <- crs(r_template)  # ensure correct CRS
-  
-  tree_rds_path <- file.path(tree_dir, paste0(city, ".rds"))
-  stopifnot(file.exists(tree_rds_path))
-  tree_sf <- read_rds(tree_rds_path) |>
-    st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = FALSE) |>
-    st_transform(crs(r_aligned))
-  # tree_v <- vect(tree_sf_proj)
-  # e <- ext(tree_v)
-  # r <- crop(r, e, snap = "out")
-  vals <- raster::values(r_aligned)
-  pal <- colorNumeric(viridis(256), domain = vals, na.color = "transparent")
-
-  UHAT_climate_point <-  read_csv(paste0("~/lab-data/datasets/climate/UHAT/raw/", city, ".csv"), show_col_types = FALSE) |>
-    mutate(season = case_when(
-      month(time) %in% 3:5 ~ "spring",
-      month(time) %in% 6:8 ~ "summer",
-      month(time) %in% 9:11 ~ "fall",
-      month(time) %in% c(12, 1, 2) ~ "winter"
-    )) |>
-    mutate(year = year(time),
-           year = if_else(month(time) == 12, year + 1, year)) |>
-    group_by(lon, lat, year, season) |>
-    summarise(
-      tmax = mean(t2m_pred_day, na.rm = TRUE),
-      tmin = mean(t2m_pred_night, na.rm = TRUE),
-      tavg = (tmax + tmin) / 2,
-      .groups = "drop"
-    ) |>
-    # from K to C
-    mutate(across(c(tmax, tmin, tavg), ~ . - 273.15)) |>
-    select(lon, lat, year, season, tmax, tmin, tavg) |>
-    filter(year == yr, season == seas) |>
-    distinct(lon, lat) |>
-    st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = FALSE) |>
-    st_transform(crs = crs(r_aligned))
-  
-  df <- as.data.frame(r_aligned, xy = TRUE, na.rm = TRUE)
-  val_col <- names(df)[3]
-  ggplot() +
-    geom_sf(data = tree_sf, color = "black", fill = "black",
-            size = 0.1, alpha = 0.8, shape = 16) +
-    geom_sf(data = UHAT_climate_point, color = "red", fill = "red",
-            size = 2, alpha = 0.7, shape = 16) +
-    geom_tile(data = df, aes(x = x, y = y, fill = .data[[val_col]]), alpha = 0.8) +
-    # coord_equal() +
-    scale_fill_viridis(oob = scales::squish, name = val_col) +
-    labs(
-      title = str_replace(basename(f), ".tif", ""),
-      x = NULL, y = NULL
-    ) +
-    theme_minimal(base_size = 10) +
-    theme(
-      panel.grid = element_blank(),
-      plot.title = element_text(hjust = 0.5, face = "bold"),
-      legend.position = "none"
-    )
-  # 
-  # leaflet() |>
-  #   addProviderTiles(providers$OpenStreetMap,
-  #                    options = providerTileOptions(opacity = 0.9)) |>
-  #   addRasterImage(r_aligned |> project("EPSG:4326"), colors = pal, opacity = 0.7, project = FALSE) |>
-  #   addCircleMarkers(
-  #     data = tree_sf,
-  #     lng = ~lon, lat = ~lat,
-  #     radius = 2,
-  #     fillColor = "black", color = "black",
-  #     fillOpacity = 0.4, opacity = 0.4,
-  #     stroke = FALSE
-  #   ) |>
-  #   addCircleMarkers(
-  #     data = UHAT_climate_point,
-  #     lng = ~lon, lat = ~lat,
-  #     radius = 3,
-  #     fillColor = "red", color = "red",
-  #     fillOpacity = 0.6, opacity = 0.6,
-  #     stroke = FALSE
-  #   ) |>
-  #   addScaleBar(position = "bottomleft", options = scaleBarOptions(metric = TRUE, imperial = FALSE))
-  
-}
-plot_one(city = "Bozeman", out_dir, tree_dir, yr = 2014, seas = "summer")
-
-city_plots <- lapply(cities, function(city) {
-  plot_one(city = city, out_dir = out_dir, tree_dir = tree_dir, yr = 2014, seas = "winter")
-})
-final_plot <- wrap_plots(city_plots, ncol = 11) &
-  theme(plot.margin = margin(6, 6, 6, 6))
-final_plot
-
