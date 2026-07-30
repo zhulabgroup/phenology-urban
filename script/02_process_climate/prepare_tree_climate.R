@@ -12,13 +12,13 @@ prepare_tree_Grid_climate <- function(city){
     st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F)
   
   ###### Daymet shortwave radiation #######
-  daymet_srad <- read_csv(paste0("data/raw/CONUS/Daymet/all_city_trees/", city, "/srad_monthly_2016_2024.csv"), show_col_types = FALSE)
-  daymet_prcp <- read_csv(paste0("data/raw/CONUS/Daymet/all_city_trees/", city, "/prcp_monthly_2016_2024.csv"), show_col_types = FALSE)
+  daymet_srad <- read_csv(paste0(here("release/input/climate/Daymet/"), city, "/srad_monthly_2016_2024.csv"), show_col_types = FALSE)
+  daymet_prcp <- read_csv(paste0(here("release/input/climate/Daymet/"), city, "/prcp_monthly_2016_2024.csv"), show_col_types = FALSE)
     
   ###### UHAT temperature #######
     
   uhat_files <- list.files(
-    path = "~/lab-data/datasets/climate/UHAT/clean/",
+    path = here("release/input/climate/UHAT/clean/"),
     pattern = paste0("^", city, ".*tavg\\.tif$"),
     full.names = TRUE
   )
@@ -28,7 +28,7 @@ prepare_tree_Grid_climate <- function(city){
   }
   uhat_climate <- map(uhat_files, function(file) {
     r <- rast(file)
-    dir_path <- "~/lab-data/datasets/climate/UHAT/grid"
+    dir_path <- here("release/input/climate/UHAT/grid/")
     tifs <- list.files(
       dir_path,
       pattern = "^MYD11A1\\..*LST_Day_1km\\.tif$",
