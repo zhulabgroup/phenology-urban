@@ -16,7 +16,7 @@ The full workflow description is documented in:
 
 - `doc/outline.qmd`
 
-This document summarizes data processing, modeling, and figure generation for the project.
+This document summarizes data processing, modeling, and figure generation for the project. A rendered version is also available [here](https://public.websites.umich.edu/~jializ/urban-phe/outline.html).
 
 ## Pipeline overview
 
