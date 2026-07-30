@@ -1,11 +1,9 @@
-fit_uni <- function(phe_type, input_data, city_feature, species_name, clim = "mean_temp", bootstrap){
+pacman::p_load(V.PhyloMaker2, phyr)
+
+fit_uni <- function(phe_type, input_data, species_name, clim = "mean_temp", bootstrap){
   combine_feature <- input_data |>
     filter(Factor == species_name) |>
-    mutate(w = 1/(sd^2)) |>
-    left_join(
-      city_feature,
-      by = "city"
-    )
+    mutate(w = 1/(sd^2))
   
   df_phe <- combine_feature |>
     filter(phe_type == !!phe_type)
@@ -186,13 +184,12 @@ fit_uni <- function(phe_type, input_data, city_feature, species_name, clim = "me
 }
 
 
-fit_multi_pglmm <- function(phe_type, input_data, city_feature, package, bootstrap, prcp, temp) {
+fit_multi_pglmm <- function(phe_type, input_data, package, bootstrap, prcp, temp) {
   D <- input_data %>%
     # rename(species = Factor) %>%
     mutate(species = gsub("_", " ", species)) %>%
     filter(phe_type == !!phe_type,
-           species %in% phylo_tree$tip.label) %>%
-    left_join(city_feature, by = "city")
+           species %in% phylo_tree$tip.label)
   
   sp_data <- sort(unique(na.omit(D$species)))
   sp_tree <- sort(phylo_tree$tip.label)
