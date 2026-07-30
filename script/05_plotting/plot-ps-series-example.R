@@ -4,10 +4,10 @@ if (!require("BatchPlanet")){
 pacman::p_load(BatchPlanet)
 
 plot_ps_series_example <- function() {
-  doy <- read_rds("release/input/phenology/doy/doy_NewYork_Acerrubrum.rds")|>
+  doy <- read_rds(here("release/input/phenology/doy/doy_NewYork_Acerrubrum.rds"))|>
     filter(id == 7639) |>
     filter(year == 2023)
-  clean_ts <- read_rds("release/input/phenology/clean/clean_NewYork_Acerrubrum.rds") |>
+  clean_ts <- read_rds(here("release/input/phenology/clean/clean_NewYork_Acerrubrum.rds")) |>
     filter(id == 7639) |>
     filter(date >= as.Date("2022-10-01") & date <= as.Date("2024-3-31"))
 
