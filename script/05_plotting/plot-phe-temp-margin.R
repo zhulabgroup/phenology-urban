@@ -1,10 +1,12 @@
 source(here("script/05_plotting/plot-setting-city-map.R"))
 source(here("script/04_stats_model/fit_spatial/prepare_model_input.R"))
+pacman::p_load(terra, ggspatial)
 
 plot_phe_temp_margin <- function(city = "NewYork", species = "Acer rubrum", phe_type = "SOS", year = 2022){
   model_input_sf <-  prepare_data(city = city, source = "Grid", taxa_col= "canonicalname", phe_type = phe_type)|>
     filter(canonicalname == species) |>
-    filter(year == !!year)
+    filter(year == !!year) |>
+    st_drop_geometry()
   phe_metric <- "doy"
   x <- model_input_sf[[phe_metric]]
   q <- stats::quantile(x, probs = c(0.25, 0.75), na.rm = TRUE)
@@ -36,20 +38,20 @@ plot_phe_temp_margin <- function(city = "NewYork", species = "Acer rubrum", phe_
     full.names = TRUE
   )
   r_template <- terra::rast(tifs[1])
-  crs(temp_tif) <- crs(r_template)  # ensure correct CRS
+  terra::crs(temp_tif) <- terra::crs(r_template)  # ensure correct CRS
   tree_location <- tree_location|>
-    st_transform(crs(temp_tif))
+    st_transform(terra::crs(temp_tif))
   
   clipped_over <- temp_tif |>
     # crop(temp_tif, vect(tree_location)) |>
-    project(crs(city_boundary), res = 0.009)  # transform to WGS84 for plotting
+    terra::project(terra::crs(city_boundary), res = 0.009)  # transform to WGS84 for plotting
   city_v <- vect(city_boundary)
   clipped <- crop(clipped_over, city_v) |> mask(city_v)
   temp_df <- as.data.frame(clipped, xy = TRUE) |>
     rename_with(~ "value", .cols = 3)
   
   tree_location <- tree_location|>
-    st_transform(crs(city_boundary))  
+    st_transform(terra::crs(city_boundary))  
   bbox_tree <- st_bbox(tree_location)
   bbox_city <- st_bbox(city_boundary)
   
