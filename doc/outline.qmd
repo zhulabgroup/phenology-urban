@@ -16,7 +16,7 @@ library(here)
 source(here::here("script", "_setting.R"))
 ```
 
-This document outlines the workflow of the urban phenology project. The accompanying data are available at [Zenodo](link). Please download the data and place it in the `release` folder.
+This document outlines the workflow of the urban phenology project. The accompanying data are available at [Zenodo](https://doi.org/10.5281/zenodo.21709425). Please download the data and place it in the `release` folder.
 
 # Data sources
 
