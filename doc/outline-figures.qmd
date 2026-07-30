@@ -1,7 +1,7 @@
 ---
-title: "Outline of results in urban phenology project"
+title: "Workflow of urban phenology project"
 author: "Jiali Zhu"
-date: "today"
+date: "2026-07-30"
 editor_options:
   chunk_output_type: console
 ---
@@ -10,835 +10,260 @@ editor_options:
 #| echo: false
 #| include: false
 #| warning: false
-
-library(zhulabtools)
-# Check and  load required packages
-check_install_packages(c("dplyr", "here", "sf", "viridis", "leaflet","terra", "patchwork", "data.table", "plotly", "tidyverse", "rgbif", "ggmcmc", "INLA", "ks", "ggnewscale", "ggrepel"))
-if (!require(plotbiomes)) {
-  devtools::install_github("valentinitnelav/plotbiomes")
-}
-load_packages(c("dplyr", "here", "sf","viridis", "leaflet", "cli", "terra","patchwork", "tidyverse","rgbif", "ggmcmc", "INLA","scales", "ks", "ggnewscale", "ggExtra", "plotbiomes", "scatterpie", "ggrepel", "phyr"))
-load_packages(c("sf","viridis", "terra","patchwork","tidyverse", "ggnewscale", "plotbiomes","patchwork", "terra",  "taxize", "V.PhyloMaker2", "ggtree", "ggpubr", "ggtreeExtra", "brms", "ggridges", "tidybayes", "cowplot", "rgbif", "cli", "tidyverse", "broom", "ggspatial", "gridExtra"))
-source("script/format_city_name.R")
-theme_set(
-  theme_minimal(base_size = 14) +
-    theme(
-      # Font family and general text
-      # Axis and facet titles
-      axis.title = element_text(size = 16),
-      strip.text = element_text(size = 14, hjust = 0),
-      # Axis tick labels (optional, default inherits from base_size)
-      # axis.text = element_text(size = 10),
-      # Panel background and border
-      panel.background = element_rect(fill = "white", color = "black"),
-      # Grid lines
-      panel.grid.major = element_blank(),
-      panel.grid.minor = element_blank(),
-      # Facet/strip placement
-      strip.placement = "outside"
-    )
-)
+#| 
+if (!requireNamespace("here", quietly = TRUE)) install.packages("here")
+library(here)
+source(here::here("script", "_setting.R"))
 ```
 
+This document outlines the workflow of the urban phenology project. The accompanying data are available at [Zenodo](link). Please download the data and place it in the `release` folder.
 
-This document outlines the figures that will be generated in the urban phenology project.
+# Data sources
 
-# Data and methods
+## Urban tree inventories
 
-## Supp_Fig.1
+We first collected and cleaned the urban tree inventories from various sources, including the [McCoy's dataset](https://elifesciences.org/articles/77891), [OpenTree.org](https://opentrees.org/), and additional governmental open data portals. The codes are saved in:
 
-Distribution of city samples. The geometry location of selected cities. The size of the circle represents the number of trees in the city/number of species. The PCA location of selected cities. Or some separate figures to show the distribution of characteristics.
+-   `script/01_tidy_tree_inventory/tidy_elife.R`
+-   `script/01_tidy_tree_inventory/tidy_opentree.R`
 
-```{r fig-spatial}
+Then, species were assigned to a categorical leaf phenology type (TraitID = 37) based on the most frequently observed classification in the TRY database. The resulting summary data are stored in `release/input/tree_list/summary`.
+
+-   `script/01_tidy_tree_inventory/clean_TRY_phetype.R`
+
+Then, we futher cleaned and filtered the inventories for each city. Each city has one chunk of code, and the filtered data are stored in `release/input/tree_list`, with each city saved as one RDS file. The codes are saved in:
+
+-   `script/01_tidy_tree_inventory/clean_inventories.R`
+-   `script/01_tidy_tree_inventory/summarize_inventories.R`
+
+The map below shows the spatial distribution of city samples. The geometry location of selected cities. The size of the circle represents the number of trees in the city.
+
+```{r fig-inventory-map}
+#| fig-cap: "spatial distribution..."
 #| warning: false
-
-inventory_centroids <- readRDS(("~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/summary/inventory_centroids.rds"))
-boundary_us <- st_read(("~/lab-data/datasets/boundary/USAdministrative/US/us_boundarydissolve.shp"), quiet = T) |> 
-  st_transform(4326)
-
-p_geo <- ggplot() +
-  geom_sf(data = boundary_us, fill = "grey85", color = "white") +
-  geom_sf(data = inventory_centroids, aes(size = num_tree, text = site), color = "darkblue", alpha = 0.6) +
-  coord_sf(expand = FALSE) +
-  scale_size_continuous(name = "Number of Trees", range = c(1, 8),labels = label_comma()) +
-  theme_minimal() +
-  labs(x = "lon", y = "lat") +
-  theme(
-    axis.text = element_text(size = 12),
-    axis.title = element_text(size = 15),
-    axis.ticks   = element_line(linewidth = 0.2),
-    panel.grid.major = element_line(color = "grey90", linetype = "solid", linewidth = 0.2),
-    panel.grid.minor = element_line(color = "grey90", linetype = "solid", linewidth = 0.15)
+inventory_centroids <- readRDS(here("release/input/tree_list/summary/inventory_centroids.rds"))
+leaflet(data = inventory_centroids) |>
+  addProviderTiles(providers$OpenStreetMap, options = providerTileOptions(opacity = 0.9)) |>
+  addCircleMarkers(
+    popup = ~ paste0(
+      "<strong>", site, "</strong><br>",
+      "Num individual: ", num_tree, "<br>"
+    ),
+    radius = ~ sqrt(num_tree/100),
+    stroke = FALSE, fillOpacity = 0.5,
+    color = "darkblue"
   )
-
-plotly::ggplotly(p_geo)
 ```
 
-```{r fig-pca}
-#| warning: false
-#| include: true
-#| fig-cap: "Distribution of cities with tree inventories."
-#| fig-width: 15
-#| fig-height: 7
-city_feature <- readRDS("~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/summary/city_feature.rds")
+## Climate datasets
 
-all_city <- readRDS("~/phenology-urban/data/proc/urban/City_list/all_city.rds") |>
-  na.omit()
-scaled_matrix <- scale(all_city |>
-  select(pop_density,bio1, bio12, sd, median)|>
-    rename(building_height_sd = sd,
-           building_height_median = median)) 
-all_city_scaled <- as.data.frame(scaled_matrix)
-all_city_scaled$NAME20 <- all_city$NAME20
+For each tree individual, we extracted the temperature from the UHAT dataset. The codes are saved in:
 
-pca_res <- prcomp(all_city_scaled[, 1:5], center = TRUE, scale. = TRUE)
+-   `script/02_process_climate/process_UHAT.R`
 
-pca_scores <- as.data.frame(pca_res$x[, 1:2])
-colnames(pca_scores) <- c("PC1", "PC2")
-pca_scores$NAME20 <- all_city_scaled$NAME20
+We then extracted the precipitation and shortwave radiation from the Daymet dataset. The codes are saved in:
 
-pca_loadings <- as.data.frame(pca_res$rotation[, 1:2])
-pca_loadings$variable <- rownames(pca_loadings)
+-   `script/02_process_climate/download_Daymet.sh`
+-   `script/02_process_climate/process_Daymet_point.py`
 
-arrow_scale <- 5.5
-pca_loadings <- pca_loadings |>
-  mutate(PC1 = PC1 * arrow_scale,
-         PC2 = PC2 * arrow_scale,
-         variable = case_when(
-    variable == "building_height_sd"     ~ "height_sd",
-    variable == "building_height_median" ~ "height_median",
-    TRUE ~ variable 
-  ))
+The code to combine climate datasets and prepare the final tree-level climate data, stored in `release/input/tree_climate`, is:
 
-list_city <- city_feature |>
-  st_join(st_read(("~/lab-data/datasets/boundary/USAdministrative/USCities/tl_2024_us_uac20.shp"), quiet = T) |> 
-            st_transform(4326) |>
-            dplyr::select(NAME20), join = st_nearest_feature) |>
-  pull(NAME20)
+-   `script/02_process_climate/prepare_tree_climate.R`
 
-pca_scores <- pca_scores |>
-  mutate(
-    selected = NAME20 %in% list_city,
-    hover_text = paste("City:", NAME20),
-    group = case_when(
-      selected ~ "Selected cities",
-      TRUE ~ "Other cities"
-    )
-  )
+## Individual tree phenology
 
-full_data <- pca_scores |> select(PC1, PC2)
-subset_data <- pca_scores |> filter(selected) |> select(PC1, PC2)
+We followed the workflow in [Song et al. (2025)](https://doi.org/10.1016/j.srs.2025.100205) and applied package [BatchPlanet](https://doi.org/10.21105/joss.09268) to extract the phenology of individual trees:
 
-density = 0.0001
-num_grids = 100
-x_breaks <- seq(min(pca_scores$PC1), max(pca_scores$PC1), length.out = num_grids +1)
-y_breaks <- seq(min(pca_scores$PC2), max(pca_scores$PC2), length.out = num_grids +1)
+-   Retrieved PlanetScope imagery (ortho_analytic_4b_sr) from 2017–2023 and extracted reflectance at tree coordinates.\
+-   Constructed smoothed, seasonally reliable Enhanced Vegetation Index (EVI) curves after computing and filtering EVI time series.
+-   Extracted the timing of Start-of-season (SOS) and End-of-season (EOS) as the day of year when the growing-season EVI curves first crossed the green-up/down 50% threshold.
 
-df <- pca_scores |>
-    mutate(
-      x_bin = cut(PC1, breaks = x_breaks, include.lowest = TRUE, labels = FALSE),
-      y_bin = cut(PC2, breaks = y_breaks, include.lowest = TRUE, labels = FALSE),
-      grid_id = paste(x_bin, y_bin, sep = "_")
-    )
-  
-grid_full <- expand.grid(
-  x_bin = 1:(length(x_breaks) - 1),
-  y_bin = 1:(length(y_breaks) - 1)
-) |>
-  mutate(
-    grid_id = paste(x_bin, y_bin, sep = "_"),
-    PC1 = (x_breaks[x_bin] + x_breaks[x_bin + 1]) / 2,
-    PC2 = (y_breaks[y_bin] + y_breaks[y_bin + 1]) / 2
-  ) |>
-  left_join(
-    df |>
-      group_by(x_bin, y_bin) |>
-      summarise(count = n(),
-                subset = sum(selected),
-                .groups = "drop"),
-    by = c("x_bin", "y_bin")
-  )
+The processing of PlanetScope imagery is handled in the following scripts
 
-kde_full <- kde(x = full_data, eval.points = grid_full |> select(PC1, PC2))
-kde_subset <- kde(x = subset_data, eval.points = grid_full|> select(PC1, PC2))
+-   `script/03_process_PS/download_process_PS.R` 
+-   `script/03_process_PS/download_process_PS.sh`
 
-dens_full <- kde_full$estimate / sum(kde_full$estimate)
-dens_subset <- kde_subset$estimate / sum(kde_subset$estimate)
-
-grid_df <- cbind(grid_full,
-                 full_density = dens_full,
-                 subset_density = dens_subset)
-
-contour_df <- grid_df %>%
-  select(PC1, PC2, full_density, subset_density) %>%
-  tidyr::pivot_longer(
-    cols = c(full_density, subset_density),
-    names_to = "group", values_to = "density"
-  ) %>%
-  mutate(group = case_when(
-    group == "full_density"   ~ "All cities",
-    group == "subset_density" ~ "Selected cities",
-    TRUE ~ group
-  ))
-  
-p_pca <- ggplot(pca_scores, aes(x = PC1, y = PC2)) +
-  geom_segment(data = pca_loadings,
-               aes(x = 0, y = 0, xend = PC1, yend = PC2),
-               arrow = arrow(length = unit(0.5, "cm")),
-               color = "red", size = 0.4, inherit.aes = FALSE) +
-  geom_text(data = pca_loadings,
-            aes(x = PC1, y = PC2, label = variable),
-            color = "red", size = 2.5, hjust = -0.2, vjust = 0.5, inherit.aes = FALSE) +
-  geom_point(data = filter(pca_scores, !(selected)),
-             aes(color = "Other cities"), alpha = 0.3, size = 0.5) +
-  geom_point(data = filter(pca_scores, selected),
-             aes(color = "Selected cities"), size = 1) +
-  # geom_text(data = filter(pca_scores, selected),
-  #           aes(label = NAME20), size = 2, vjust = -1) +
-  # geom_text(data = filter(pca_scores,  !selected & GUTI_list),
-  #           aes(label = NAME20), size = 2, vjust = -1) +
-  scale_color_manual(
-    name = "City Category",
-    values = c(
-      "Other cities" = "grey60",
-      "Selected cities" = "darkblue"
-    )
-  ) +
-  new_scale_color() +
-    geom_contour(data = contour_df,
-                 aes(x = PC1, y = PC2, z = density, color = group),
-                 breaks = c(density)) +
-    scale_color_manual(
-      name = "Density Contour",
-      values = c("All cities" = "grey50", "Selected cities" = "cornflowerblue")
-    ) +
-    theme_classic() +
-  labs(x = "PC1", y = "PC2")+
-  theme(aspect.ratio = 0.8,
-        axis.text = element_text(size = 12),
-        axis.title = element_text(size = 15))
-
-p_area <- p_geo + p_pca +
-  plot_layout(ncol = 2, 
-              guides = "collect",
-              widths = c(2, 1.2))
-ggsave("~/phenology-urban/temp/figure_agu/conus.png", p_area, width = 12, height = 4, dpi = 500)
-```
-
-## Remote sensing data processing
-
-# Results
-
-## Variation of phenology across cities
-
-### Main_Fig.1 a,c
-
-one species across cities, raw DOY histogram -> IQR boxplot -> IQR scatterplot (within and scross)
+The processed phenology data are stored in `release/input/phenology/doy/`. Here, we show an example of phenology extraction for an individual tree.
 
 ```{r}
-library(randomcoloR)
-tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
-rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
-cities <- gsub("\\.rds$", "", basename(rds_files))
+#| label: fig-evi
+#| fig-cap: "Example of phenology extraction for an Acer rubrum individual (40.7627°N, 73.7325°W) in New York City. Grey points show PlanetScope-derived EVI, the black line is the smoothed EVI curve. Green and orange shading indicate green-up and green-down periods, with vertical lines marking the 50% thresholds used to define SOS and EOS."
+#| fig-width: 7
+#| fig-height: 5.5
+#| out.width: "50%"
+#| fig-align: "center"
+source(here("script/05_plotting/plot-ps-series-example.R"))
+plot_ps_series_example()
+```
+
+# Model and results
+
+## Widespread intra-city variation in individual-tree phenology
+
+The section is to answer the question of how large is intra-city variation in tree phenology relative to variation among cities.
+
+### Distribution of SOS / EOS examples
+
+The following code generates the distribution plots for SOS and EOS examples across different cities and species.
+
+```{r}
+#| eval: false
+pacman::p_load(randomcoloR)
+cities <- names(city_label)
 set.seed(123)
 color_palette <- setNames(
   distinctColorPalette(length(cities)),
   cities
 )
-source(here("script/plot_raw_phe.R"))
+source(here("script/05_plotting/plot-raw-phe.R"))
 
-phe_type = "SOS"
-sos_city_input <- read_rds(paste0("~/phenology-urban/data/proc/model_output/nooutlier_", phe_type, "_input.rds")) |>
-  filter(year == 2022) |>
-  mutate(year = as.factor(year))
 sos_species = "Pistacia chinensis" # within from large to small
-sos_plots <- plot_species_raw_phe(species = sos_species, all_city_input = sos_city_input, color_palette, phe_type = "SOS", color_limits = c(27, 124),
-                                  highlight_city = c("LosAngeles", "NewOrleans", "Portland"))
-example_city1 <- plot_phe_one_city(data_input = sos_city_input, city = "Portland", species = sos_species, phe_type = phe_type, year = 2022, color_limits = c(27, 124))
-example_city2 <- plot_phe_one_city(sos_city_input, city = "LosAngeles", species = sos_species, phe_type = phe_type, year = 2022, color_limits = c(27, 124))
-example_city3 <- plot_phe_one_city(sos_city_input, city = "NewOrleans", species = sos_species, phe_type = phe_type, year = 2022, color_limits = c(27, 124))
+sos_plots <- plot_species_raw_phe(species = sos_species, color_palette, phe_type = "SOS", color_limits = c(27, 124),
+                                  highlight_city = c("LosAngeles", "NewOrleans", "Portland"), year = 2022)
+example_city1_SOS <- plot_phe_one_city(city = "Portland", species = sos_species, phe_type = "SOS", year = 2022, color_limits = c(27, 124))
+example_city2_SOS <- plot_phe_one_city(city = "LosAngeles", species = sos_species, phe_type = "SOS", year = 2022, color_limits = c(27, 124))
+example_city3_SOS <- plot_phe_one_city(city = "NewOrleans", species = sos_species, phe_type = "SOS", year = 2022, color_limits = c(27, 124))
 
-sos_plots$doy_map
-cities <- (example_city1 /
-  example_city2 /
-  example_city3)
-sos_plots$sp_boxplot_SOS
+sos_plots$doy_map / sos_plots$sp_boxplot &
+  plot_layout(heights = c(1, 0.2))
 
-ggsave("~/phenology-urban/temp/figure_agu/variance/sos_conus.png", sos_plots$doy_map, width = 17, height = 10, dpi = 500, units = "cm")
-ggsave("~/phenology-urban/temp/figure_agu/variance/sos_cities.png", cities, width = 3.5, height = 11, dpi = 500)
-ggsave("~/phenology-urban/temp/figure_agu/variance/sos_box.png", sos_plots$sp_boxplot_SOS, width = 10, height = 2, dpi = 500)
+cities_SOS <- (example_city1_SOS /
+  example_city2_SOS /
+  example_city3_SOS)
 
-
-phe_type = "EOS"
-eos_city_input <- read_rds(paste0("~/phenology-urban/data/proc/model_output/nooutlier_", phe_type, "_input.rds")) |>
-  filter(year == 2022) |>
-  mutate(year = as.factor(year))
 eos_species <- "Quercus alba" # within from large to small, Tilia cordata
-eos_plots <- plot_species_raw_phe(species = eos_species, all_city_input = eos_city_input, color_palette, phe_type = "EOS", color_limits = c(253, 322),
-                                  highlight_city = c("Atlanta", "Bloomington", "Houston"))
+eos_plots <- plot_species_raw_phe(species = eos_species, color_palette, phe_type = "EOS", color_limits = c(253, 322),
+                                  highlight_city = c("Atlanta", "Bloomington", "Houston"), year = 2022)
 
-example_city1 <- plot_phe_one_city(eos_city_input, city = "Bloomington", species = eos_species, phe_type = phe_type, year = 2022, color_limits = c(253, 322))
-example_city2 <- plot_phe_one_city(eos_city_input, city = "Atlanta", species = eos_species, phe_type = phe_type, year = 2022, color_limits = c(253, 322))
-example_city3 <- plot_phe_one_city(eos_city_input, city = "Houston", species = eos_species, phe_type = phe_type, year = 2022, color_limits = c(253, 322))
+example_city1_EOS <- plot_phe_one_city(city = "Bloomington", species = eos_species, phe_type = "EOS", year = 2022, color_limits = c(253, 322))
+example_city2_EOS <- plot_phe_one_city(city = "Atlanta", species = eos_species, phe_type = "EOS", year = 2022, color_limits = c(253, 322))
+example_city3_EOS <- plot_phe_one_city(city = "Houston", species = eos_species, phe_type = "EOS", year = 2022, color_limits = c(253, 322))
 
-# May change to Norfolk Bloomington Altantas (268, 322)
-eos_plots$doy_map
-cities <- (example_city1 /
-  example_city2 /
-  example_city3)
-eos_plots$sp_boxplot_SOS
+eos_plots$doy_map / eos_plots$sp_boxplot &
+  plot_layout(heights = c(1, 0.2))
 
-
-ggsave("~/phenology-urban/temp/figure_agu/variance/eos_conus.png", eos_plots$doy_map, width = 17, height = 10, dpi = 500, units = "cm")
-ggsave("~/phenology-urban/temp/figure_agu/variance/eos_cities.png", cities, width = 3, height = 8.5, dpi = 500)
-ggsave("~/phenology-urban/temp/figure_agu/variance/eos_box.png", eos_plots$sp_boxplot_SOS, width = 10, height = 2, dpi = 500)
-
-
-ggsave("~/phenology-urban/temp/figure_agu/variance_sos.png", plot_sos, width = 15.5, height = 16.5, dpi = 500, units = "cm")
-ggsave("~/phenology-urban/temp/figure_agu/variance_eos.png", plot_eos, width = 15.5, height = 16.5, dpi = 500, units = "cm")
+cities_EOS <- (example_city1_EOS /
+  example_city2_EOS /
+  example_city3_EOS)
 ```
 
-### Main_Fig.1 b,d
+### Variance partitioning model
 
-```{r lmer}
-library(lme4)
-library(tidytext)
-fit_variance_partition <- function(df, species_name) {
-  d <- df |> 
-    filter(canonicalname == species_name) |>
-    mutate(tree_uid = interaction(city, id, drop = TRUE))
-  
-  if (n_distinct(d$city) < 2 || n_distinct(d$tree_uid) < 10) {
-    return(tibble(
-      species = species_name,
-      sigma_city = NA_real_,
-      sigma_within = NA_real_,
-      sigma_residual = NA_real_,
-      prop_city = NA_real_,
-      prop_within = NA_real_
-    ))
-  }
-  
-  model <- tryCatch(
-    lmer(doy ~ 1 +  (1 | year) + (1 | city) + (1 | city:id), data = d),
-    error = function(e) NULL
-  )
-  
-  if (is.null(model)) {
-    return(tibble(
-      species = species_name,
-      sigma_city = NA_real_,
-      sigma_within = NA_real_,
-      sigma_residual = NA_real_,
-      prop_city = NA_real_,
-      prop_within = NA_real_,
-      compared_ratio = NA_real_,
-      phe_type = phe_type,
-      sample_city = n_distinct(d$city)
-    ))
-  }
-  
-  vc <- as.data.frame(VarCorr(model))
-  sigma_city     <- vc$vcov[vc$grp == "city"]
-  sigma_within  <- vc$vcov[vc$grp == "city:id"]
-  sigma_residual <- vc$vcov[vc$grp == "Residual"]
-  sigma_year <- vc$vcov[vc$grp == "year"]
-  total_var <- sigma_city + sigma_within + sigma_residual + sigma_year
-  tibble(
-    species = species_name,
-    sigma_city = sigma_city,
-    sigma_within = sigma_within,
-    sigma_residual = sigma_residual,
-    prop_city = sigma_city / total_var,
-    prop_within = sigma_within / total_var,
-    prop_residual = sigma_residual / total_var,
-    prop_city2 = prop_city / (sum(prop_city, prop_within)),
-    prop_within2 = prop_within / (sum(prop_city, prop_within)),
-    phe_type = phe_type,
-    sample_city = n_distinct(d$city)
-  )
-}
+To compare the relative contributions of different sources of phenological variation, we partitioned variance in SOS and EOS into cross-city, intra-city, and cross-year components.
 
+For species, let $y_{i,j,t}$ denote the phenological timing (SOS or EOS, day of year) of individual tree $i$ of species in city $j$ and year $t$. We fitted an intercept-only linear mixed-effects model for each species:
 
-################### EOS plot ###################
+where:
 
-phe_type = "EOS"
-all_city_input <- read_rds(paste0("~/phenology-urban/data/proc/model_output/nooutlier_", phe_type, "_input.rds")) |>
-  filter(year<2024) |>
-  mutate(year = as.factor(year))
-species_list <- unique(all_city_input$canonicalname)
-variance_partition_all_eos <- map_dfr(
-  species_list,
-  ~ fit_variance_partition(all_city_input, .x)
-)
+- $\mu$ is the species-specific mean phenological timing,
 
-# variance_partition_all_eos$prop_within2 <- -variance_partition_all_eos$prop_within2
-plot_df_eos <- variance_partition_all_eos %>%
-  select(species, prop_city2, prop_within2, phe_type, sample_city) %>%
-  filter(is.finite(prop_city2), is.finite(prop_within2)) %>%
-  mutate(
-    prop_city2 = round(prop_city2 * 100, 2),
-    prop_within2 = round(prop_within2 * 100, 2),
-    group = if_else(prop_city2 < abs(prop_within2),
-                    "Within-city > Across-city",
-                    "Within-city < Across-city")
-  ) %>%
-  mutate(
-    species = factor(species, levels = unique(species))
-  ) |>
-  pivot_longer(
-    cols = c(prop_within2, prop_city2),
-    names_to = "component",
-    values_to = "prop"
-  ) %>%
-  mutate(
-    component = recode(component,
-                       prop_within2 = "Within-city",
-                       prop_city2   = "Across-city")
-  )
+- $u_{j}$ is the inter-urban (cross-city) random effect for species $m$,
 
-load("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/tree_species.RData")
+- $v_{i(j)}$ is the intra-urban (cross-individual) random effect, with individuals nested within cities,
 
-D <- plot_df_eos %>%
-  mutate(species = gsub("_", " ", species)) %>%
-  filter(species %in% phylo_tree$tip.label)
+- $w_{t}$ is the interannual random effect,
 
-sp_data <- sort(unique(na.omit(D$species)))
-sp_tree <- sort(phylo_tree$tip.label)
-keep_sp <- intersect(sp_data, sp_tree)
+- $\varepsilon_{i,j,t}$ is the residual error.
 
-D2 <- D %>%
-  filter(species %in% keep_sp) %>%
-  droplevels() %>%
-  mutate(
-    species = factor(species, levels = keep_sp)
-  )
+All random effects were assumed to be independent and normally distributed:
 
-tr2 <- drop.tip(phylo_tree, setdiff(phylo_tree$tip.label, keep_sp))
+$$
+y_{i,j,t}
+= \mu
++ u_{j}
++ v_{i(j)}
++ w_{t}
++ \varepsilon_{i,j,t},
+$$
+$$
+u_{j} \sim \mathcal{N}(0, \sigma^2_{\mathrm{cross}}),
+$$
 
-all_tree <- ggtree(tr2, layout = "fan", open.angle = 10)+
-  geom_tiplab(offset = 55, size =0, linesize = 0.3)
-all_ring <- as.data.frame(plot_df_eos) |>
-  mutate(label = species)
+$$
+v_{i(j)} \sim \mathcal{N}(0, \sigma^2_{\mathrm{intra}}),
+$$
 
-p_EOS_ring <- all_tree +
-  geom_fruit(
-    data = all_ring,
-    geom = geom_col,
-    mapping = aes(
-      y = label,
-      x = prop,
-      fill = component
-    ),
-    orientation = "y",
-    width = 1,
-    offset = 0.05,
-    pwidth = 0.5,
-    axis.params = list(
-      axis = "x",
-      text.size = 4.5,
-      hjust = 1,
-      vjust = 1.5,
-      nbreak = 3
-    ),
-    grid.params = list()
-  ) +
-  scale_fill_manual(
-    values = c("Across-city" = "grey80", "Within-city" = "grey40"),
-    name = "Variance proportion (%)",
-    labels = c("Between-city", "Within-city")
-  )
+$$
+w_{t} \sim \mathcal{N}(0, \sigma^2_{\mathrm{year}}),
+$$
 
-################### SOS plot ###################
+$$
+\varepsilon_{i,j,t} \sim \mathcal{N}(0, \sigma^2_{\mathrm{residual}}).
+$$
 
-phe_type = "SOS"
-all_city_input <- read_rds(paste0("~/phenology-urban/data/proc/model_output/nooutlier_", phe_type, "_input.rds")) |>
-  filter(year<2024) |>
-  mutate(year = as.factor(year))
-species_list <- unique(all_city_input$canonicalname)
-variance_partition_all_sos <- map_dfr(
-  species_list,
-  ~ fit_variance_partition(all_city_input, .x)
-)
+The total phenological variance for species $m$ was computed as:
+$$
+\hat{\sigma}^2_{\mathrm{total}}
+= \hat{\sigma}^2_{\mathrm{cross}}
++ \hat{\sigma}^2_{\mathrm{intra}}
++ \hat{\sigma}^2_{\mathrm{year}}
++ \hat{\sigma}^2_{\mathrm{residual}}.
+$$
 
-# variance_partition_all_sos$prop_within2 <- -variance_partition_all_sos$prop_within2
-plot_df_sos <- variance_partition_all_sos %>%
-  select(species, prop_city2, prop_within2, phe_type, sample_city) %>%
-  filter(is.finite(prop_city2), is.finite(prop_within2)) %>%
-  mutate(
-    prop_city2 = round(prop_city2 * 100, 2),
-    prop_within2 = round(prop_within2 * 100, 2),
-    group = if_else(prop_city2 < abs(prop_within2),
-                    "Within-city > Across-city",
-                    "Within-city < Across-city")
-  ) %>%
-  mutate(
-    species = factor(species, levels = unique(species))
-  ) |>
-  pivot_longer(
-    cols = c(prop_within2, prop_city2),
-    names_to = "component",
-    values_to = "prop"
-  ) %>%
-  mutate(
-    component = recode(component,
-                       prop_within2 = "Within-city",
-                       prop_city2   = "Across-city")
-  )
+The relative contributions of spatial components were further defined as:
+$$
+C_{\mathrm{cross}}
+= \frac{\hat{\sigma}^2_{\mathrm{cross}}}
+{\hat{\sigma}^2_{\mathrm{intra}} + \hat{\sigma}^2_{\mathrm{cross}}},
+\qquad
+C_{\mathrm{intra}}
+= \frac{\hat{\sigma}^2_{\mathrm{intra}}}
+{\hat{\sigma}^2_{\mathrm{intra}} + \hat{\sigma}^2_{\mathrm{cross}}}.
+$$
+The model is implemented in `script/04_stats_model/fit_variance.R`. The resulting variance partitioning results are used to generate the figure below.
 
+```{r}
+#| label: fig-variance
+#| fig-cap: "Proportional contributions of intra-city and cross-city components to variation in SOS and EOS across species."
+#| fig-width: 8
+#| fig-height: 5.5
+#| warning: false
+source(here("script/05_plotting/plot-variance-ring.R"))
 
-D <- plot_df_sos %>%
-  mutate(species = gsub("_", " ", species)) %>%
-  filter(species %in% phylo_tree$tip.label)
+p_EOS_ring <- plot_variance_ring(phe_type = "EOS")
+p_SOS_ring <- plot_variance_ring(phe_type = "SOS")
 
-sp_data <- sort(unique(na.omit(D$species)))
-sp_tree <- sort(phylo_tree$tip.label)
-keep_sp <- intersect(sp_data, sp_tree)
-
-D2 <- D %>%
-  filter(species %in% keep_sp) %>%
-  droplevels() %>%
-  mutate(
-    species = factor(species, levels = keep_sp)
-  )
-
-tr2 <- drop.tip(phylo_tree, setdiff(phylo_tree$tip.label, keep_sp))
-
-all_tree <- ggtree(tr2, layout = "fan", open.angle = 10)+
-  geom_tiplab(offset = 55, size =0, linesize = 0.3)
-all_ring <- as.data.frame(plot_df_eos) |>
-  mutate(label = species)
-
-p_SOS_ring <- all_tree +
-  geom_fruit(
-    data = all_ring,
-    geom = geom_col,
-    mapping = aes(
-      y = label,
-      x = prop,
-      fill = component
-    ),
-    orientation = "y",
-    width = 1,
-    offset = 0.05,
-    pwidth = 0.5,
-    axis.params = list(
-      axis = "x",
-      text.size = 4.5,
-      hjust = 1,
-      vjust = 1.5,
-      nbreak = 3
-    ),
-    grid.params = list()
-  ) +
-  scale_fill_manual(
-    values = c("Across-city" = "grey80", "Within-city" = "grey40"),
-    name = "Variance proportion (%)",
-    labels = c("Between-city", "Within-city")
-  )
-
-
-ring = p_SOS_ring / p_EOS_ring +
-  plot_layout(ncol = 1, 
+p_SOS_ring / p_EOS_ring +
+  plot_layout(ncol = 2, 
               guides = "collect") &
   theme(legend.position = "bottom")
-ggsave("~/phenology-urban/temp/figure_agu/phenology_var_porp_ring.png", ring, width = 10, height = 14, dpi = 500)
-################### Combine ###################
-
-plot_df <- rbind(plot_df_sos, plot_df_eos) |>
-  mutate(
-    phe_type = factor(phe_type, levels = c("SOS", "EOS")),
-    component = recode(component,
-                       "Across-city" = "Between-city",
-                       "Within-city" = "Within-city")
-  )
-
-plot_df2 <- plot_df %>%
-  group_by(phe_type, species) %>%
-  mutate(intra_prop = prop[component == "Within-city"][1]) %>%
-  ungroup()
-
-p_var <- ggplot(plot_df2,
-       aes(x = prop,
-           y = reorder_within(species, intra_prop, phe_type),
-           fill = component)) +
-  geom_col(width = 1) +
-  geom_bar(stat = "identity", position = "stack", width = 0) +
-  geom_vline(xintercept = 50, linetype = "dashed", color = "red",linewidth=1)+
-  scale_fill_manual(values = c("Between-city" = "grey80", "Within-city" = "grey40")) +
-  labs(y = "Species", x = "Variance relative proportion (%)") +
-  coord_cartesian(xlim = c(0, 100))+
-  facet_wrap(~phe_type, ncol = 2, scales = "free_y") +
-  scale_y_reordered() +
-  scale_x_continuous(labels = abs) +
-  theme(panel.grid=element_blank(),
-        panel.background = element_rect(fill ='white',color ='black'),
-        axis.text.x = element_text(size = 14,color = "black"),
-        axis.text.y = element_blank(),
-        axis.ticks.y = element_blank(),
-        axis.title = element_text(size = 18),
-        strip.background = element_blank(),
-        strip.text = element_blank(),
-        legend.title = element_blank(),
-        legend.text = element_text(size = 14),
-        legend.position = "bottom"
-  )
-p_var
-ggsave("~/phenology-urban/temp/figure_agu/phenology_var_porp.png", p_var, width = 10, height = 5, dpi = 500)
 ```
 
-### Just phenology variation
+## Individual-tree phenology associated with fine-scale urban temperature variation
 
-Distribution of phenology variation measured by Tukey’s whisker range, with each sample corresponding to a City–Species–Year combination.
+This section investigates how is individual-tree phenology associated with fine-scale intra-city temperature variation.
 
-```{r}
-plot_phe_cities <- function(cities, taxon_col, stats = "sd"){
-  pairs <- lapply(c("SOS", "EOS"), function(phe_type) {
-    all_city_input <- read_rds(paste0("~/phenology-urban/data/proc/model_output/all_", phe_type, "_input.rds"))
-    fixed_city <- unique(all_city_input$city) |>
-      sort()
-    color_palette <- setNames(viridis(length(fixed_city)), fixed_city)
-    
-    summary_data <- all_city_input %>%
-      dplyr::group_by(city, year, .data[[taxon_col]]) %>%
-      dplyr::summarise(
-        obs = n(),
-        sd = sd(doy, na.rm = TRUE),
-        IQR_d = quantile(doy, 0.75, na.rm = TRUE) - quantile(doy, 0.25, na.rm = TRUE),
-        lower_whisker_d = max(quantile(doy, 0.25, na.rm = TRUE) - 1.5 * IQR_d, min(doy, na.rm = TRUE)),
-        upper_whisker_d = min(quantile(doy, 0.75, na.rm = TRUE) + 1.5 * IQR_d, max(doy, na.rm = TRUE)),
-        whisker_d = upper_whisker_d - lower_whisker_d,
-        .groups = "drop"
-      ) |>
-      mutate(genus = str_extract(.data[[taxon_col]], "^[^ ]+"))
-    
-    title_text <- if(taxon_col == "canonicalname") {
-      "Each sample represents a species–city combination"
-    } else {
-      "genus"
-    }
-    
-    x_label <- if(stats == "sd") {
-      paste0("Standard Deviation of ", phe_type, " (doy)")
-    } else if(stats == "IQR_d") {
-      paste0("Interquartile range of ", phe_type, " (doy)")
-    } else if(stats == "whisker_d") {
-      paste0("Tukey whisker range of ", phe_type, " (doy)")
-    } else {
-      stop("Invalid stats argument. Choose from 'sd', 'IQR_D', or ' whisker_d'.")
-    }
-    
-    binwidth <- if(stats == "sd") {
-      2
-    } else if(stats == "IQR_d") {
-      4
-    } else if(stats == "whisker_d") {
-      4
-    } else {
-      stop("Invalid stats argument. Choose from 'sd', 'IQR_D', or ' whisker_d'.")
-    }
-    
-    p_density <- ggplot(summary_data, aes(x = .data[[stats]], fill = city)) +
-      # geom_histogram(binwidth = 2, position = "identity", alpha = 0.5) +
-      geom_density(alpha = 0.5) +
-      scale_fill_manual(values = color_palette) + 
-      labs(x = x_label) +
-      theme_classic() +
-      theme(axis.text.x = element_text(size = 10),
-            axis.text.y = element_text(size = 10),
-            title = element_text(size = 14),
-            legend.position = "NA")
-    
-    p_hist <- ggplot(summary_data, aes(x = .data[[stats]])) +
-      geom_histogram(binwidth = binwidth, position = "identity", alpha = 0.5) +
-      # geom_density(alpha = 0.5) +
-      # scale_fill_manual(values = color_palette) + 
-      labs(x = x_label) +
-      theme_classic() +
-      theme(axis.text.x = element_text(size = 10),
-            axis.text.y = element_text(size = 10),
-            title = element_text(size = 14),
-            legend.position = "right")
-    list(density = p_density, hist = p_hist)
-  })
-  
-    p_density_all <- wrap_plots(lapply(pairs, `[[`, "density"), ncol = 2) +
-    plot_layout(guides = "collect")
+### Fitting spatial models
 
-    p_hist_all <- wrap_plots(lapply(pairs, `[[`, "hist"), ncol = 2)
-  
-    return(list(city_density = p_density_all, cities_histogram = p_hist_all))
-}
+To answer question 2, we fitted spatial statistical models separately for each species–city combination:
 
-tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
-rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
-cities <- gsub("\\.rds$", "", basename(rds_files))
+$$y(\mathbf{s}, t) = \mathbf{x}(\mathbf{s},t)^\top \boldsymbol{\beta}  + w(\mathbf{s}) + u(t)+ \varepsilon(\mathbf{s},t)$$
 
-# sd, whisker_d, IQR_d
-whisker_sp <- plot_phe_cities(cities, "canonicalname", stats = "whisker_d")
-whisker_sp$city_density / whisker_sp$cities_histogram +
-  plot_annotation(title = "Each sample represents a species–city-year combination")
-```
+$$\mathbf{x}(\mathbf{s},t) = \left(1, \text{T}(\mathbf{s},t), \text{P}(\mathbf{s},t), \text{R}(\mathbf{s},t)\right)^\top$$
 
+$$\boldsymbol{\beta} = (\beta_0, \beta_{\text{T}}, \beta_{\text{P}}, \beta_{\text{R}})^\top$$
 
-### Phenology variation and temperature variation (one city)
+$$w(\mathbf{s}) \sim \text{GP}\!\left(0,\; C(\mathbf{s},\mathbf{s}')\right)$$
+
+$$u(t) \stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma_u^2)$$
+
+$$\varepsilon(\mathbf{s},t) \stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma_\varepsilon^2)$$
+
+$$\beta_{\ell} \sim \mathcal{N}(0, \sigma_\beta^2), \quad {\ell} \in \{0, {\text{T}}, {\text{P}}, {\text{R}}\}$$
+
+The code to fit these spatial models is saved in `script/04_stats_model/fit_spatial/inla/run_inla_all_models.R`,
+and the results are stored in `release/intermediate/spatial/inla`.
+
+### Example spatial patterns
+
+We show one example of the spatial patterns of mean seasonal temperature and the phenological metric for a representative species in an example city.
 
 ```{r}
-source(here("script/spatial_stats_model/prepare_model_input.R"))
-city = "Moab"
-
-plot_phe_temp_city <- function(city, taxon_col){
-  plots <- lapply(c("SOS", "EOS"), function(phe_type) {
-    model_input_all <- prepare_data(city, source = "Grid", taxa_col= taxon_col, phe_type = phe_type)
-    fixed_taxa <- unique(model_input_all[[taxon_col]]) |>
-      sort()
-    color_palette <- setNames(viridis(length(fixed_taxa)), fixed_taxa)
-    temp_col = grep("^temp", names(model_input_all), value = TRUE)
-    doy_temp_summary <- model_input_all %>%
-      dplyr::group_by(.data[[taxon_col]]) %>%
-      dplyr::summarise(
-        median_doy = median(doy, na.rm = TRUE),
-        IQR_d = quantile(doy, 0.75, na.rm = TRUE) - quantile(doy, 0.25, na.rm = TRUE),
-        lower_whisker_d = max(quantile(doy, 0.25, na.rm = TRUE) - 1.5 * IQR_d, min(doy, na.rm = TRUE)),
-        upper_whisker_d = min(quantile(doy, 0.75, na.rm = TRUE) + 1.5 * IQR_d, max(doy, na.rm = TRUE)),
-        median_temp = median(.data[[temp_col]], na.rm = TRUE),
-        IQR_t = quantile(.data[[temp_col]], 0.75, na.rm = TRUE) - quantile(.data[[temp_col]], 0.25, na.rm = TRUE),
-        lower_whisker_t = max(quantile(.data[[temp_col]], 0.25, na.rm = TRUE) - 1.5 * IQR_t, min(.data[[temp_col]], na.rm = TRUE)),
-        upper_whisker_t = min(quantile(.data[[temp_col]], 0.75, na.rm = TRUE) + 1.5 * IQR_t, max(.data[[temp_col]], na.rm = TRUE)),
-        .groups = "drop"
-      )
-    title_text <- if(taxon_col == "canonicalname") {
-      "Species"
-    } else {
-      "Genus"
-    }
-    ggplot(doy_temp_summary, aes(x = median_temp, y = median_doy, color = .data[[taxon_col]])) +
-      geom_point(size = 3) +
-      geom_errorbar(aes(ymin = lower_whisker_d, ymax = upper_whisker_d), width = 0.2, linewidth = 1, alpha = 0.5) +
-      geom_errorbarh(aes(xmin = lower_whisker_t, xmax = upper_whisker_t), height = 4, linewidth = 1,  alpha = 0.5) +
-      scale_color_manual(values = color_palette) + 
-      labs(x = temp_col, y = phe_type, title = title_text) +
-      theme_minimal() +
-      theme(axis.text.x = element_text(size = 10),
-            axis.text.y = element_text(size = 10),
-            title = element_text(size = 14),
-            legend.position = "none")
-    })
-  
-  plot <- wrap_plots(plots, ncol = 2)
-  return(plot)
-}
-
-p <- plot_phe_temp_city(city, "genus") / plot_phe_temp_city(city, taxon_col=  "canonicalname") +
-  plot_annotation(title = paste0("Phenology variation across species in ",city))
-```
-
-### Phenology variation plus temperature variation (across cities)
-
-```{r}
-tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
-rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
-cities <- gsub("\\.rds$", "", basename(rds_files))
-
-source(here("script/spatial_stats_model/prepare_model_input.R"))
-set.seed(123)
-color_palette <- setNames(
-  randomcoloR::distinctColorPalette(length(cities)),
-  cities |> sort()
-)
-
-plot_phe_temp_cities <- function(cities, taxon_col, color_col = "city"){
-  plots <- lapply(c("SOS", "EOS"), function(phe_type) {
-    all_city_input <- data.frame()
-    for (city in cities){
-      model_input_all <- prepare_data(city, source = "Grid", taxa_col = taxon_col, phe_type = phe_type)
-      phe_metric <- "doy"
-      clean_model_input_all <- model_input_all |>
-        filter(year < 2024) |>
-        group_by(canonicalname) |>
-        summarise(
-          q1 = quantile(.data[[phe_metric]], 0.25, na.rm = TRUE),
-          q3 = quantile(.data[[phe_metric]], 0.75, na.rm = TRUE),
-          iqr = q3 - q1,
-          lo = q1 - 1.5 * iqr,
-          hi = q3 + 1.5 * iqr,
-          .groups = "drop"
-        ) |>
-        right_join(
-          model_input_all |> filter(year < 2024),
-          by = "canonicalname"
-        ) |>
-        filter(
-          is.na(.data[[phe_metric]]) |
-            dplyr::between(.data[[phe_metric]], lo, hi)
-        ) |>
-        mutate(city = city) |>
-        select(-q1, -q3, -iqr, -lo, -hi)
-      all_city_input <- rbind(all_city_input, clean_model_input_all)
-    }
-    
-    temp_col = grep("^temp", names(all_city_input), value = TRUE)
-    doy_temp_summary <- all_city_input %>%
-      dplyr::group_by(city, canonicalname) %>%
-      dplyr::summarise(
-        obs = n(),
-        median_doy = median(doy, na.rm = TRUE),
-        IQR_d = quantile(doy, 0.75, na.rm = TRUE) - quantile(doy, 0.25, na.rm = TRUE),
-        q25_d = quantile(doy, 0.25, na.rm = TRUE),
-        q75_d = quantile(doy, 0.75, na.rm = TRUE),
-        lower_whisker_d = max(quantile(doy, 0.25, na.rm = TRUE) - 1.5 * IQR_d, min(doy, na.rm = TRUE)),
-        upper_whisker_d = min(quantile(doy, 0.75, na.rm = TRUE) + 1.5 * IQR_d, max(doy, na.rm = TRUE)),
-        median_temp = median(.data[[temp_col]], na.rm = TRUE),
-        IQR_t = quantile(.data[[temp_col]], 0.75, na.rm = TRUE) - quantile(.data[[temp_col]], 0.25, na.rm = TRUE),
-        q25_t = quantile(.data[[temp_col]], 0.25, na.rm = TRUE),
-        q75_t = quantile(.data[[temp_col]], 0.75, na.rm = TRUE),
-        lower_whisker_t = max(quantile(.data[[temp_col]], 0.25, na.rm = TRUE) - 1.5 * IQR_t, min(.data[[temp_col]], na.rm = TRUE)),
-        upper_whisker_t = min(quantile(.data[[temp_col]], 0.75, na.rm = TRUE) + 1.5 * IQR_t, max(.data[[temp_col]], na.rm = TRUE)),
-        .groups = "drop"
-      ) 
-    
-    title_text <- if(phe_type == "SOS") {
-      "Mean winter temperature (°C)"
-    } else {
-      "Mean summer temperature (°C)"
-    }
-    phy_type_label <- if(phe_type == "SOS") {
-      "Start-of-season (DOY)"
-    } else {
-      "End-of-season (DOY)"
-    }
-    
-    ggplot(doy_temp_summary, aes(x = median_temp, y = median_doy)) +
-      geom_point(size = 0.5, alpha = 0.5, color = "grey30") +
-      geom_errorbar(aes(ymin = q25_d, ymax = q75_d), width = 0.1, linewidth = 0.3, alpha = 0.05, color = "grey30") +
-      geom_errorbarh(aes(xmin = q25_t, xmax = q75_t), width = 1, linewidth = 0.3,  alpha = 0.05, color = "grey30") +
-      # scale_color_manual(values = color_palette) + 
-      labs(x = title_text, y = phy_type_label) +
-      scale_y_continuous(limits = c(0, 365)) +
-      theme_classic() +
-      theme(axis.text.x = element_text(size = 14),
-            axis.text.y = element_text(size = 14),
-            title = element_text(size = 18),
-            legend.position = "none")
-    })
-  
-  plot <- (wrap_plots(plots, ncol = 2) +
-    plot_layout(guides = "collect"))
-  return(plot)
-}
-
-p <- plot_phe_temp_cities(cities, taxon_col = "canonicalname", color_col = "city")
-p
-ggsave("~/phenology-urban/temp/figure_agu/phenology_temperature_cities2.png", p, width = 10, height = 4.5, dpi = 500)
-```
-
-
-## The respones of phenology to temperature variation
-
-### Main_Fig.2
-
-```{r}
-source(here("script/plot_phe_temp_margin.R"))
+#| label: fig-example
+#| fig-cap: "Spatial patterns of mean seasonal temperature and the phenological metric for one representative species in one example city in 2022."
+#| fig-width: 8
+#| fig-height: 5.5
+source(here("script/05_plotting/plot-phe-temp-margin.R"))
 cities = c("NewYork", "TP", "Stockton", "LosAngeles", "Seattle", "Sacramento", "WashingtonDC", "SanFrancisco")
 species = c(
   "Acer rubrum", "Acer rubrum",
@@ -847,321 +272,50 @@ species = c(
   "Acer rubrum","Acer rubrum")
 phe_types = c("SOS", "SOS", "SOS", "SOS", "EOS", "EOS", "EOS", "EOS")
 
-for (i in c(1:8)) {
-  c <- cities[i]
-  s <- species[i]
-  p <- phe_types[i]
-  cat("Processing:", c, "-", s, "-", p, "\n")
-  result <- plot_phe_temp_margin(city = c, species = s, phe_type = p, year = 2022)
-  
-  # Save the plots
-  ggsave(
-    result$sp_city_scatter_plot,
-    filename = here(paste0("temp/figure_example_city/", p, "/",c,"_point2.png")),
-    width = 3.3,
-    height = 3,
-    units = "in",
-    dpi = 500
+plot_list <- map(seq_len(1), \(i) { #8
+  result <- plot_phe_temp_margin(
+    city     = cities[i],
+    species  = species[i],
+    phe_type = phe_types[i],
+    year     = 2022
   )
-  ggsave(
-    result$map_panels_gridded_model,
-    filename = here(paste0("temp/figure_example_city/", p, "/",c,"_map_model.png")),
-    width = 9.5,
-    height = 6,
-    units = "in",
-    dpi = 500
-  )
-  ggsave(
-    result$map_panels_gridded,
-    filename = here(paste0("temp/figure_example_city/", p, "/",c,"_map.png")),
-    width = 9.5,
-    height = 6,
-    units = "in",
-    dpi = 500
-  )
-  ggsave(
-    result$map_panels,
-    filename = here(paste0("temp/figure_example_city/", p, "/",c,"_map_point.png")),
-    width = 9.5,
-    height = 6,
-    units = "in",
-    dpi = 500
-  )
-}
+  result$map_panels_gridded
+})
+all_plots <- wrap_plots(
+  plot_list
+  # ncol = 2,
+  # nrow = 4
+) +
+  plot_annotation(tag_levels = "a")
+all_plots
 ```
 
+### All coefficients of spatial models
 
-## Relationship with bioclimate
+This section summarizes all the coefficients obtained from the spatial models for each species–city combination.
 
-### Main Fig-5
+```{r input-coef}
+source(here("script/04_stats_model/summarize-spatial-coef.R"))
+df_coef <- summarize_spatial_coef(model_type = "inla")
+```
 
 ```{r}
-source("~/phenology-urban/script/fit_pglmm_model.R")
-m_SOS <- fit_multi_pglmm("SOS_06", input_data = overlap_city_species_range_model, city_feature, package = "phyr", prcp = "bio12", temp = "bio1", bootstrap = T)
-m_EOS <- fit_multi_pglmm("EOS_06", input_data = overlap_city_species_range_model, city_feature, package = "phyr", prcp = "bio12", temp = "bio1", bootstrap = T)
-
-model_list_multi <- list(m_SOS, m_EOS)
-write_rds(model_list_multi, "~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla_sensitive/model_multi_bioclimate_06.rds")
-
-model_list_multi <- read_rds("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/model_multi_bioclimate.rds")
-
-
-# p1 = model_list_multi[[1]][["plot"]]
-# p2 = model_list_multi[[2]][["plot"]] +
-#   theme(axis.text.y = element_blank())
-# 
-# p1 + p2 +
-#   plot_layout(ncol = 2,
-#               guides = "collect",
-#               widths = c(1,1))
-
-df_plot_model <- model_list_multi[[1]]$model |>
-  mutate(response = "SOS") |>
-  rbind(model_list_multi[[2]]$model |>
-          mutate(response = "EOS")) |>
-  mutate(significance = case_when(
-          q025 * q975 >= 0 ~ "Sig.",
-          TRUE ~ "Non-sig."
-        ))
-df_plot_model$effectsize <- paste0(
-  sprintf("%.2f", df_plot_model$mean),
-  " (",
-  sprintf("%.2f", df_plot_model$q025),
-  ", ",
-  sprintf("%.2f", df_plot_model$q975),
-  ")"
-)
-df_plot_model$label[df_plot_model$term == "(Intercept)"] <- "Intercept"
-df_plot_model$label[df_plot_model$term == "prcp_s"] <- "Mean annual precipitation"
-df_plot_model$label[df_plot_model$term == "temp_s"] <- "Mean annual temperature"
-
-df_plot_model_sos <- df_plot_model |>
-  filter(response == "SOS") |>
-  mutate(label = factor(label, levels = c("Mean annual temperature", "Mean annual precipitation", "Intercept")))
-
-# Panel A: Infection growth rate without policy
-betas.no <- ggplot(data = df_plot_model_sos) + 
-  geom_segment(aes(x = q025, y = label, xend = q975, yend = label), size = 0.3, colour =  "grey39") + #grey CI
-  geom_point(aes(x=mean, y=label, color = significance), size=3, alpha = 0.95) +
-  scale_color_manual(values = c("Sig." = "#A8BFD7", "Non-sig." = "#EEC1C0")) +
-  geom_vline(xintercept=0, colour="grey30", linetype="dashed", size = 0.5) + 
-  scale_y_discrete(limits = (df_plot_model_sos$label), position = "left")  +
-  ggtitle(" ") +
-  theme_bw(base_size = 16) %+replace%
-  theme(panel.background = element_rect(fill="#ffffff", colour=NA),
-        panel.border = element_blank(), 
-        axis.line.x = element_line(linewidth = 0.6),
-        panel.grid=element_blank(),
-        axis.ticks=element_blank(),
-        legend.position="none",
-        plot.title = element_text(hjust = 0, size=rel(0.8)), 
-        axis.title=element_text(size=rel(0.8), face="bold"),
-        axis.text=element_text(size=rel(0.8)),
-        strip.text=element_text(size=rel(1)),
-        strip.background=element_rect(fill="#ffffff", colour=NA),
-        panel.spacing.y=unit(1.5, "lines"),
-        legend.key = element_blank()) +
-  coord_cartesian(xlim =c(-0.3,0.3))  +
-  xlab("Posterior estimate (95%)") + ylab("")
-
-eff.size.no <- ggplot(data = df_plot_model_sos) + 
-  geom_point(aes(x=mean, y=effectsize), color = "grey", size=3, alpha = 0.9) +
-  scale_y_discrete(limits = (df_plot_model_sos$effectsize), position = "left") +
-  geom_vline(xintercept=0, colour="grey30", linetype="dashed", size = 0.5) + 
-  xlab("") +
-  ggtitle("Effect size") +
-  theme_bw(base_size = 16) %+replace%
-  theme(panel.background = element_rect(fill="#ffffff", colour=NA),
-        panel.border = element_blank(), 
-        axis.line.x = element_line(linewidth = 0),
-        panel.grid=element_blank(),
-        axis.ticks=element_blank(),
-        legend.position="none", 
-        plot.title.position = "plot",
-        plot.title = element_text(hjust = 0, size=rel(0.8), face="bold"), 
-        axis.title.y=element_blank(),
-        axis.text=element_text(size=rel(0.8)),
-        axis.text.y = element_text(hjust = 0),
-        strip.text=element_text(size=rel(1)),
-        strip.background=element_rect(fill="#ffffff", colour=NA),
-        panel.spacing.y=unit(1.5, "lines"),
-        legend.key = element_blank()) +
-  coord_cartesian(xlim =c(-0.3,0.3)) 
-
-#combine 3 plots into 1 figure
-plot_sos = grid.arrange(betas.no, eff.size.no, ncol=2)
-
-df_plot_model_eos <- df_plot_model |>
-  filter(response == "EOS") |>
-  mutate(label = factor(label, levels = c("Mean annual temperature", "Mean annual precipitation", "Intercept")))
-
-# Panel A: Infection growth rate without policy
-betas.no <- ggplot(data = df_plot_model_eos) + 
-  geom_segment(aes(x = q025, y = label, xend = q975, yend = label), size = 0.3, colour =  "grey39") + #grey CI
-  geom_point(aes(x=mean, y=label, color = significance), size=3, alpha = 0.95) +
-  scale_color_manual(values = c("Sig." = "#A8BFD7", "Non-sig." = "#EEC1C0")) +
-  geom_vline(xintercept=0, colour="grey30", linetype="dashed", size = 0.5) + 
-  scale_y_discrete(limits = (df_plot_model_eos$label), position = "left")  +
-  ggtitle(" ") +
-  theme_bw(base_size = 16) %+replace%
-  theme(panel.background = element_rect(fill="#ffffff", colour=NA),
-        panel.border = element_blank(), 
-        axis.line.x = element_line(linewidth = 0.6),
-        panel.grid=element_blank(),
-        axis.ticks=element_blank(),
-        legend.position="none", 
-                plot.title = element_text(hjust = 0, size=rel(0.8)), 
-        axis.title=element_text(size=rel(0.8), face="bold"),
-        axis.text=element_text(size=rel(0.8)),
-        strip.text=element_text(size=rel(1)),
-        strip.background=element_rect(fill="#ffffff", colour=NA),
-        panel.spacing.y=unit(1.5, "lines"),
-        legend.key = element_blank()) +
-  coord_cartesian(xlim =c(-1.5,1.5))  +
-  xlab("Posterior estimate (95%)") + ylab("")
-
-eff.size.no <- ggplot(data = df_plot_model_eos) + 
-  geom_point(aes(x=mean, y=effectsize), color = "grey", size=3, alpha = 0.9) +
-  scale_y_discrete(limits = (df_plot_model_eos$effectsize), position = "left") +
-  geom_vline(xintercept=0, colour="grey30", linetype="dashed", size = 0.5) + 
-  xlab("") +
-  ggtitle("Effect size") +
-  theme_bw(base_size = 16) %+replace%
-  theme(panel.background = element_rect(fill="#ffffff", colour=NA),
-        panel.border = element_blank(), 
-        axis.line.x = element_line(linewidth = 0),
-        panel.grid=element_blank(),
-        axis.ticks=element_blank(),
-        legend.position="none", 
-        plot.title.position = "plot",
-        plot.title = element_text(hjust = 0, size=rel(0.8), face="bold"), 
-        axis.title.y=element_blank(),
-        axis.text=element_text(size=rel(0.8)),
-        axis.text.y = element_text(hjust = 0),
-        strip.text=element_text(size=rel(1)),
-        strip.background=element_rect(fill="#ffffff", colour=NA),
-        panel.spacing.y=unit(1.5, "lines"),
-        legend.key = element_blank()) +
-  coord_cartesian(xlim =c(-0.3,0.3)) 
-
-#combine 3 plots into 1 figure
-plot_eos = grid.arrange(betas.no, eff.size.no, ncol=2)
-
-plot_final_bioclimate <- grid.arrange(plot_sos, plot_eos, ncol=1)
-ggsave(
-  filename = paste0("~/phenology-urban/temp/fig-main/fig5-pglmm_model.png"),
-  plot = plot_final_bioclimate,
-  width = 10,
-  height = 3.3,
-  dpi = 500
-)
-```
-
-### input data
-
-```{r input-heatmap}
-#| include: false
-### Group by city and phe_type
-tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_NPN/"
-rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
-cities <- gsub("\\.rds$", "", basename(rds_files))
-phe_types <- c("SOS", "EOS")
-
-coef_summary_all <- data.frame()
-for (city in cities) {
-  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla_NPN/spatial_spde//", city, "/canonicalname/")
-  for (phe_type in phe_types) {
-    file_path <- file.path(r_output_dir, paste0(phe_type, "_summary.rds"))
-    if (file.exists(file_path)) {
-      coef_summary <- readr::read_rds(file_path) |>
-        dplyr::mutate(phe_type = phe_type, city = city)
-      coef_summary_all <- dplyr::bind_rows(coef_summary_all, coef_summary)
-    }
-  }
-}
-
-coef_summary_all <- coef_summary_all |> 
-  # filter(city != "Rochester") |>
-  mutate(phe_type = factor(phe_type, levels = phe_types),
-         genus = sub(" .*", "", Factor),
-         species = Factor) |>
-  left_join(
-    readr::read_rds("~/phenology-urban/temp/tree_genus_family.rds"),
-    by = "genus") |>
-  mutate(city_label = unname(city_label[city]))
-
-inventory_centroids <- readRDS(("~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/summary/inventory_centroids.rds")) |>
-  mutate(city_label = unname(city_label[site]))
-boundary_us <- st_read(("~/lab-data/datasets/boundary/USAdministrative/US/us_boundarydissolve.shp"), quiet = T) |>
-  st_transform(4326)
-
-load("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/tree_species.RData") # phylo_tree
-load("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/tree_genus.RData") # tree_genus
-load("~/phenology-urban/temp/tree_family.RData") # tree_family
-
-city_feature <- readRDS("~/phenology-urban/data/raw/CONUS/StreetTrees/cleaned_ps_input/summary/city_feature.rds") |>
-  select(-bio1, -bio12) |>
-  left_join(read_rds("~/phenology-urban/data/raw/CONUS/StreetTrees/cleaned_ps_input/summary/city_bioclimate.rds") |>
-              select(site, bio1, bio12), by = "site") |>
-  rename(city = site) |>
-  mutate(city = ifelse(city == "St_George", "StGeorge", city)) |>
-  mutate(city = ifelse(city == "St.Louis", "StLouis", city))|>
-  mutate(city_label = unname(city_label[city]))
-
-
-city_inven_backbone <- read_rds("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/city_inven_backbone.rds")
-
-city_inven_backbone_filtered <- city_inven_backbone |>
-  filter(
-    kingdom == "Plantae", phylum == "Tracheophyta",
-    rank %in% c("GENUS", "SPECIES"),
-    status %in% c("ACCEPTED", "SYNONYM")
-  )
-
-city_inven_backbone_filtered_consolidated <- city_inven_backbone_filtered |>
-  mutate(usageKey = if_else(status == "SYNONYM", acceptedUsageKey, usageKey))
-
-overlap_city_species_range <- coef_summary_all |>
-  mutate(Factor := gsub("_", " ", species)) |>
-  left_join(city_inven_backbone_filtered_consolidated |>
-              select(usageKey, verbatim_name), by = c("Factor" = "verbatim_name")) |>
-  left_join(read_rds("~/phenology-urban/data/proc/tree_origin/chelsa/sp_chelsa_summary.rds"),
-            by = c("usageKey" = "specieskey")) |>
-  left_join(city_feature |> 
-              select(-city_label) |>
-              st_drop_geometry(), 
-            by = "city")
-
-overlap_city_species_range_model <- overlap_city_species_range |>
-  mutate(hot_edge = bio1 - bio1_p95,
-         cold_edge = bio1_p5 - bio1,
-         d_temp = bio1 - bio1_median,
-         d_prcp = bio12 - bio12_median,
-         temp_breadth = bio1_p95 - bio1_p5,
-         prcp_breadth = bio12_p95 - bio12_p5,
-         dry_edge = bio12 - bio12_p5)  |>
-  select(-bio1, -bio12)# larger value: further away from the edge 
-```
-
-### Main_Fig.3 Coefficient summary
-
-```{r}
-#| label: fig-heatmap
+#| label: fig-coef
 #| include: true
-#| fig-width: 16
-#| fig-height: 12
-#| fig-cap: "Phenological responses to intra-urban temperature variation across species and cities. Colors indicate the direction of the phenological response, and color intensity reflects the level of statistical significance. Panels present heatmaps summarizing the phenological response types for each species–city combination. Species along the x-axis are ordered according to their phylogenetic relationships, whereas cities on the y-axis are arranged alphabetically."
+#| fig-width: 12
+#| fig-height: 10
+#| fig-cap: "Phenological associations with fine-scale intra-city temperature variation across species and cities."
 #| warning: false
 #| eval: true
 
-source("~/phenology-urban/script/plot-city-coef-distribute.R")
+source(here("script/05_plotting/plot-city-coef-distribute.R"))
 p_all_coef <- plot_city_coef(
-  coef_summary_all = coef_summary_all |>
+  coef_summary_all = df_coef |>
     mutate(species = gsub("_", " ", species)),
   level = "species",
   city_order_bio = "bio1"
 )
-p_effect_hist <- plot_hist_effect_type(overlap_city_species_range_model)
+p_effect_hist <- plot_hist_effect_type(df_coef)
 
 p_all_coef_with_hist<- p_all_coef + p_effect_hist +
   plot_layout(
@@ -1169,222 +323,54 @@ p_all_coef_with_hist<- p_all_coef + p_effect_hist +
   )
 
 p_all_coef_with_hist
-ggsave("~/phenology-urban/temp/figure_supp/freq-all-coef-SOS-EOS.png", p_all_coef_with_hist, width = 10, height = 9, dpi = 500)
 ```
 
-### Main_Fig.4 a,b spatial map
+We next examined the distributions of GSL coefficients for winter temperature and summer temperature, grouped according to the direction of the corresponding SOS or EOS temperature response.
 
 ```{r}
-#| include: false
-city_mean <- coef_summary_all |>
-  group_by(city_label, phe_type) |>
-  summarise(
-    avg = mean(Estimate, na.rm = TRUE),
-    sd  = sd(Estimate, na.rm = TRUE),
-    .groups = "drop"
-  )
+#| label: fig-coef-gsl
+#| include: true
+#| fig-width: 5
+#| fig-height: 5
+#| fig-cap: "Distributions of GSL coefficients for winter temperature and summer temperature, grouped according to the direction of the corresponding SOS or EOS temperature response."
+#| warning: false
+#| eval: true
+df_coef_gsl <- summarize_spatial_coef(model_type = "inla_gsl")
 
-model_results_loc <- inventory_centroids |>
-  left_join(city_mean, by = c("city_label")) |>
-  # left_join(city_feature, by = c("site" ="city")) |>
-  mutate(lon = st_coordinates(x)[, 1],
-         lat = st_coordinates(x)[, 2])
-
-sos_range_vals <- range(model_results_loc |> filter(phe_type == "SOS_04") |> pull(avg), na.rm = TRUE)
-eos_range_vals <- range(model_results_loc |> filter(phe_type == "EOS_04") |> pull(avg), na.rm = TRUE)
-tau_vals <- unique(model_results_loc$sd) |> na.omit()
-tau_breaks <- pretty(range(tau_vals), n = 5)
-
-chelsa_ras_us <- terra::rast("~/phenology-urban/data/proc/tree_origin/chelsa_map/chelsa_us.tif")
-bio1 <- chelsa_ras_us[[1]]
-bio12 <- chelsa_ras_us[[2]]
-
-brks <- c(14)
-p_sos = ggplot() +
-  geom_sf(data = boundary_us , fill = "white", color = "transparent") +
-  tidyterra::geom_spatraster(data = bio1, alpha = 0.4) +
-  scale_fill_gradientn(
-    colours = rev(RColorBrewer::brewer.pal(9, "RdBu")),
-    name = "bio1 (°C)",
-    na.value = "transparent"
-  ) +
-  # tidyterra::geom_spatraster_contour(data = terra::aggregate(bio1,fact = 100,fun = mean,na.rm = TRUE), 
-  #                                    colour = "#EA7A71", linewidth = 3,alpha = 0.8, breaks = brks) +
-  # tidyterra::geom_spatraster_contour_text(data = terra::aggregate(bio1,fact = 100,fun = mean,na.rm = TRUE), 
-  #                                         breaks = brks, size =4, stroke = 0, colour = "#C0200E") +
-  geom_sf(data = boundary_us , fill = "transparent", color = "grey85") +
-  geom_point(data = model_results_loc |> 
-               filter(phe_type == "SOS_04"),
-             aes(x = lon, y = lat, text = site,
-                 size   = (sd)),
-             shape  = 21,
-             stroke = 1, # acts as the thickness of the boundary line
-             colour = "grey20" # acts as the color of the boundary line
-             ) +
-  geom_point(
-    data = model_results_loc |> 
-      filter(phe_type == "SOS_04"),
-    aes(x = lon, y = lat,  text = site, color = avg, size = sd), alpha =0.7
-  ) +
-  scale_color_gradientn(
-    name = "Mean estimated\neffect",
-    colors = c("#FCA636FF", "white", "#0D0887FF"),
-    values = scales::rescale(c(round(sos_range_vals[1], 1), 0, round(sos_range_vals[2], 1))),
-    breaks = c(round(sos_range_vals[1], 1), 0, round(sos_range_vals[2], 1)),
-    limits = c(round(sos_range_vals[1], 1), round(sos_range_vals[2], 1)),
-  )+
-  facet_wrap(~ phe_type, ncol = 1) +
-  scale_size_continuous(
-    name = "Among-species variance",
-    breaks = (tau_breaks),
-    labels = (tau_breaks)^2,
-    range = c(3, 12),
-    limits = range(tau_vals)
-  ) +
-  guides(
-    color = guide_colorbar(order = 1),
-    size  = guide_legend(order = 2)
-  ) +
-  theme_minimal() +
-  theme(
-    axis.text = element_text(size = 16),
-    axis.title = element_text(size = 20),
-    strip.text = element_text(size = 22, face = "bold"),
-    legend.title = element_text(size = 16),
-    legend.text = element_text(size = 14)
-  ) +
-  labs(x = "Longitude", y = "Latitude") +
-  coord_sf(expand = FALSE)
-
-brks <- c(300, 600, 1000, 1400, 2500)
-p_eos = ggplot() +
-  geom_sf(data = boundary_us , fill = "white", color = "transparent") +
-  tidyterra::geom_spatraster(data = bio12, alpha = 0.4) +
-  scale_fill_gradientn(
-    colours = RColorBrewer::brewer.pal(9, "YlGnBu"),
-    name = "bio12 (mm)",
-    na.value = "transparent"
-  ) +
-  # tidyterra::geom_spatraster_contour(data = terra::aggregate(bio1,fact = 100,fun = mean,na.rm = TRUE), 
-  #                                    colour = "#EA7A71", linewidth = 3,alpha = 0.8, breaks = brks) +
-  # tidyterra::geom_spatraster_contour_text(data = terra::aggregate(bio1,fact = 100,fun = mean,na.rm = TRUE), 
-  #                                         breaks = brks, size =4, stroke = 0, colour = "#C0200E") +
-  geom_sf(data = boundary_us , fill = "transparent", color = "grey85") +
-  geom_point(data = model_results_loc |> 
-               filter(phe_type == "EOS_04"),
-             aes(x = lon, y = lat, text = site,
-                 size   = (sd)),
-             shape  = 21,
-             stroke = 1, # acts as the thickness of the boundary line
-             colour = "grey20" # acts as the color of the boundary line
-  ) +
-  geom_point(
-    data = model_results_loc |> 
-      filter(phe_type == "EOS_04"),
-    aes(x = lon, y = lat, text = site, color = avg, size = sd), alpha =0.7
-  ) +
-  scale_color_gradientn(
-    name = "Mean estimated\neffect",
-    colors = c("#FCA636FF", "white", "#0D0887FF"),
-    values = scales::rescale(c(round(eos_range_vals[1], 1), 0, round(eos_range_vals[2], 1))),
-    breaks = c(round(eos_range_vals[1], 1), 0, round(eos_range_vals[2], 1)),
-    limits = c(round(eos_range_vals[1], 1), round(eos_range_vals[2], 1)),
-  )+
-  facet_wrap(~ phe_type, ncol = 1) +
-  scale_size_continuous(
-    name = "Among-species variance",
-    breaks = (tau_breaks),
-    labels = (tau_breaks)^2,
-    range = c(3, 12),
-    limits = range(tau_vals)
-  ) +
-  guides(
-    color = guide_colorbar(order = 1),
-    size  = guide_legend(order = 2)
-  ) +
-  theme_minimal() +
-  theme(
-    axis.text.x = element_text(size = 16),
-    axis.title.x = element_text(size = 20),
-    axis.text.y = element_blank(),
-    axis.title.y = element_blank(),
-    strip.text = element_text(size = 22, face = "bold"),
-    legend.title = element_text(size = 16),
-    legend.text = element_text(size = 14)
-  ) +
-  labs(x = "Longitude") +
-  coord_sf(expand = FALSE)
-
-p_sos_fill <- p_sos +
-  guides(
-    color = guide_colorbar(
-      direction = "horizontal",
-      order = 1,
-      label.theme = element_text(angle = 45, hjust = 1, vjust = 1)),
-    size  = "none",
-    fill  = guide_colorbar(
-      direction = "horizontal",
-      order = 1,
-      label.theme = element_text(angle = 45, hjust = 1, vjust = 1))
-  ) +
-  theme(
-    legend.position = "bottom",
-    legend.box = "horizontal",
-    legend.box.just = "left",
-    legend.title = element_text(size = 12),
-    legend.text  = element_text(size = 10)
-  )
-
-p_eos_fill <- p_eos +
-  guides(
-    color = guide_colorbar(
-      direction = "horizontal",
-      order = 1,
-      label.theme = element_text(angle = 45, hjust = 1, vjust = 1)),
-    size  = "none",
-    fill  = guide_colorbar(
-      direction = "horizontal",
-      order = 1,
-      label.theme = element_text(angle = 45, hjust = 1, vjust = 1))
-  ) +
-  theme(
-    legend.position = "bottom",
-    legend.box = "horizontal",
-    legend.box.just = "left",
-    legend.title = element_text(size = 12),
-    legend.text  = element_text(size = 10)
-  )
-
-leg_color_size <- cowplot::get_legend(
-  p_sos +
-    guides(
-      fill  = "none",
-      color = "none",
-      size  = guide_legend(order = 2)
-    ) +
-    theme(
-      legend.position = "right",
-      legend.box = "vertical"
-    )
-)
-
-left <- p_sos_fill + p_eos_fill + 
-  plot_layout(ncol = 2)
-wrap_elements(leg_color_size)
-ggsave(
-  filename = "~/phenology-urban/temp/figure_supp/spatial_city_SOS_EOS_04.png",
-  plot = left,
-  width = 14,
-  height = 6,
-  dpi = 500
-)
+plot_hist_gsl_coef_type(SOS_EOS_coef = df_coef, GSL_coef = df_coef_gsl)
 ```
 
+## Temperature–phenology associations varied with regional climatic context 
 
-### Main_Fig.4 c,d Marginal
+This section answers the question: do these temperature-phenology associations vary with regional climatic context?
+
+### Spatial distribution of city-level temperature sensitivity
+
+We first visualized the spatial distribution of city-level mean temperature sensitivity for SOS and EOS across cities.
 
 ```{r}
-species_vec <- c(
+#| label: fig-coef-map
+#| include: true
+#| fig-width: 12
+#| fig-height: 5
+#| fig-cap: "Spatial distribution of city-level mean temperature sensitivity for SOS (a) and EOS (b), averaged across species present in each city."
+#| warning: false
+source(here("script/05_plotting/plot-city-coef-map.R"))
+plot_city_coef_map(df_coef)
+```
+
+### Example univariate relationships with city-level climate
+
+We next examined the univariate relationships between phenological temperature sensitivity and city-level climate for the 10 most common species across cities.
+
+```{r}
+#| label: fig-coef-marginal-example
+#| include: true
+#| fig-width: 10
+#| fig-height: 5
+#| fig-cap: "Univariate relationships between phenological temperature sensitivity and city-level climate for the 10 most common species across cities."
+#| warning: false
+species_example <- c(
   "Acer saccharinum",
   "Acer rubrum",
   "Pyrus calleryana",
@@ -1396,286 +382,61 @@ species_vec <- c(
   "Fraxinus pennsylvanica",
   "Tilia cordata"
 )
+source(here("script/05_plotting/plot-species-uni.R"))
+plot_SOS <- plot_species_uni(clim = "bio1", phe_type = "SOS", species_example, df_coef)
+plot_EOS <- plot_species_uni(clim = "bio12", phe_type = "EOS", species_example, df_coef)
 
-source("~/phenology-urban/script/fit_pglmm_model.R")
-load("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/tree_species.RData")
-
-
-clim = "bio12"
-phe_type = "GSL_summer"
-x_lab <- if (rlang::as_name(clim) %in% c("bio1")) {
-  expression("Mean annual temperature ("*degree*C*")")
-} else if (rlang::as_name(clim) %in% c("bio12")) {
-  "Mean annual precipitation (mm)"
-} else {
-  rlang::as_name(clim)
-}
-
-pred_df <- lapply(
-  species_vec,
-  function(sp) {
-    fit_uni(
-      phe_type = phe_type, input_data = overlap_city_species_range_model, city_feature = city_feature, species_name = sp, clim = clim, bootstrap = T)$pred_table
-  }
-) |>
-  bind_rows()
-
-fit_input_df <- overlap_city_species_range_model |>
-  left_join(city_feature, by = "city") |>
-  filter(Factor %in% species_vec, phe_type == !!phe_type) |>
-  select(Estimate, Lower, Upper, !!clim, Factor)
-x_vals <- fit_input_df[[clim]]
-x_min  <- min(x_vals, na.rm = TRUE)
-x_max  <- max(x_vals, na.rm = TRUE)
-x_rng  <- x_max - x_min
-
-p_EOS <- ggplot(fit_input_df, aes(x = .data[[clim]], y = Estimate, color = Factor)) +
-  geom_pointrange(aes(ymin = Lower, ymax = Upper), alpha = 0.1, size = 0.2) +
-  geom_ribbon(data = pred_df,
-              aes(x = .data[[clim]], ymin = y_lwr, ymax = y_upr, fill = species),
-              inherit.aes = FALSE,
-              alpha = 0.2) +
-  geom_line(data = pred_df,
-            aes(x = .data[[clim]], y = y_pred, color = species),
-            inherit.aes = FALSE,
-            linewidth = 0.5) +
-  guides(alpha = "none") +
-  scale_x_continuous(
-    limits = c(x_min - 0.15 * x_rng, x_max)
-  ) +
-  scale_y_continuous(
-    limits = c(-30, 30)
-  ) +
-  theme_classic() +
-  labs(
-    x = x_lab,
-    y = paste0("Estimated effect on ", phe_type),
-    color = "Species",
-    fill  = "Species"
-  ) +
-  theme(
-    axis.text = element_text(size = 12),
-    axis.title = element_text(size = 14),
-    legend.text = element_text(face = "italic")
-    # axis.title = element_blank()
-  )
-
-clim = "bio1"
-phe_type = "GSL_summer"
-x_lab <- if (rlang::as_name(clim) %in% c("bio1")) {
-  expression("Mean annual temperature ("*degree*C*")")
-} else if (rlang::as_name(clim) %in% c("bio12")) {
-  "Mean annual precipitation (mm)"
-} else {
-  rlang::as_name(clim)
-}
-
-pred_df <- lapply(
-  species_vec,
-  function(sp) {
-    fit_uni(
-      phe_type = phe_type, input_data = overlap_city_species_range_model, city_feature = city_feature, species_name = sp, clim = clim, bootstrap = T)$pred_table
-  }
-) |>
-  bind_rows()
-
-fit_input_df <- overlap_city_species_range_model  |>
-  left_join(city_feature, by = "city") |>
-  filter(Factor %in% species_vec, phe_type == !!phe_type) |>
-  select(Estimate, Lower, Upper, !!clim, Factor)
-x_vals <- fit_input_df[[clim]]
-x_min  <- min(x_vals, na.rm = TRUE)
-x_max  <- max(x_vals, na.rm = TRUE)
-x_rng  <- x_max - x_min
-
-p_SOS <- ggplot(fit_input_df, aes(x = .data[[clim]], y = Estimate, color = Factor)) +
-  geom_pointrange(aes(ymin = Lower, ymax = Upper), alpha = 0.1, size = 0.2) +
-  geom_ribbon(data = pred_df,
-              aes(x = .data[[clim]], ymin = y_lwr, ymax = y_upr, fill = species),
-              inherit.aes = FALSE,
-              alpha = 0.2) +
-  geom_line(data = pred_df,
-            aes(x = .data[[clim]], y = y_pred, color = species),
-            inherit.aes = FALSE,
-            linewidth = 0.5) +
-  guides(alpha = "none") +
-  scale_x_continuous(
-    limits = c(x_min - 0.15 * x_rng, x_max)
-  ) +
-  scale_y_continuous(
-    limits = c(-20, 20)
-  ) +
-  theme_classic() +
-  labs(
-    x = x_lab,
-    y = paste0("Estimated effect on ", phe_type),
-    color = "Species",
-    fill  = "Species"
-  ) +
-  theme(
-    axis.text = element_text(size = 12),
-    axis.title = element_text(size = 14),
-    legend.text = element_text(face = "italic")
-    # axis.title = element_blank()
-  )
-
-p_SOS <- p_SOS + labs(y = bquote(beta[Temp]~" estimate for SOS"))
-p_EOS <- p_EOS + labs(y = bquote(beta[Temp]~" estimate for EOS"))
-
-p_uni_SOS_EOS <- p_SOS + p_EOS +
+p_uni_SOS_EOS <- plot_SOS + plot_EOS +
   plot_layout(ncol = 2,
               guides = "collect",
               widths = c(1,1))
 p_uni_SOS_EOS
-
-ggsave("~/phenology-urban/temp/figure_supp/uni_bioclimate_SOS_EOS_mcmc.png", p_uni_SOS_EOS, width = 11, height = 3.7, dpi = 500)
 ```
 
-## Connection to GSL
+### Fitting phylogenetic generalized linear mixed models (PGLMM)
 
-### input data
+To formally assess how phenological temperature sensitivity varies with city-level climate while accounting for phylogenetic relationships among species, we fitted phylogenetic generalized linear mixed models (PGLMMs):
 
-```{r input-heatmap}
-#| include: false
-### Group by city and phe_type
-tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
-rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
-cities <- gsub("\\.rds$", "", basename(rds_files))
+$$\beta_{{\text{T}},j,k}^{(r)} = \mathbf{z}_{j}^\top \boldsymbol{b} +\lambda_{k} + \varepsilon_{j,k}^{(r)} $$
 
-phe_types <- c("SOS", "EOS")
-coef_summary_all <- data.frame()
-for (city in cities) {
-  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla/spatial_spde/", city, "/canonicalname/")
-  for (phe_type in phe_types) {
-    file_path <- file.path(r_output_dir, paste0(phe_type, "_summary.rds"))
-    if (file.exists(file_path)) {
-      coef_summary <- readr::read_rds(file_path) |>
-        dplyr::mutate(phe_type = phe_type, city = city)
-      coef_summary_all <- dplyr::bind_rows(coef_summary_all, coef_summary)
-    }
-  }
+$$\mathbf{z}_{j} = (1, \mathrm{MAT}_{j}, \mathrm{MAP}_{j})^\top$$
+
+$$\boldsymbol{b} = (b_0,b_{\mathrm{MAT}},b_{\mathrm{MAP}})^\top$$
+
+$$\boldsymbol{\lambda} = (\lambda_1, \dots, \lambda_K)^\top$$
+
+$$\boldsymbol{\lambda} \sim \mathcal{MVN}\!\left(\mathbf{0},\; \sigma^2_{\mathrm{phy}}\,\mathbf{A}\right)$$
+
+$$\varepsilon_{j,k}^{(r)} \stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma^2_{\beta_\text{T}})$$
+
+$$b_{\ell} \sim \mathcal{N}(0, \sigma_b^2), \quad {\ell} \in \{0, \mathrm{MAT}, \mathrm{MAP}\}$$
+
+```{r}
+#| label: fig-coef-pglmm
+#| include: true
+#| fig-width: 8
+#| fig-height: 4
+#| fig-cap: "Relationships between phenological temperature sensitivity and city-level climate."
+#| warning: false
+source(here("script/04_stats_model/fit_pglmm.R"))
+pglmm_path <- here("release/output/pglmm_bioclimate_inla.rds")
+
+if (!file.exists(pglmm_path)) {
+  m_SOS <- fit_multi_pglmm("SOS", input_data = df_coef, city_feature, package = "phyr", prcp = "bio12", temp = "bio1", bootstrap = T)
+  m_EOS <- fit_multi_pglmm("EOS", input_data = df_coef, city_feature, package = "phyr", prcp = "bio12", temp = "bio1", bootstrap = T)
+  model_list_multi <- list(m_SOS, m_EOS)
+  write_rds(model_list_multi, pglmm_path)
+} else {
+  model_list_multi <- read_rds(pglmm_path)
 }
 
-phe_types <- c("GSL_winter", "GSL_summer")
-coef_summary_all_end <- data.frame()
-for (city in cities) {
-  r_output_dir <- paste0("~/phenology-urban/data/proc/model_output/final_models_clean_outlier/inla_gsl/spatial_spde/", city, "/canonicalname/")
-  for (phe_type in phe_types) {
-    file_path <- file.path(r_output_dir, paste0(phe_type, "_summary.rds"))
-    if (file.exists(file_path)) {
-      coef_summary <- readr::read_rds(file_path) |>
-        dplyr::mutate(phe_type = phe_type, city = city)
-      coef_summary_all_end <- dplyr::bind_rows(coef_summary_all_end, coef_summary)
-    }
-  }
-}
+p1 = model_list_multi[[1]][["plot"]]
+p2 = model_list_multi[[2]][["plot"]] +
+  theme(axis.text.y = element_blank())
 
-match_coef <- coef_summary_all |>
-  select(Factor, city, phe_type, Estimate, Sig, Color) |>
-  left_join(coef_summary_all_end |>
-              mutate(gsl_type = case_when(
-                phe_type == "GSL_winter" ~ "SOS",
-                phe_type == "GSL_summer" ~ "EOS"
-              )) |>
-              select(Factor, city, gsl_type, gsl_sig = Sig, gsl_color = Color, gsl_coef = Estimate)
-            , by = c("Factor", "city", "phe_type" = "gsl_type"))
-
-SOS_GSL_df <- match_coef |>
-  filter(phe_type == "SOS") |>
-  group_by(Color) |>
-  summarise(
-    mean_GSL_coef = mean(gsl_coef, na.rm = TRUE),
-    .groups = "drop"
-  )
-
-p_SOS_GSL <- ggplot() +
-  geom_histogram(data = match_coef |> filter(phe_type == "SOS"),
-                 aes(x = gsl_coef, group = Color,  fill = Color), position = "identity", alpha = 0.5, bins = 100) +
-  geom_vline(data = SOS_GSL_df, 
-             aes(xintercept = mean_GSL_coef, color = Color), size = 1) +
-  geom_text(data = SOS_GSL_df, 
-            aes(x = mean_GSL_coef, y = 70, label = round(mean_GSL_coef, 2), color = Color,
-                hjust = if_else(mean_GSL_coef > 0, -0.5, 1.5)), size = 10) +
-  labs(x = bquote("GSL-winter" ~ beta[T]), y = "Count") +
-  scale_fill_identity(
-    breaks = c("#0D0887FF", "#FCA636FF"),
-    name = NULL,
-    labels = c(
-      expression("SOS–winter"~ beta[T] > 0),
-      expression("SOS–winter"~ beta[T] < 0)
-    ),
-    guide = guide_legend(
-      nrow = 1,
-      byrow = TRUE,
-      override.aes = list(alpha = 0.5)
-    )
-  ) +
-  scale_color_identity() +
-  scale_x_continuous(limits = c(-8, 8)) +
+p1 + p2 +
+  plot_layout(ncol = 2, guides = "collect", widths = c(1,1)) &
   theme(
-    axis.text = element_text(size = 16),
-    axis.title = element_text(size = 22),
-    legend.text = element_text(size = 17),
-    legend.position = "top",
-    legend.direction = "horizontal",
-    legend.justification = "center",
-    legend.box.just = "center",
-    legend.margin = margin(t = 0, r = 0, b = 5, l = 0),
-    legend.box.spacing = unit(0, "pt"),
-    legend.background = element_blank(),
-    legend.key = element_blank()
+    legend.position = "bottom"
   )
-
-EOS_GSL_df <- match_coef |>
-  filter(phe_type == "EOS") |>
-  group_by(Color) |>
-  summarise(
-    mean_GSL_coef = mean(gsl_coef, na.rm = TRUE),
-    .groups = "drop"
-  )
-
-p_EOS_GSL <- ggplot() +
-  geom_histogram(data = match_coef |> filter(phe_type == "EOS"),
-                 aes(x = gsl_coef, group = Color,  fill = Color), position = "identity", alpha = 0.5, bins = 100) +
-  geom_vline(data = EOS_GSL_df, 
-             aes(xintercept = mean_GSL_coef, color = Color), size = 1) +
-  geom_text(data = EOS_GSL_df, 
-            aes(x = mean_GSL_coef, y = 70, label = round(mean_GSL_coef, 2), color = Color,
-                hjust = if_else(mean_GSL_coef > 0, -0.5, 1.2)), size = 10) +
-  labs(x = bquote("GSL-summer" ~ beta[T]), y = "Count") +
-  scale_fill_identity(
-    breaks = c("#0D0887FF", "#FCA636FF"),
-    name = NULL,
-    labels = c(
-      expression("EOS–summer"~ beta[T] > 0),
-      expression("EOS–summer"~ beta[T] < 0)
-    ),
-    guide = guide_legend(
-      nrow = 1,
-      byrow = TRUE,
-      override.aes = list(alpha = 0.5)
-    )
-  ) +
-  scale_color_identity() +
-  scale_x_continuous(limits = c(-16, 16)) +
-  theme(
-    axis.text = element_text(size = 16),
-    axis.title = element_text(size = 22),
-    legend.text = element_text(size = 17),
-    legend.position = "top",
-    legend.direction = "horizontal",
-    legend.justification = "center",
-    legend.box.just = "center",
-    legend.margin = margin(t = 0, r = 0, b = 5, l = 0),
-    legend.box.spacing = unit(0, "pt"),
-    legend.background = element_blank(),
-    legend.key = element_blank()
-  )
-
-p = cowplot::plot_grid(
-  p_SOS_GSL,NULL,p_EOS_GSL,
-  ncol = 1,
-  rel_heights = c(1,0.1, 1)
-)
-ggsave("~/phenology-urban/temp/fig-main/SOS_EOS_GSL.png", p, width = 5.9, height = 12, dpi = 500)
 ```
