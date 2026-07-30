@@ -1,8 +1,5 @@
 options(repos = c(CRAN = "https://cloud.r-project.org"))
 
-if (!requireNamespace("here", quietly = TRUE)) install.packages("here")
-library(here)
-
 if (!requireNamespace("pacman", quietly = TRUE)) install.packages("pacman")
 library(pacman)
 options(repos = c(CRAN = "https://cloud.r-project.org"))
