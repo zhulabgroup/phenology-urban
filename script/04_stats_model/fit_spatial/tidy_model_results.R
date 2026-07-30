@@ -1,7 +1,5 @@
 ####################### INLA model results tidy #######################
-tree_dir <- here("data/raw/CONUS/StreetTrees/cleaned_ps_input/")
-rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
-cities <- gsub("\\.rds$", "", basename(rds_files))
+cities <- names(city_label)
 phe_types <- c("SOS", "EOS")
 
 prepare_coef_summary <- function(r_output_dir, phe_type){
@@ -34,7 +32,7 @@ prepare_coef_summary <- function(r_output_dir, phe_type){
 
 for (city in cities) { 
   message(paste0("Processing city: ", city))
-  r_output_dir <- paste0(here("data/proc/model_output/final_models_clean_outlier/spatial_spde/"), city, "/canonicalname/")
+  r_output_dir <- paste0(here("release/intermediate/spatial/inla/spatial_spde/"), city, "/canonicalname/")
   for (phe_type in phe_types){
     prepare_coef_summary(r_output_dir, phe_type)
   }
@@ -81,7 +79,7 @@ prepare_coef_summary_mcmc <- function(r_output_dir, phe_type){
   
 for (city in cities) { 
   message(paste0("Processing city: ", city))
-  r_output_dir <- paste0(here("data/proc/model_output/final_models_clean_outlier/mcmc/spatial_mat/"), city, "/canonicalname/")
+  r_output_dir <- paste0(here("release/intermediate/spatial/mcmc/spatial_mat/"), city, "/canonicalname/")
   for (phe_type in phe_types){
     prepare_coef_summary_mcmc(r_output_dir, phe_type)
   }

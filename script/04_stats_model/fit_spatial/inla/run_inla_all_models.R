@@ -1,10 +1,6 @@
 ################################## package loading ##################################
-library(zhulabtools)
+pacman::p_load(rgbif, foreach, doParallel, terra)
 
-load_packages(c("here", "rgbif", "ggplot2", "sf","sp",
-                "glue", "tidyverse", "broom","lme4", "viridis",
-                "broom.mixed", "coda", "patchwork", "terra", "stats",
-                "foreach", "doParallel"))
 select <- dplyr::select
 ## Rscript.r
 options(inla.call = "inla")
@@ -15,8 +11,7 @@ source(here("script/04_stats_model/fit_spatial/inla/alg_sp_inla.R"))
 
 ################################## parameter loading ##################################
 
-r_input_dir <- here("data/")
-r_output_dir <- here("data/proc/model_output/final_models_clean_outlier/")
+r_output_dir <- here("release/intermediate/spatial/")
 
 tree_dir <- here("data/raw/CONUS/StreetTrees/cleaned_ps_input/")
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
