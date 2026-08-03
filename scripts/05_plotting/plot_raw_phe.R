@@ -1,7 +1,7 @@
 pacman::p_load(terra, ggspatial)
 
 source(here("scripts/04_stats_model/fit_spatial/prepare_model_input.R"))
-source(here("scripts/05_plotting/plot-setting-city-map.R"))
+source(here("scripts/05_plotting/plot_setting_city_map.R"))
 
 plot_species_raw_phe <- function(species, color_palette, phe_type, color_limits = NULL, highlight_city = NULL, year){
   all_city_input <- read_rds(here(paste0("release/input/phenology/no_outlier/nooutlier_", phe_type, "_input.rds"))) |>

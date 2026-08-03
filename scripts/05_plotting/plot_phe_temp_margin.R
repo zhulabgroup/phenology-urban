@@ -1,4 +1,4 @@
-source(here("scripts/05_plotting/plot-setting-city-map.R"))
+source(here("scripts/05_plotting/plot_setting_city_map.R"))
 source(here("scripts/04_stats_model/fit_spatial/prepare_model_input.R"))
 pacman::p_load(terra, ggspatial)
 

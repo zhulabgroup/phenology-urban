@@ -92,7 +92,7 @@ The processed phenology data are stored in `release/input/phenology/doy/`. Here,
 #| fig-height: 5.5
 #| out.width: "50%"
 #| fig-align: "center"
-source(here("scripts/05_plotting/plot-ps-series-example.R"))
+source(here("scripts/05_plotting/plot_ps_series_example.R"))
 plot_ps_series_example()
 ```
 
@@ -115,7 +115,7 @@ color_palette <- setNames(
   distinctColorPalette(length(cities)),
   cities
 )
-source(here("scripts/05_plotting/plot-raw-phe.R"))
+source(here("scripts/05_plotting/plot_raw_phe.R"))
 
 sos_species = "Pistacia chinensis" # within from large to small
 sos_plots <- plot_species_raw_phe(species = sos_species, color_palette, phe_type = "SOS", color_limits = c(27, 124),
@@ -218,7 +218,7 @@ The model is implemented in `scripts/04_stats_model/fit_variance.R`. The resulti
 #| fig-width: 8
 #| fig-height: 5.5
 #| warning: false
-source(here("scripts/05_plotting/plot-variance-ring.R"))
+source(here("scripts/05_plotting/plot_variance_ring.R"))
 
 p_EOS_ring <- plot_variance_ring(phe_type = "EOS")
 p_SOS_ring <- plot_variance_ring(phe_type = "SOS")
@@ -263,7 +263,7 @@ We show one example of the spatial patterns of mean seasonal temperature and the
 #| fig-cap: "Spatial patterns of mean seasonal temperature and the phenological metric for one representative species in one example city in 2022."
 #| fig-width: 8
 #| fig-height: 5.5
-source(here("scripts/05_plotting/plot-phe-temp-margin.R"))
+source(here("scripts/05_plotting/plot_phe_temp_margin.R"))
 cities = c("NewYork", "TP", "Stockton", "LosAngeles", "Seattle", "Sacramento", "WashingtonDC", "SanFrancisco")
 species = c(
   "Acer rubrum", "Acer rubrum",
@@ -308,7 +308,7 @@ df_coef <- summarize_spatial_coef(model_type = "inla")
 #| warning: false
 #| eval: true
 
-source(here("scripts/05_plotting/plot-city-coef-distribute.R"))
+source(here("scripts/05_plotting/plot_city_coef_distribute.R"))
 p_all_coef <- plot_city_coef(
   coef_summary_all = df_coef |>
     mutate(species = gsub("_", " ", species)),
@@ -355,7 +355,7 @@ We first visualized the spatial distribution of city-level mean temperature sens
 #| fig-height: 5
 #| fig-cap: "Spatial distribution of city-level mean temperature sensitivity for SOS (a) and EOS (b), averaged across species present in each city."
 #| warning: false
-source(here("scripts/05_plotting/plot-city-coef-map.R"))
+source(here("scripts/05_plotting/plot_city_coef_map.R"))
 plot_city_coef_map(df_coef)
 ```
 
@@ -382,7 +382,7 @@ species_example <- c(
   "Fraxinus pennsylvanica",
   "Tilia cordata"
 )
-source(here("scripts/05_plotting/plot-species-uni.R"))
+source(here("scripts/05_plotting/plot_species_uni.R"))
 plot_SOS <- plot_species_uni(clim = "bio1", phe_type = "SOS", species_example, df_coef)
 plot_EOS <- plot_species_uni(clim = "bio12", phe_type = "EOS", species_example, df_coef)
 
