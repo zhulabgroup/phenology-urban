@@ -1,6 +1,6 @@
 ###################################### Clean TRY #################################
 
-trait_data_raw <- rtry_import(here("release/input/tree_list/summary/TRY_street_tree.txt"))|>
+trait_data_raw <- rtry_import(here("data/input/tree_list/summary/TRY_street_tree.txt"))|>
   rtry_remove_dup() |>
   rtry_select_row(TraitID == 37) |>
   rtry_select_col(AccSpeciesName, OriglName, OrigValueStr, OrigUnitStr, Comment)
@@ -155,4 +155,4 @@ phe_type_clean_gbif <- phe_type_clean |>
   group_by(canonicalName, type)|>
   summarise(num_obs = n(), .groups = "drop")
 
-write_rds(phe_type_clean_gbif, here("release/input/tree_list/summary/species_phe_types.rds"))
+write_rds(phe_type_clean_gbif, here("data/input/tree_list/summary/species_phe_types.rds"))

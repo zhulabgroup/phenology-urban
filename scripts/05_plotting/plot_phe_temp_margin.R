@@ -30,10 +30,10 @@ plot_phe_temp_margin <- function(city = "NewYork", species = "Acer rubrum", phe_
   } else {
     stop("Invalid phe_type. Use 'SOS' or 'EOS'.")
   }
-  file <- paste0(here("release/input/climate/UHAT/clean/"),city, "_", season, "_", year, ".tif")
+  file <- paste0(here("data/input/climate/UHAT/clean/"),city, "_", season, "_", year, ".tif")
   temp_tif <- terra::rast(file)
   tifs <- list.files(
-    here("release/input/climate/UHAT/grid"),
+    here("data/input/climate/UHAT/grid"),
     pattern = "^MYD11A1\\..*LST_Day_1km\\.tif$",
     full.names = TRUE
   )
@@ -232,7 +232,7 @@ plot_phe_temp_margin <- function(city = "NewYork", species = "Acer rubrum", phe_
   
   ## change to model fit and point density
   
-  phe_fitted <- read_rds(paste0(here("release/intermediate/spatial/inla/spatial_spde/"), city, "/canonicalname/", gsub(" ", "_", species), "_", phe_type, ".rds"))
+  phe_fitted <- read_rds(paste0(here("data/intermediate/spatial/inla/spatial_spde/"), city, "/canonicalname/", gsub(" ", "_", species), "_", phe_type, ".rds"))
   
   b0     <- phe_fitted$res$summary.fixed["Intercept", "mean"]
   b_temp <- phe_fitted$res$summary.fixed["temp",      "mean"]

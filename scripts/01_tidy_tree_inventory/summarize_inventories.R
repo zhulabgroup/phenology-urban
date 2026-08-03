@@ -1,5 +1,5 @@
-inventory_dir <- here("release/input/tree_list/")
-output_dir    <- here("release/input/tree_list/summary/")
+inventory_dir <- here("data/input/tree_list/")
+output_dir    <- here("data/input/tree_list/summary/")
 
 file_list <- list.files(inventory_dir, pattern = "\\.rds$", full.names = TRUE)
 

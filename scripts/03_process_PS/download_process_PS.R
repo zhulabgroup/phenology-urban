@@ -3,13 +3,13 @@ if (!require("BatchPlanet")){
 }
 pacman::p_load(BatchPlanet)
 
-tree_dir <- here("release/input/tree_list")
+tree_dir <- here("data/input/tree_list")
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
 tree_df <- rds_files |> #25
   map_dfr(read_rds) |>
   mutate(taxa = if_else(genus == "Validation", "Validation", gsub(" ", "", taxa))) 
 
-dir_data <- here("release/input/phenology")
+dir_data <- here("data/input/phenology")
 setting <- set_planetscope_parameters(
   api_key = set_api_key(),
   item_name = "PSScene",

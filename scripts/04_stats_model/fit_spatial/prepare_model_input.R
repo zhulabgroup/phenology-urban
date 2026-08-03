@@ -6,7 +6,7 @@
 prepare_data <- function(city, source = "Grid", taxa_col = "canonicalname", phe_type) {
   if (source == "Grid") { # UHAT and Daymet
        input_dir <- list.files(,
-        path = paste0(here("release/input/tree_climate/"), source, "/"), # For example NY
+        path = paste0(here("data/input/tree_climate/"), source, "/"), # For example NY
         pattern = paste0("^", city, ".*\\.rds$"),
         full.names = TRUE)
        tree_climate <- read_rds(input_dir) |>
@@ -17,7 +17,7 @@ prepare_data <- function(city, source = "Grid", taxa_col = "canonicalname", phe_
          st_transform(crs = 5070)
     } else if (source == "Grid_GSL") { # UHAT and Daymet
       input_dir <- list.files(,
-                              path = paste0(here("release/input/tree_climate/"), source, "/"), # For example NY
+                              path = paste0(here("data/input/tree_climate/"), source, "/"), # For example NY
                               pattern = paste0("^", city, ".*\\.rds$"),
                               full.names = TRUE)
       tree_climate <- read_rds(input_dir) |>
@@ -30,7 +30,7 @@ prepare_data <- function(city, source = "Grid", taxa_col = "canonicalname", phe_
         st_transform(crs = 5070)
     } else if (source == "Grid_NPN") { # UHAT and Daymet
       input_dir <- list.files(,
-                              path = paste0(here("release/input/tree_climate/"), source, "/"), # For example NY
+                              path = paste0(here("data/input/tree_climate/"), source, "/"), # For example NY
                               pattern = paste0("^", city, ".*\\.rds$"),
                               full.names = TRUE)
       tree_climate <- read_rds(input_dir) |>
@@ -45,7 +45,7 @@ prepare_data <- function(city, source = "Grid", taxa_col = "canonicalname", phe_
   
   #Join to phenology data
 
-    file_list <- list.files(path = here("release/input/phenology/doy"), pattern = paste0("^doy_",city,"_.*\\.rds$"), full.names = TRUE)
+    file_list <- list.files(path = here("data/input/phenology/doy"), pattern = paste0("^doy_",city,"_.*\\.rds$"), full.names = TRUE)
     data_list <- file_list %>%
       purrr::map(~ read_rds(.x))
     all_doy <- bind_rows(data_list)

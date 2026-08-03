@@ -1,6 +1,6 @@
 plot_city_coef_map <- function(df_coef) {
   
-  boundary_us <- st_read(here("release/input/boundary/US/us_boundarydissolve.shp"), quiet = T) |>
+  boundary_us <- st_read(here("data/input/boundary/US/us_boundarydissolve.shp"), quiet = T) |>
     st_transform(4326)
   
   # df_coef: data frame with columns city_label, phe_type, Estimate, lon, lat
@@ -19,7 +19,7 @@ plot_city_coef_map <- function(df_coef) {
   tau_vals <- unique(model_results_loc$sd) |> na.omit()
   tau_breaks <- pretty(range(tau_vals), n = 5)
   
-  chelsa_ras_us <- terra::rast(here("release/input/climate/CHELSA/chelsa_us.tif"))
+  chelsa_ras_us <- terra::rast(here("data/input/climate/CHELSA/chelsa_us.tif"))
   bio1 <- chelsa_ras_us[[1]]
   bio12 <- chelsa_ras_us[[2]]
   

@@ -57,7 +57,7 @@ fit_variance_partition <- function(df, species_name) {
 }
 
 for (phe_type in c("SOS", "EOS")) {
-  all_city_input <- read_rds(here::here(paste0("release/input/phenology/no_outlier/nooutlier_", phe_type, "_input.rds"))) |>
+  all_city_input <- read_rds(here::here(paste0("data/input/phenology/no_outlier/nooutlier_", phe_type, "_input.rds"))) |>
     filter(year<2024) |>
     mutate(year = as.factor(year))
   species_list <- unique(all_city_input$canonicalname)
@@ -65,5 +65,5 @@ for (phe_type in c("SOS", "EOS")) {
     species_list,
     ~ fit_variance_partition(all_city_input, .x)
     )
-  write_rds(variance_partition_all, here::here(paste0("release/intermediate/variance_decompose/variance_partition_", phe_type, ".rds")))
+  write_rds(variance_partition_all, here::here(paste0("data/intermediate/variance_decompose/variance_partition_", phe_type, ".rds")))
 }

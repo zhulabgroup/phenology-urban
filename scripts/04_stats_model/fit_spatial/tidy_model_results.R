@@ -32,7 +32,7 @@ prepare_coef_summary <- function(r_output_dir, phe_type){
 
 for (city in cities) { 
   message(paste0("Processing city: ", city))
-  r_output_dir <- paste0(here("release/intermediate/spatial/inla/spatial_spde/"), city, "/canonicalname/")
+  r_output_dir <- paste0(here("data/intermediate/spatial/inla/spatial_spde/"), city, "/canonicalname/")
   for (phe_type in phe_types){
     prepare_coef_summary(r_output_dir, phe_type)
   }
@@ -79,7 +79,7 @@ prepare_coef_summary_mcmc <- function(r_output_dir, phe_type){
   
 for (city in cities) { 
   message(paste0("Processing city: ", city))
-  r_output_dir <- paste0(here("release/intermediate/spatial/mcmc/spatial_mat/"), city, "/canonicalname/")
+  r_output_dir <- paste0(here("data/intermediate/spatial/mcmc/spatial_mat/"), city, "/canonicalname/")
   for (phe_type in phe_types){
     prepare_coef_summary_mcmc(r_output_dir, phe_type)
   }

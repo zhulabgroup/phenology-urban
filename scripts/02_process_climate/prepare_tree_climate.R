@@ -1,24 +1,24 @@
 pacman::p_load(terra)
 
 prepare_tree_Grid_climate <- function(city){
-  out_path <- here(paste0("release/input/tree_climate/Grid/", city, ".rds"))
+  out_path <- here(paste0("data/input/tree_climate/Grid/", city, ".rds"))
   
   ################## Calculate seasonal climate ##################
   message(paste0("Processing example city: ", city, "..."))
   
-  tree_dir <- here(paste0("release/input/tree_list/", city, ".rds"))
+  tree_dir <- here(paste0("data/input/tree_list/", city, ".rds"))
   tree_location <- read_rds(tree_dir) |>
     filter(!(lon == "NaN") & !(lat == "NaN")) |>
     st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F)
   
   ###### Daymet shortwave radiation #######
-  daymet_srad <- read_csv(paste0(here("release/input/climate/Daymet/"), city, "/srad_monthly_2016_2024.csv"), show_col_types = FALSE)
-  daymet_prcp <- read_csv(paste0(here("release/input/climate/Daymet/"), city, "/prcp_monthly_2016_2024.csv"), show_col_types = FALSE)
+  daymet_srad <- read_csv(paste0(here("data/input/climate/Daymet/"), city, "/srad_monthly_2016_2024.csv"), show_col_types = FALSE)
+  daymet_prcp <- read_csv(paste0(here("data/input/climate/Daymet/"), city, "/prcp_monthly_2016_2024.csv"), show_col_types = FALSE)
     
   ###### UHAT temperature #######
     
   uhat_files <- list.files(
-    path = here("release/input/climate/UHAT/clean/"),
+    path = here("data/input/climate/UHAT/clean/"),
     pattern = paste0("^", city, ".*tavg\\.tif$"),
     full.names = TRUE
   )
@@ -28,7 +28,7 @@ prepare_tree_Grid_climate <- function(city){
   }
   uhat_climate <- map(uhat_files, function(file) {
     r <- rast(file)
-    dir_path <- here("release/input/climate/UHAT/grid/")
+    dir_path <- here("data/input/climate/UHAT/grid/")
     tifs <- list.files(
       dir_path,
       pattern = "^MYD11A1\\..*LST_Day_1km\\.tif$",
@@ -73,7 +73,7 @@ prepare_tree_Grid_climate <- function(city){
 }
 
 
-tree_dir <- here("release/input/tree_list")
+tree_dir <- here("data/input/tree_list")
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
 cities <- gsub("\\.rds$", "", basename(rds_files))
 for (city in cities){

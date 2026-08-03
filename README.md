@@ -8,7 +8,7 @@ Project data are hosted on Zenodo:
 
 - https://doi.org/10.5281/zenodo.21709425
 
-After downloading, place the data under the `release/` folder (matching this repository structure).
+After downloading, place the data under the `data/` folder (matching this repository structure).
 
 ## Workflow location
 
@@ -42,9 +42,9 @@ Main scripts are organized by step under `script/`:
 
 ## Key data folders
 
-- `release/input/`: processed inputs (tree list, climate, phenology)
-- `release/intermediate/`: model intermediate outputs
-- `release/output/`: final model outputs and summaries
+- `data/input/`: processed inputs (tree list, climate, phenology)
+- `data/intermediate/`: model intermediate outputs
+- `data/output/`: final model outputs and summaries
 
 ## Notes
 

@@ -1,7 +1,7 @@
 pacman::p_load(terra)
 # output directory
-out_dir <- here("release/input/climate/UHAT/clean")
-tree_dir <- here("release/input/tree_list/")
+out_dir <- here("data/input/climate/UHAT/clean")
+tree_dir <- here("data/input/tree_list/")
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
 cities <- gsub("\\.rds$", "", basename(rds_files))
 
@@ -78,7 +78,7 @@ build_UHAT_tif <- function(yr, seas, out_dir, temp_type) {
 
 for (city in cities) {
   message(paste0("Processing city: ", city))
-  uhat_file <- paste0(here("release/input/climate/UHAT/raw/"), city, ".csv")
+  uhat_file <- paste0(here("data/input/climate/UHAT/raw/"), city, ".csv")
   if (!file.exists(uhat_file)) {
     message(paste0("No UHAT found for: ", city))
     next  # Skip the current iteration of the loop
@@ -108,7 +108,7 @@ for (city in cities) {
   # Match to centroids
   
   # Save the basic grid:
-  dir_path <- here("release/input/climate/UHAT/grid")
+  dir_path <- here("data/input/climate/UHAT/grid")
   tifs <- list.files(
     dir_path,
     pattern = "^MYD11A1\\..*LST_Day_1km\\.tif$",

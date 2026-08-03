@@ -4,7 +4,7 @@ source(here("scripts/04_stats_model/fit_spatial/prepare_model_input.R"))
 source(here("scripts/05_plotting/plot_setting_city_map.R"))
 
 plot_species_raw_phe <- function(species, color_palette, phe_type, color_limits = NULL, highlight_city = NULL, year){
-  all_city_input <- read_rds(here(paste0("release/input/phenology/no_outlier/nooutlier_", phe_type, "_input.rds"))) |>
+  all_city_input <- read_rds(here(paste0("data/input/phenology/no_outlier/nooutlier_", phe_type, "_input.rds"))) |>
     filter(year == !!year)
   phe_title <- case_when(
     phe_type == "SOS" ~ "Start-of-season",
@@ -100,10 +100,10 @@ plot_species_raw_phe <- function(species, color_palette, phe_type, color_limits 
     )
   
   
-  inventory_centroids <- readRDS(here("release/input/tree_list/summary/inventory_centroids.rds")) |>
+  inventory_centroids <- readRDS(here("data/input/tree_list/summary/inventory_centroids.rds")) |>
     left_join(species_city, by = c("site" = "city")) |>
     filter(!is.na(median_doy))
-  boundary_us <- st_read(here("release/input/boundary/US/us_boundarydissolve.shp"), quiet = T) |> 
+  boundary_us <- st_read(here("data/input/boundary/US/us_boundarydissolve.shp"), quiet = T) |> 
     st_transform(4326)
   
   doy_map <- ggplot() +

@@ -1,12 +1,12 @@
 ### City and species level data
 cities <- names(city_label)
-inventory_centroids <- read_rds(here("release/input/tree_list/summary/inventory_centroids.rds")) |>
+inventory_centroids <- read_rds(here("data/input/tree_list/summary/inventory_centroids.rds")) |>
   mutate(city_label = unname(city_label[site]))
-boundary_us <- st_read(here("release/input/boundary/US/us_boundarydissolve.shp"), quiet = T) |>
+boundary_us <- st_read(here("data/input/boundary/US/us_boundarydissolve.shp"), quiet = T) |>
   st_transform(4326)
 
-load(here("release/input/tree_list/summary/tree_species.RData"))
-city_inven_backbone <- read_rds(here("release/input/tree_list/summary/city_inven_backbone.rds"))|>
+load(here("data/input/tree_list/summary/tree_species.RData"))
+city_inven_backbone <- read_rds(here("data/input/tree_list/summary/city_inven_backbone.rds"))|>
   filter(
     kingdom == "Plantae", phylum == "Tracheophyta",
     rank %in% c("GENUS", "SPECIES"),
@@ -14,9 +14,9 @@ city_inven_backbone <- read_rds(here("release/input/tree_list/summary/city_inven
   )|>
   mutate(usageKey = if_else(status == "SYNONYM", acceptedUsageKey, usageKey))
 
-city_feature <- read_rds(here("release/input/tree_list/summary/city_feature.rds")) |>
+city_feature <- read_rds(here("data/input/tree_list/summary/city_feature.rds")) |>
   select(-`ID.1`) |>
-  left_join(read_rds(here("release/input/tree_list/summary/city_bioclimate.rds")) |>
+  left_join(read_rds(here("data/input/tree_list/summary/city_bioclimate.rds")) |>
               select(site, bio1, bio12), by = "site") |>
   rename(city = site) |>
   mutate(city = ifelse(city == "St_George", "StGeorge", city)) |>
@@ -25,16 +25,16 @@ city_feature <- read_rds(here("release/input/tree_list/summary/city_feature.rds"
 
 ### Coefficients results
 summarize_spatial_coef <- function(model_type = "inla"){
-  save_summary_path <- paste0(here("release/output/spatial_coef_summary_"), model_type, ".rds")
+  save_summary_path <- paste0(here("data/output/spatial_coef_summary_"), model_type, ".rds")
   phe_types <- c("SOS", "EOS")
   if (model_type == "inla") {
-    model_dir <- here("release/intermediate/spatial/inla/spatial_spde/")
+    model_dir <- here("data/intermediate/spatial/inla/spatial_spde/")
   } else if (model_type == "mcmc") {
-    model_dir <- here("release/intermediate/spatial/mcmc/spatial_mat/")
+    model_dir <- here("data/intermediate/spatial/mcmc/spatial_mat/")
   } else if (model_type == "freq") {
-    model_dir <- here("release/intermediate/spatial/freq/")
+    model_dir <- here("data/intermediate/spatial/freq/")
   }  else if (model_type == "inla_gsl") {
-    model_dir <- here("release/intermediate/spatial/inla_gsl/spatial_spde/")
+    model_dir <- here("data/intermediate/spatial/inla_gsl/spatial_spde/")
     phe_types <- c("GSL_winter", "GSL_summer")
   }
   

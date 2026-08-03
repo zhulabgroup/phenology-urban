@@ -1,9 +1,9 @@
 pacman::p_load("V.PhyloMaker2", "ggtree", "ggpubr", "ggtreeExtra")
 
-load(here("release/input/tree_list/summary/tree_species.RData"))
+load(here("data/input/tree_list/summary/tree_species.RData"))
 
 plot_variance_ring <- function(phe_type) {
-  plot_df <- read_rds(here(paste0("release/intermediate/variance_decompose/variance_partition_", phe_type, ".rds"))) %>%
+  plot_df <- read_rds(here(paste0("data/intermediate/variance_decompose/variance_partition_", phe_type, ".rds"))) %>%
     select(species, prop_city2, prop_within2, phe_type, sample_city) %>%
     filter(is.finite(prop_city2), is.finite(prop_within2)) %>%
     mutate(

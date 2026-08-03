@@ -6,7 +6,7 @@ source(here("scripts/04_stats_model/fit_spatial/prepare_model_input.R"))
 source(here("scripts/04_stats_model/fit_spatial/sensitive/alg_sp_freq.R"))
 source(here("scripts/04_stats_model/fit_spatial/sensitive/alg_spbayes_mat.R"))
 
-r_output_dir <- here("release/intermediate/spatial/")
+r_output_dir <- here("data/intermediate/spatial/")
 cities <- names(city_label)
 
 ################################## run freq model ##################################

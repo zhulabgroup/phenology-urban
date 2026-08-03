@@ -16,7 +16,7 @@ library(here)
 source(here::here("scripts", "setting.R"))
 ```
 
-This document outlines the workflow of the urban phenology project. The accompanying data are available at [Zenodo](https://doi.org/10.5281/zenodo.21709425). Please download the data and place it in the `release` folder.
+This document outlines the workflow of the urban phenology project. The accompanying data are available at [Zenodo](https://doi.org/10.5281/zenodo.21709425). Please download the data and place it in the `data` folder.
 
 # Data sources
 
@@ -27,11 +27,11 @@ We first collected and cleaned the urban tree inventories from various sources, 
 -   `scripts/01_tidy_tree_inventory/tidy_elife.R`
 -   `scripts/01_tidy_tree_inventory/tidy_opentree.R`
 
-Then, species were assigned to a categorical leaf phenology type (TraitID = 37) based on the most frequently observed classification in the TRY database. The resulting summary data are stored in `release/input/tree_list/summary`.
+Then, species were assigned to a categorical leaf phenology type (TraitID = 37) based on the most frequently observed classification in the TRY database. The resulting summary data are stored in `data/input/tree_list/summary`.
 
 -   `scripts/01_tidy_tree_inventory/clean_TRY_phetype.R`
 
-Then, we futher cleaned and filtered the inventories for each city. Each city has one chunk of code, and the filtered data are stored in `release/input/tree_list`, with each city saved as one RDS file. The codes are saved in:
+Then, we futher cleaned and filtered the inventories for each city. Each city has one chunk of code, and the filtered data are stored in `data/input/tree_list`, with each city saved as one RDS file. The codes are saved in:
 
 -   `scripts/01_tidy_tree_inventory/clean_inventories.R`
 -   `scripts/01_tidy_tree_inventory/summarize_inventories.R`
@@ -41,7 +41,7 @@ The map below shows the spatial distribution of city samples. The geometry locat
 ```{r fig-inventory-map}
 #| fig-cap: "spatial distribution..."
 #| warning: false
-inventory_centroids <- readRDS(here("release/input/tree_list/summary/inventory_centroids.rds"))
+inventory_centroids <- readRDS(here("data/input/tree_list/summary/inventory_centroids.rds"))
 leaflet(data = inventory_centroids) |>
   addProviderTiles(providers$OpenStreetMap, options = providerTileOptions(opacity = 0.9)) |>
   addCircleMarkers(
@@ -66,7 +66,7 @@ We then extracted the precipitation and shortwave radiation from the Daymet data
 -   `scripts/02_process_climate/download_Daymet.sh`
 -   `scripts/02_process_climate/process_Daymet_point.py`
 
-The code to combine climate datasets and prepare the final tree-level climate data, stored in `release/input/tree_climate`, is:
+The code to combine climate datasets and prepare the final tree-level climate data, stored in `data/input/tree_climate`, is:
 
 -   `scripts/02_process_climate/prepare_tree_climate.R`
 
@@ -83,7 +83,7 @@ The processing of PlanetScope imagery is handled in the following scripts
 -   `scripts/03_process_PS/download_process_PS.R` 
 -   `scripts/03_process_PS/download_process_PS.sh`
 
-The processed phenology data are stored in `release/input/phenology/doy/`. Here, we show an example of phenology extraction for an individual tree.
+The processed phenology data are stored in `data/input/phenology/doy/`. Here, we show an example of phenology extraction for an individual tree.
 
 ```{r}
 #| label: fig-evi
@@ -252,7 +252,7 @@ $$\varepsilon(\mathbf{s},t) \stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma_
 $$\beta_{\ell} \sim \mathcal{N}(0, \sigma_\beta^2), \quad {\ell} \in \{0, {\text{T}}, {\text{P}}, {\text{R}}\}$$
 
 The code to fit these spatial models is saved in `scripts/04_stats_model/fit_spatial/inla/run_inla_all_models.R`,
-and the results are stored in `release/intermediate/spatial/inla`.
+and the results are stored in `data/intermediate/spatial/inla`.
 
 ### Example spatial patterns
 
@@ -419,7 +419,7 @@ $$b_{\ell} \sim \mathcal{N}(0, \sigma_b^2), \quad {\ell} \in \{0, \mathrm{MAT}, 
 #| fig-cap: "Relationships between phenological temperature sensitivity and city-level climate."
 #| warning: false
 source(here("scripts/04_stats_model/fit_pglmm.R"))
-pglmm_path <- here("release/output/pglmm_bioclimate_inla.rds")
+pglmm_path <- here("data/output/pglmm_bioclimate_inla.rds")
 
 if (!file.exists(pglmm_path)) {
   m_SOS <- fit_multi_pglmm("SOS", input_data = df_coef, city_feature, package = "phyr", prcp = "bio12", temp = "bio1", bootstrap = T)

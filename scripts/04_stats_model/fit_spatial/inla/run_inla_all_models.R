@@ -11,7 +11,7 @@ source(here("scripts/04_stats_model/fit_spatial/inla/alg_sp_inla.R"))
 
 ################################## parameter loading ##################################
 
-r_output_dir <- here("release/intermediate/spatial/")
+r_output_dir <- here("data/intermediate/spatial/")
 
 tree_dir <- here("data/raw/CONUS/StreetTrees/cleaned_ps_input/")
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
