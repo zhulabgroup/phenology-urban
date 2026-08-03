@@ -13,7 +13,7 @@ editor_options:
 #| 
 if (!requireNamespace("here", quietly = TRUE)) install.packages("here")
 library(here)
-source(here::here("script", "_setting.R"))
+source(here::here("scripts", "setting.R"))
 ```
 
 This document outlines the workflow of the urban phenology project. The accompanying data are available at [Zenodo](https://doi.org/10.5281/zenodo.21709425). Please download the data and place it in the `release` folder.
@@ -24,17 +24,17 @@ This document outlines the workflow of the urban phenology project. The accompan
 
 We first collected and cleaned the urban tree inventories from various sources, including the [McCoy's dataset](https://elifesciences.org/articles/77891), [OpenTree.org](https://opentrees.org/), and additional governmental open data portals. The codes are saved in:
 
--   `script/01_tidy_tree_inventory/tidy_elife.R`
--   `script/01_tidy_tree_inventory/tidy_opentree.R`
+-   `scripts/01_tidy_tree_inventory/tidy_elife.R`
+-   `scripts/01_tidy_tree_inventory/tidy_opentree.R`
 
 Then, species were assigned to a categorical leaf phenology type (TraitID = 37) based on the most frequently observed classification in the TRY database. The resulting summary data are stored in `release/input/tree_list/summary`.
 
--   `script/01_tidy_tree_inventory/clean_TRY_phetype.R`
+-   `scripts/01_tidy_tree_inventory/clean_TRY_phetype.R`
 
 Then, we futher cleaned and filtered the inventories for each city. Each city has one chunk of code, and the filtered data are stored in `release/input/tree_list`, with each city saved as one RDS file. The codes are saved in:
 
--   `script/01_tidy_tree_inventory/clean_inventories.R`
--   `script/01_tidy_tree_inventory/summarize_inventories.R`
+-   `scripts/01_tidy_tree_inventory/clean_inventories.R`
+-   `scripts/01_tidy_tree_inventory/summarize_inventories.R`
 
 The map below shows the spatial distribution of city samples. The geometry location of selected cities. The size of the circle represents the number of trees in the city.
 
@@ -59,16 +59,16 @@ leaflet(data = inventory_centroids) |>
 
 For each tree individual, we extracted the temperature from the UHAT dataset. The codes are saved in:
 
--   `script/02_process_climate/process_UHAT.R`
+-   `scripts/02_process_climate/process_UHAT.R`
 
 We then extracted the precipitation and shortwave radiation from the Daymet dataset. The codes are saved in:
 
--   `script/02_process_climate/download_Daymet.sh`
--   `script/02_process_climate/process_Daymet_point.py`
+-   `scripts/02_process_climate/download_Daymet.sh`
+-   `scripts/02_process_climate/process_Daymet_point.py`
 
 The code to combine climate datasets and prepare the final tree-level climate data, stored in `release/input/tree_climate`, is:
 
--   `script/02_process_climate/prepare_tree_climate.R`
+-   `scripts/02_process_climate/prepare_tree_climate.R`
 
 ## Individual tree phenology
 
@@ -80,8 +80,8 @@ We followed the workflow in [Song et al. (2025)](https://doi.org/10.1016/j.srs.2
 
 The processing of PlanetScope imagery is handled in the following scripts
 
--   `script/03_process_PS/download_process_PS.R` 
--   `script/03_process_PS/download_process_PS.sh`
+-   `scripts/03_process_PS/download_process_PS.R` 
+-   `scripts/03_process_PS/download_process_PS.sh`
 
 The processed phenology data are stored in `release/input/phenology/doy/`. Here, we show an example of phenology extraction for an individual tree.
 
@@ -92,7 +92,7 @@ The processed phenology data are stored in `release/input/phenology/doy/`. Here,
 #| fig-height: 5.5
 #| out.width: "50%"
 #| fig-align: "center"
-source(here("script/05_plotting/plot-ps-series-example.R"))
+source(here("scripts/05_plotting/plot-ps-series-example.R"))
 plot_ps_series_example()
 ```
 
@@ -115,7 +115,7 @@ color_palette <- setNames(
   distinctColorPalette(length(cities)),
   cities
 )
-source(here("script/05_plotting/plot-raw-phe.R"))
+source(here("scripts/05_plotting/plot-raw-phe.R"))
 
 sos_species = "Pistacia chinensis" # within from large to small
 sos_plots <- plot_species_raw_phe(species = sos_species, color_palette, phe_type = "SOS", color_limits = c(27, 124),
@@ -210,7 +210,7 @@ C_{\mathrm{intra}}
 = \frac{\hat{\sigma}^2_{\mathrm{intra}}}
 {\hat{\sigma}^2_{\mathrm{intra}} + \hat{\sigma}^2_{\mathrm{cross}}}.
 $$
-The model is implemented in `script/04_stats_model/fit_variance.R`. The resulting variance partitioning results are used to generate the figure below.
+The model is implemented in `scripts/04_stats_model/fit_variance.R`. The resulting variance partitioning results are used to generate the figure below.
 
 ```{r}
 #| label: fig-variance
@@ -218,7 +218,7 @@ The model is implemented in `script/04_stats_model/fit_variance.R`. The resultin
 #| fig-width: 8
 #| fig-height: 5.5
 #| warning: false
-source(here("script/05_plotting/plot-variance-ring.R"))
+source(here("scripts/05_plotting/plot-variance-ring.R"))
 
 p_EOS_ring <- plot_variance_ring(phe_type = "EOS")
 p_SOS_ring <- plot_variance_ring(phe_type = "SOS")
@@ -251,7 +251,7 @@ $$\varepsilon(\mathbf{s},t) \stackrel{\text{i.i.d.}}{\sim} \mathcal{N}(0,\sigma_
 
 $$\beta_{\ell} \sim \mathcal{N}(0, \sigma_\beta^2), \quad {\ell} \in \{0, {\text{T}}, {\text{P}}, {\text{R}}\}$$
 
-The code to fit these spatial models is saved in `script/04_stats_model/fit_spatial/inla/run_inla_all_models.R`,
+The code to fit these spatial models is saved in `scripts/04_stats_model/fit_spatial/inla/run_inla_all_models.R`,
 and the results are stored in `release/intermediate/spatial/inla`.
 
 ### Example spatial patterns
@@ -263,7 +263,7 @@ We show one example of the spatial patterns of mean seasonal temperature and the
 #| fig-cap: "Spatial patterns of mean seasonal temperature and the phenological metric for one representative species in one example city in 2022."
 #| fig-width: 8
 #| fig-height: 5.5
-source(here("script/05_plotting/plot-phe-temp-margin.R"))
+source(here("scripts/05_plotting/plot-phe-temp-margin.R"))
 cities = c("NewYork", "TP", "Stockton", "LosAngeles", "Seattle", "Sacramento", "WashingtonDC", "SanFrancisco")
 species = c(
   "Acer rubrum", "Acer rubrum",
@@ -295,7 +295,7 @@ all_plots
 This section summarizes all the coefficients obtained from the spatial models for each species–city combination.
 
 ```{r input-coef}
-source(here("script/04_stats_model/summarize-spatial-coef.R"))
+source(here("scripts/04_stats_model/summarize-spatial-coef.R"))
 df_coef <- summarize_spatial_coef(model_type = "inla")
 ```
 
@@ -308,7 +308,7 @@ df_coef <- summarize_spatial_coef(model_type = "inla")
 #| warning: false
 #| eval: true
 
-source(here("script/05_plotting/plot-city-coef-distribute.R"))
+source(here("scripts/05_plotting/plot-city-coef-distribute.R"))
 p_all_coef <- plot_city_coef(
   coef_summary_all = df_coef |>
     mutate(species = gsub("_", " ", species)),
@@ -355,7 +355,7 @@ We first visualized the spatial distribution of city-level mean temperature sens
 #| fig-height: 5
 #| fig-cap: "Spatial distribution of city-level mean temperature sensitivity for SOS (a) and EOS (b), averaged across species present in each city."
 #| warning: false
-source(here("script/05_plotting/plot-city-coef-map.R"))
+source(here("scripts/05_plotting/plot-city-coef-map.R"))
 plot_city_coef_map(df_coef)
 ```
 
@@ -382,7 +382,7 @@ species_example <- c(
   "Fraxinus pennsylvanica",
   "Tilia cordata"
 )
-source(here("script/05_plotting/plot-species-uni.R"))
+source(here("scripts/05_plotting/plot-species-uni.R"))
 plot_SOS <- plot_species_uni(clim = "bio1", phe_type = "SOS", species_example, df_coef)
 plot_EOS <- plot_species_uni(clim = "bio12", phe_type = "EOS", species_example, df_coef)
 
@@ -418,7 +418,7 @@ $$b_{\ell} \sim \mathcal{N}(0, \sigma_b^2), \quad {\ell} \in \{0, \mathrm{MAT}, 
 #| fig-height: 4
 #| fig-cap: "Relationships between phenological temperature sensitivity and city-level climate."
 #| warning: false
-source(here("script/04_stats_model/fit_pglmm.R"))
+source(here("scripts/04_stats_model/fit_pglmm.R"))
 pglmm_path <- here("release/output/pglmm_bioclimate_inla.rds")
 
 if (!file.exists(pglmm_path)) {
