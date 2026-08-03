@@ -1,5 +1,5 @@
-source(here("script/05_plotting/plot-setting-city-map.R"))
-source(here("script/04_stats_model/fit_spatial/prepare_model_input.R"))
+source(here("scripts/05_plotting/plot-setting-city-map.R"))
+source(here("scripts/04_stats_model/fit_spatial/prepare_model_input.R"))
 pacman::p_load(terra, ggspatial)
 
 plot_phe_temp_margin <- function(city = "NewYork", species = "Acer rubrum", phe_type = "SOS", year = 2022){

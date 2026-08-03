@@ -24,7 +24,7 @@ set -uo pipefail
 
 # Define the R script and input/output files
 WORKING_DIR=../phenology-urban/
-R_SCRIPT_SEN=../phenology-urban/script/04_stats_model/fit_spatial/inla/run_sensitive_models.R
+R_SCRIPT_SEN=../phenology-urban/scripts/04_stats_model/fit_spatial/inla/run_sensitive_models.R
 OUTPUT_DIR=${WORKING_DIR}/temp/slurm_logs
 
 # Only for spBayes

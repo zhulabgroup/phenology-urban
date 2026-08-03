@@ -21,7 +21,7 @@
 
 # Define the R script and input/output files
 WORKING_DIR=../phenology-urban/
-SCRIPT=../phenology-urban/script/process_Daymet_point.py
+SCRIPT=../phenology-urban/scripts/process_Daymet_point.py
 
 # Load necessary modules
 module load python3.9-anaconda/2021.11

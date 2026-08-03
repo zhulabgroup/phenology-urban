@@ -1,4 +1,4 @@
-source(here("script/04_stats_model/fit_pglmm.R"))
+source(here("scripts/04_stats_model/fit_pglmm.R"))
 
 
 plot_species_uni <- function(clim, phe_type, species_example, df_coef) {

@@ -13,7 +13,7 @@
 
 # Define the R script and input/output files
 WORKING_DIR=../phenology-urban/
-R_SCRIPT=../phenology-urban/script/download_process_PS.R
+R_SCRIPT=../phenology-urban/scripts/download_process_PS.R
 
 # Load necessary modules
 module load Rgeospatial/4.2.0-2023-04-25

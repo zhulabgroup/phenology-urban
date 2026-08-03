@@ -6,8 +6,8 @@ select <- dplyr::select
 options(inla.call = "inla")
 library(INLA)
 
-source(here("script/04_stats_model/fit_spatial/prepare_model_input.R"))
-source(here("script/04_stats_model/fit_spatial/inla/alg_sp_inla.R"))
+source(here("scripts/04_stats_model/fit_spatial/prepare_model_input.R"))
+source(here("scripts/04_stats_model/fit_spatial/inla/alg_sp_inla.R"))
 
 ################################## parameter loading ##################################
 
