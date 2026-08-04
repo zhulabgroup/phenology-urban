@@ -45,3 +45,5 @@ inst/doc
 history_database
 .Rhistory
 .vscode/extensions.json
+.vscode/settings.json
+.DS_Store
