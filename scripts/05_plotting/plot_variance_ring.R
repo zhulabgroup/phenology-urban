@@ -77,6 +77,38 @@ plot_variance_ring <- function(phe_type) {
       name = "Variance proportion (%)",
       labels = c("Between-city", "Within-city")
     )
-  
+  built <- ggplot2::ggplot_build(p_ring)
+
+  bar_layers <- Filter(
+    function(d) all(c("xmin", "xmax") %in% names(d)),
+    built$data
+  )
+
+  bar_data <- bar_layers[[length(bar_layers)]]
+
+  x0   <- min(bar_data$xmin, na.rm = TRUE)
+  x100 <- max(bar_data$xmax, na.rm = TRUE)
+  x50  <- x0 + 0.5 * (x100 - x0)
+
+  tip_y <- all_tree$data$y[all_tree$data$isTip]
+
+  ring_50 <- data.frame(
+    x = rep(x50, 500),
+    y = seq(
+      min(tip_y) - 0.5,
+      max(tip_y) + 0.5,
+      length.out = 500
+    )
+  )
+
+  p_ring <- p_ring +
+    geom_path(
+      data = ring_50,
+      aes(x = x, y = y),
+      inherit.aes = FALSE,
+      color = "grey60",
+      linetype = "dashed",
+      linewidth = 0.45
+    )
   return(p_ring)
 }
