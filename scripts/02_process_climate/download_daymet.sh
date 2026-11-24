@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=download_daymet_prcp
+#SBATCH --job-name=download_daymet_days
 #SBATCH --account=[]                   # Account name
 #SBATCH --output=slurm_job%j_task%a.out
 #SBATCH --error=slurm_job%j_task%a.err
