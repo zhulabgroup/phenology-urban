@@ -1,5 +1,40 @@
 pacman::p_load(terra)
 
+summarise_Daymet_seasons <- function(daymet, season_type = "full_season") {
+  season_type <- match.arg(season_type, c("full_season", "early_season", "later_season"))
+  winter_months <- switch(season_type,
+    full_season = c(12, 1, 2), early_season = c(12, 1), later_season = c(1, 2)
+  )
+  summer_months <- switch(season_type,
+    full_season = c(6, 7, 8), early_season = c(6, 7), later_season = c(7, 8)
+  )
+  if (!all(c("id", "date", "srad", "prcp") %in% names(daymet))) {
+    stop("Daily Daymet data must contain id, date, srad, and prcp")
+  }
+  daymet <- daymet |>
+    mutate(date = as.Date(date))
+  if (anyNA(daymet$id) || anyNA(daymet$date)) stop("Daily Daymet data contains missing IDs or dates")
+  if (anyDuplicated(daymet[c("id", "date")])) stop("Daily Daymet data contains duplicate tree dates")
+
+  daymet |>
+    mutate(month = lubridate::month(date),
+           year = lubridate::year(date) + as.integer(month == 12),
+           season = case_when(
+             month %in% winter_months ~ "winter",
+             month %in% summer_months ~ "summer",
+             season_type == "full_season" & month %in% 3:5 ~ "spring",
+             season_type == "full_season" & month %in% 9:11 ~ "fall",
+             TRUE ~ NA_character_
+           )) |>
+    filter(!is.na(season)) |>
+    group_by(id, year, season) |>
+    summarise(
+      Avg_srad = if (all(is.na(srad))) NA_real_ else mean(srad, na.rm = TRUE),
+      Sum_Sum_mm = if (all(is.na(prcp))) NA_real_ else sum(prcp, na.rm = TRUE),
+      .groups = "drop"
+    )
+}
+
 prepare_tree_Grid_climate <- function(city, fixed_season = TRUE, season_type = "full_season") {
   if (!is.logical(fixed_season) || length(fixed_season) != 1L || is.na(fixed_season)) {
     stop("fixed_season must be TRUE or FALSE")
@@ -18,10 +53,18 @@ prepare_tree_Grid_climate <- function(city, fixed_season = TRUE, season_type = "
     filter(!(lon == "NaN") & !(lat == "NaN")) |>
     st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F)
   
-  ###### Daymet shortwave radiation #######
-  daymet_srad <- read_csv(paste0(here("data/input/climate/Daymet/"), city, "/srad_monthly_2016_2024.csv"), show_col_types = FALSE)
-  daymet_prcp <- read_csv(paste0(here("data/input/climate/Daymet/"), city, "/prcp_monthly_2016_2024.csv"), show_col_types = FALSE)
+  daymet_files <- list.files(
+    here("data/input/climate/Daymet", city),
+    pattern = "^daymet_daily_[0-9]{4}_[0-9]{4}\\.csv\\.gz$",
+    full.names = TRUE
+  )
+  if (length(daymet_files) != 1L) {
+    stop("Expected exactly one daily Daymet file for ", city, "; found ", length(daymet_files))
+  }
+  daymet <- read_csv(daymet_files[1], show_col_types = FALSE) |>
+    summarise_Daymet_seasons(season_type)
   if (season_type != "full_season") {
+    message(paste0("Processing UHAT season type: ", season_type))
     source(here("scripts/02_process_climate/process_UHAT.R"), local = TRUE)
     process_UHAT_city(city, season_type)
   }
@@ -73,14 +116,12 @@ prepare_tree_Grid_climate <- function(city, fixed_season = TRUE, season_type = "
     )
   
   points_surface <- tree_location |>
-    left_join(daymet_srad |>
-                select(id, year, season, Avg_srad) |>
-                pivot_wider(names_from = season, values_from = Avg_srad, names_prefix = "Daymet_srad_"),
-              by = c("id")) |>
-    left_join(daymet_prcp |>
-                select(id, year, season, Sum_Sum_mm) |>
-                pivot_wider(names_from = season, values_from = Sum_Sum_mm, names_prefix = "Daymet_prcp_"),
-              by = c("id", "year")) |>
+    left_join(daymet |>
+                pivot_wider(names_from = season, values_from = c(Avg_srad, Sum_Sum_mm),
+                            names_glue = "{.value}_{season}") |>
+                rename_with(~ sub("^Avg_srad_", "Daymet_srad_", .x), starts_with("Avg_srad_")) |>
+                rename_with(~ sub("^Sum_Sum_mm_", "Daymet_prcp_", .x), starts_with("Sum_Sum_mm_")),
+              by = "id") |>
     left_join(uhat_climate |>
                 mutate(year = as.double(year)), by = c("id", "year"))
   
@@ -92,13 +133,12 @@ prepare_tree_Grid_climate <- function(city, fixed_season = TRUE, season_type = "
 tree_dir <- here("data/input/tree_list")
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
 cities <- gsub("\\.rds$", "", basename(rds_files))
-if (sys.nframe() == 0L) for (city in cities){
+if (sys.nframe() == 0L) for (city in cities[5:10]){
   tryCatch(
     {
-      prepare_tree_Grid_climate(city)
+      prepare_tree_Grid_climate(city, season_type = "early_season")
     },
     error = function(e) {
       message("Skipping ", city, ": ", e$message)
     }
   )}
-
