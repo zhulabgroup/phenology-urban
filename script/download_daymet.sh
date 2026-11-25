@@ -1,62 +1,45 @@
 #!/bin/bash
 #SBATCH --job-name=download_daymet_prcp
 #SBATCH --account=zhukai0                   # Account name
-#SBATCH --output=slurm_job%j_task%a.out
-#SBATCH --error=slurm_job%j_task%a.err
-#SBATCH --array=1
+#SBATCH --output=slurm_job%A_task%a.out
+#SBATCH --error=slurm_job%A_task%a.err
+#SBATCH --array=0-4
 #SBATCH --time=24:00:00
 #SBATCH --partition=standard
 #SBATCH --mem=10G
-#SBATCH --cpus-per-task=2
+#SBATCH --cpus-per-task=1
 #SBATCH --mail-user=jializ@umich.edu        # Where to send mail
 #SBATCH --mail-type=BEGIN,END               # Mail notifications at the start and end of the job
 
-# Usage:
-# Submit the script to Slurm with:
-#    sbatch run_jags_array_slurm.sh
-# When Slurm job array is completed, create a symbolic link to the desirable output with:
-#    ln -si "$WORKING_DIR/intermediate/slurm_job123456/jags_mod.rds" \
-#          "$WORKING_DIR/intermediate/jags_mod.rds"
-#    The `-si` option in `ln` will prompt for confirmation before replacing any existing link or file.
+set -eo pipefail
+export LC_ALL=C
 
-# Define the R script and input/output files
-WORKING_DIR=../phenology-urban/
-SCRIPT=../phenology-urban/script/process_Daymet_point.py
+TREE_DIR="/home/jializ/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input"
+SCRIPT="$SLURM_SUBMIT_DIR/script/process_Daymet_point.py"
 
-# Load necessary modules
+shopt -s nullglob
+files=("$TREE_DIR"/*.rds)
+if (( ${#files[@]} == 0 )); then
+	echo "No city RDS files found in $TREE_DIR" >&2
+	exit 1
+fi
+: "${SLURM_ARRAY_TASK_ID:?Submit this script as a Slurm array}"
+
+cities=()
+for ((index = SLURM_ARRAY_TASK_ID; index < ${#files[@]}; index += 5)); do
+	city=$(basename "${files[index]}" .rds)
+	cities+=("$city")
+done
+
+if (( ${#cities[@]} == 0 )); then
+	echo "No cities assigned to task $SLURM_ARRAY_TASK_ID"
+	exit 0
+fi
+
 module load python3.9-anaconda/2021.11
-source ../LilyPythonTest/bin/activate
+source "$SLURM_SUBMIT_DIR/../LilyPythonTest/bin/activate"
 
-# Record the start time
-start_time=$(date +%s)
-
-# Run the script
-python -u $SCRIPT
-
-# Record the end time and calculate duration
-end_time=$(date +%s)
-duration=$((end_time - start_time))
-
-# Convert the duration to a human-readable format
-hh=$((duration / 3600))
-mm=$(((duration % 3600) / 60))
-ss=$((duration % 60))
-formatted_duration=$(printf "%02d:%02d:%02d" $hh $mm $ss)
-
-# Convert memory to a human-readable format
-mem_gb=$((SLURM_MEM_PER_NODE / 1024))
-
-# Log job information
-job_info=$OUTPUT_DIR/slurm_job${SLURM_ARRAY_JOB_ID}_task${SLURM_ARRAY_TASK_ID}.log
-echo "Job ID: $SLURM_ARRAY_JOB_ID" > $job_info
-echo "Job Name: $SLURM_JOB_NAME" >> $job_info
-echo "Partition: $SLURM_JOB_PARTITION" >> $job_info
-echo "Array Task ID: $SLURM_ARRAY_TASK_ID" >> $job_info
-echo "Number of CPUs: $SLURM_CPUS_PER_TASK" >> $job_info
-echo "Memory: ${mem_gb}GB" >> $job_info
-echo "Time Limit: $SLURM_TIMELIMIT" >> $job_info
-echo "Start Time: $(date -d @$start_time '+%Y-%m-%d %H:%M:%S')" >> $job_info
-echo "End Time: $(date -d @$end_time '+%Y-%m-%d %H:%M:%S')" >> $job_info
-echo "Duration: $formatted_duration" >> $job_info
+echo "Processing ${#cities[@]} cities: ${cities[*]}"
+python -u "$SCRIPT" --tree-dir "$TREE_DIR" --cities "${cities[@]}" --workers 2
 
 
