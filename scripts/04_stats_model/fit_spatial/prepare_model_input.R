@@ -4,7 +4,7 @@
 # phe_type <- "SOS" # "SOS", "EOS"
 
 prepare_data <- function(city, source = "Grid", taxa_col = "canonicalname", phe_type) {
-  if (source == "Grid") { # UHAT and Daymet
+  if (source %in% c("Grid", "Grid_early_season", "Grid_later_season")) { # UHAT and Daymet
        input_dir <- list.files(,
         path = paste0(here("data/input/tree_climate/"), source, "/"), # For example NY
         pattern = paste0("^", city, ".*\\.rds$"),
@@ -39,8 +39,39 @@ prepare_data <- function(city, source = "Grid", taxa_col = "canonicalname", phe_
                srad_summer = Daymet_srad_summer, srad_winter = Daymet_srad_winter) |>
         st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F) |>
         st_transform(crs = 5070)
-    } else {
-      stop("Invalid source. Must be 'WU' or 'Grid'.")
+    } else if (source %in% c("Grid_pre60", "Grid_pre30")) { # UHAT and Daymet
+      preseason <- sub("^Grid_", "", source)
+      
+      read_climate <- function(phase, season) {
+        files <- list.files(
+          here("data/input/tree_climate", paste0("Grid_", phase, "_", preseason)),
+          pattern = paste0("^", city, "__.*\\.rds$"), full.names = TRUE
+        )
+        if (!length(files)) stop("No ", phase, " files for ", city)
+        
+        map_dfr(files, ~ read_rds(.x) |>
+                  st_drop_geometry() |>
+                  select(id, taxa, lon, lat, year,
+                         temp = UHAT_temp_preseason,
+                         prcp = Daymet_prcp_preseason,
+                         srad = Daymet_srad_preseason)) |>
+          rename_with(~ paste0(.x, "_", season), c(temp, prcp, srad))
+      }
+      
+      tree_climate <- full_join(
+        read_climate("SOS", "winter"),
+        read_climate("EOS", "summer"),
+        by = c("id", "taxa", "lon", "lat", "year"),
+        relationship = "one-to-one"
+      ) |>
+        select(id, taxa, lon, lat, year,
+               temp_summer, temp_winter,
+               prcp_summer, prcp_winter,
+               srad_summer, srad_winter) |>
+        st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = FALSE) |>
+        st_transform(crs = 5070)
+    }else {
+      stop("Invalid source. Must be 'Grid', 'Grid_early_season', or 'Grid_later_season'.")
     }
   
   #Join to phenology data

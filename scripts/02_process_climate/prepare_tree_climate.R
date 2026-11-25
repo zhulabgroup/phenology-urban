@@ -1,4 +1,7 @@
 pacman::p_load(terra)
+source(here(
+  "scripts/02_process_climate/prepare_tree_Grid_climate_adaptive.R"
+))
 
 summarise_Daymet_seasons <- function(daymet, season_type = "full_season") {
   season_type <- match.arg(season_type, c("full_season", "early_season", "later_season"))
@@ -35,11 +38,20 @@ summarise_Daymet_seasons <- function(daymet, season_type = "full_season") {
     )
 }
 
-prepare_tree_Grid_climate <- function(city, fixed_season = TRUE, season_type = "full_season") {
+prepare_tree_Grid_climate <- function(city, fixed_season = TRUE, season_type = "full_season", preseason_length = 30, phenophase = "SOS", ...) {
   if (!is.logical(fixed_season) || length(fixed_season) != 1L || is.na(fixed_season)) {
     stop("fixed_season must be TRUE or FALSE")
   }
-  if (!fixed_season) stop("fixed_season = FALSE is not implemented")
+  if (!fixed_season) {
+    return(
+      prepare_tree_Grid_climate_adaptive(
+        city = city,
+        preseason_length = preseason_length,
+        phenophase = phenophase,
+        ...
+      )
+    )
+  }
   season_type <- match.arg(season_type, c("full_season", "early_season", "later_season"))
   output_dir <- switch(season_type, full_season = "Grid", early_season = "Grid_early_season",
                        later_season = "Grid_later_season")
@@ -133,10 +145,10 @@ prepare_tree_Grid_climate <- function(city, fixed_season = TRUE, season_type = "
 tree_dir <- here("data/input/tree_list")
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
 cities <- gsub("\\.rds$", "", basename(rds_files))
-if (sys.nframe() == 0L) for (city in cities[5:10]){
+if (sys.nframe() == 0L) for (city in cities[1:22]){
   tryCatch(
     {
-      prepare_tree_Grid_climate(city, season_type = "early_season")
+      prepare_tree_Grid_climate(city, fixed_season = FALSE, preseason_length = 60, phenophase = "SOS")
     },
     error = function(e) {
       message("Skipping ", city, ": ", e$message)
