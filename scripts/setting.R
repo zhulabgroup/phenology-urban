@@ -102,6 +102,8 @@ create_symlink_turbo("data/intermediate/spatial/mcmc", "proj-phenology-urban/pro
 create_symlink_turbo("data/intermediate/spatial/inla_gsl", "proj-phenology-urban/proc/model_output/final_models_clean_outlier/inla_gsl")
 create_symlink_turbo("data/intermediate/spatial/inla_early_season", "proj-phenology-urban/proc/model_output/final_models_clean_outlier/inla_early_season")
 create_symlink_turbo("data/intermediate/spatial/inla_later_season", "proj-phenology-urban/proc/model_output/final_models_clean_outlier/inla_later_season")
+create_symlink_turbo("data/intermediate/spatial/inla_pre60", "proj-phenology-urban/proc/model_output/final_models_clean_outlier/inla_pre60")
+create_symlink_turbo("data/intermediate/spatial/inla_pre30", "proj-phenology-urban/proc/model_output/final_models_clean_outlier/inla_pre30")
 create_symlink_turbo("data/intermediate/variance_decompose", "proj-phenology-urban/proc/model_output/variance_decompose")
 
 create_symlink_turbo("data/output", "proj-phenology-urban/output")
