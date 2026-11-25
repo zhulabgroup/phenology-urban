@@ -2,7 +2,6 @@
 
 import argparse
 import gzip
-import logging
 import threading
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from io import StringIO
@@ -18,7 +17,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DAYMET_URL = "https://daymet.ornl.gov/single-pixel/api/data"
 DAYMET_VARIABLES = ("prcp", "srad")
 THREAD_LOCAL = threading.local()
-LOGGER = logging.getLogger(__name__)
 
 
 def parse_daily_response(text, tree_id):
@@ -107,8 +105,7 @@ def download_city(tree_file, output_dir, years, workers):
                         try:
                             daily = future.result()
                         except Exception as error:
-                            LOGGER.warning("Skipping %s tree %s: %s", city, tree_id, error)
-                            continue
+                            raise RuntimeError(f"Failed to download {city} tree {tree_id}") from error
                         daily.to_csv(output, index=False, header=completed == 0)
                         completed += 1
                         if completed % 100 == 0:
@@ -117,13 +114,10 @@ def download_city(tree_file, output_dir, years, workers):
                 try:
                     daily = future.result()
                 except Exception as error:
-                    LOGGER.warning("Skipping %s tree %s: %s", city, tree_id, error)
-                    continue
+                    raise RuntimeError(f"Failed to download {city} tree {tree_id}") from error
                 daily.to_csv(output, index=False, header=completed == 0)
                 completed += 1
 
-    if completed == 0:
-        raise RuntimeError(f"No trees downloaded for {city}; incomplete file retained: {partial_file}")
     partial_file.rename(out_file)
     print(f"Saved {completed} trees to {out_file}")
 
