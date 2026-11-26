@@ -23,7 +23,7 @@ set -uo pipefail
 
 # Define the R script and input/output files
 WORKING_DIR=../phenology-urban/
-R_SCRIPT_INLA=../phenology-urban/script/spatial_stats_model/inla_alg/run_inla_all_models.R
+R_SCRIPT_INLA=../phenology-urban/script/spatial_stats_model/inla_alg/run_inla_sensitivity.R
 OUTPUT_DIR=${WORKING_DIR}/temp/slurm_logs
 
 # Load necessary modules
