@@ -113,18 +113,13 @@ summarise_UHAT_seasons <- function(raw_uhat, season_type = "full_season") {
     select(lon, lat, year, season, tmax, tmin, tavg)
 }
 
-process_UHAT_city <- function(city, season_type = "full_season", overwrite = FALSE) {
+process_UHAT_city <- function(city, raw_uhat, season_type = "full_season", overwrite = FALSE) {
   season_type <- match.arg(season_type, c("full_season", "early_season", "later_season"))
   out_dir <- paste0("~/lab-data/datasets/climate/UHAT/", switch(season_type,
                                                     full_season = "clean", early_season = "clean_early_season",
                                                     later_season = "clean_later_season"
   ))
   message(paste0("UHAT: Processing city: ", city))
-  uhat_file <- paste0("~/lab-data/datasets/climate/UHAT/raw/", city, ".csv")
-  if (!file.exists(uhat_file)) {
-    stop("No UHAT found for: ", city)
-  }
-  raw_uhat <- read_csv(uhat_file)
   UHAT_climate <- summarise_UHAT_seasons(raw_uhat, season_type)
   dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
   

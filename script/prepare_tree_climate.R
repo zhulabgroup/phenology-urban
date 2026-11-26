@@ -2,6 +2,9 @@ library(zhulabtools)
 load_packages(c("here", "tidyverse", "ggplot2", "sf", "lubridate", "terra", "patchwork", "scales", "viridis", "leaflet"))
 select <- dplyr::select
 pacman::p_load(terra)
+source(here(
+  "script/prepare_tree_Grid_climate_adaptive.R"
+))
 
 summarise_Daymet_seasons <- function(daymet, season_type = "full_season") {
   season_type <- match.arg(season_type, c("full_season", "early_season", "later_season"))
@@ -38,37 +41,37 @@ summarise_Daymet_seasons <- function(daymet, season_type = "full_season") {
     )
 }
 
-prepare_tree_Grid_climate <- function(city, fixed_season = TRUE, season_type = "full_season") {
+prepare_tree_Grid_climate <- function(city, raw_uhat, daymet_raw, fixed_season = TRUE, season_type = "full_season", preseason_length = 30, phenophase = "SOS", ...) {
   if (!is.logical(fixed_season) || length(fixed_season) != 1L || is.na(fixed_season)) {
     stop("fixed_season must be TRUE or FALSE")
   }
-  if (!fixed_season) stop("fixed_season = FALSE is not implemented")
+  if (!fixed_season) {
+    return(
+      prepare_tree_Grid_climate_adaptive(
+        city = city, raw_uhat, daymet_raw,
+        preseason_length = preseason_length,
+        phenophase = phenophase,
+        ...
+      )
+    )
+  }
   season_type <- match.arg(season_type, c("full_season", "early_season", "later_season"))
   output_dir <- switch(season_type, full_season = "Grid", early_season = "Grid_early_season",
                        later_season = "Grid_later_season")
   out_path <- here("data/proc/tree_climate", output_dir, paste0(city, ".rds"))
   
   ################## Calculate seasonal climate ##################
-  message(paste0("Processing example city: ", city, "..."))
   
   tree_dir <- paste0("~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/", city, ".rds")
   tree_location <- read_rds(tree_dir) |>
     filter(!(lon == "NaN") & !(lat == "NaN")) |>
     st_as_sf(coords = c("lon", "lat"), crs = 4326, remove = F)
-  
-  daymet_files <- list.files(
-    here("data/raw/CONUS/Daymet/all_city_trees", city),
-    pattern = "^daymet_daily_[0-9]{4}_[0-9]{4}\\.csv\\.gz$",
-    full.names = TRUE
-  )
-  if (length(daymet_files) != 1L) {
-    stop("Expected exactly one daily Daymet file for ", city, "; found ", length(daymet_files))
-  }
-  daymet <- read_csv(daymet_files[1], show_col_types = FALSE) |>
+  message(paste0("Daymet: Processing city: ", city))
+  daymet <- daymet_raw |>
     summarise_Daymet_seasons(season_type)
   if (season_type != "full_season") {
     source(here("script/process_UHAT.R"), local = TRUE)
-    process_UHAT_city(city, season_type)
+    process_UHAT_city(city, raw_uhat, season_type)
   }
   
   ###### UHAT temperature #######
@@ -118,6 +121,7 @@ prepare_tree_Grid_climate <- function(city, fixed_season = TRUE, season_type = "
     )
   
   points_surface <- tree_location |>
+    mutate(id = as.character(id)) |>
     left_join(daymet |>
                 pivot_wider(names_from = season, values_from = c(Avg_srad, Sum_Sum_mm),
                             names_glue = "{.value}_{season}") |>
@@ -125,7 +129,7 @@ prepare_tree_Grid_climate <- function(city, fixed_season = TRUE, season_type = "
                 rename_with(~ sub("^Sum_Sum_mm_", "Daymet_prcp_", .x), starts_with("Sum_Sum_mm_")),
               by = "id") |>
     left_join(uhat_climate |>
-                mutate(year = as.double(year)), by = c("id", "year"))
+                mutate(year = as.double(year), id = as.character(id)), by = c("id", "year"))
   
   dir.create(dirname(out_path), recursive = TRUE, showWarnings = FALSE)
   write_rds(points_surface, out_path, compress = "gz")
@@ -135,12 +139,43 @@ prepare_tree_Grid_climate <- function(city, fixed_season = TRUE, season_type = "
 tree_dir <- "~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/"
 rds_files <- list.files(tree_dir, pattern = "\\.rds$", full.names = TRUE)
 cities <- gsub("\\.rds$", "", basename(rds_files))
-if (sys.nframe() == 0L) for (city in cities[14:21]){
-  tryCatch(
-    {
-      prepare_tree_Grid_climate(city, season_type = "early_season")
-    },
-    error = function(e) {
-      message("Skipping ", city, ": ", e$message)
-    }
-  )}
+
+if (sys.nframe() == 0L) {
+  n_cores <- as.integer(Sys.getenv("SLURM_CPUS_PER_TASK", "6"))
+  
+  results <- parallel::mclapply(cities[23:76], function(city) {
+    tryCatch({
+      uhat_file <- paste0("~/lab-data/datasets/climate/UHAT/raw/", city, ".csv")
+      if (!file.exists(uhat_file)) stop("No UHAT found")
+      raw_uhat <- readr::read_csv(uhat_file, show_col_types = FALSE, num_threads = 1)
+      
+      daymet_files <- list.files(here("data/raw/CONUS/Daymet/all_city_trees", city),
+                                 pattern = "^daymet_daily_[0-9]{4}_[0-9]{4}\\.csv\\.gz$", full.names = TRUE)
+      if (length(daymet_files) != 1L) stop("Expected one Daymet file, found ", length(daymet_files))
+      
+      daymet_raw <- readr::read_csv(daymet_files[1],
+                                    col_select = all_of(c("id", "date", "prcp", "srad")),
+                                    col_types = cols(id = col_character(), date = col_character(),
+                                                     prcp = col_double(), srad = col_double()),
+                                    num_threads = 1, show_col_types = FALSE)
+      
+      for (season in c("early_season", "later_season"))
+        prepare_tree_Grid_climate(city, raw_uhat, daymet_raw, fixed_season = TRUE, season_type = season)
+      
+      for (phe in c("SOS", "EOS")) {
+        prepare_tree_Grid_climate(city, raw_uhat, daymet_raw,
+                                  fixed_season = FALSE, preseason_length = 30, phenophase = phe)
+        prepare_tree_Grid_climate(city, raw_uhat, daymet_raw,
+                                  fixed_season = FALSE, preseason_length = 60, phenophase = phe)
+      }
+      
+      message("Finished: ", city)
+      data.frame(city, status = "success")
+    }, error = function(e) {
+      message("Failed: ", city, " - ", conditionMessage(e))
+      data.frame(city, status = conditionMessage(e))
+    })
+  }, mc.cores = n_cores, mc.preschedule = FALSE)
+  
+  print(dplyr::bind_rows(results))
+}
