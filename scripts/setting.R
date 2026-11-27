@@ -3,7 +3,7 @@ options(repos = c(CRAN = "https://cloud.r-project.org"))
 if (!requireNamespace("pacman", quietly = TRUE)) install.packages("pacman")
 library(pacman)
 options(repos = c(CRAN = "https://cloud.r-project.org"))
-pacman::p_load(sf, patchwork, tidyverse, leaflet)
+pacman::p_load(here, sf, patchwork, tidyverse, leaflet)
 
 city_label <- c(
   "DT" = "Detroit, MI",
@@ -95,6 +95,7 @@ create_symlink_turbo("data/input/phenology/no_outlier", "datasets/vegetation/PS/
 create_symlink_turbo("data/input/tree_climate", "proj-phenology-urban/proc/tree_climate")
 create_symlink_turbo("data/input/tree_list", "datasets/vegetation/StreetTrees/cleaned_ps_input")
 create_symlink_turbo("data/input/boundary", "datasets/boundary/USAdministrative")
+create_symlink_turbo("data/input/NPN", "proj-phenology-urban/raw/CONUS/NPN")
 
 create_symlink_turbo("data/intermediate/spatial/inla", "proj-phenology-urban/proc/model_output/final_models_clean_outlier/inla")
 create_symlink_turbo("data/intermediate/spatial/freq", "proj-phenology-urban/proc/model_output/final_models_clean_outlier/freq")

@@ -440,3 +440,20 @@ p1 + p2 +
     legend.position = "bottom"
   )
 ```
+
+# Validation and sensitivity analyses
+
+## Validation of phenological observations from PlanetScope with NPN
+
+```{r}
+#| label: fig-compare-PS-NPN
+#| include: true
+#| fig-width: 13
+#| fig-height: 13
+#| fig-cap: "Comparison of phenological metrics derived from PlanetScope and NPN observations for (a) SOS at specific location-year, (b) EOS at specific location-year, (c) SOS for specific species-year, (d) EOS for specific species-year".
+#| warning: false
+source(here("scripts/06_validation/validate_PS_NPN.R"))
+fig_plot <- plot_validation_ps_npn()
+fig_plot
+# ggsave("~/phenology-urban/temp/figure_supp/validate_ps_npn.png", p, width = 14.5, height = 11.5, dpi = 500)
+```
