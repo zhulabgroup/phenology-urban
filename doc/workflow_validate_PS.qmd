@@ -61,9 +61,9 @@ The filter rules are:
 > It is common that there were multiple instances where the plant transitioned from a status of No to a status of Yes. These can represent real phenomena, for instance a drought deciduous tree that leafs out several times in a year, or a dogwood that reblooms after a frost event. This can also occur when observers are reporting on the same plant on sequential days but are not in agreement on phenophase status with other observers.
 
 ```{r}
-us_city <- st_read(here("data/raw/CONUS/boundary/USCities/tl_2024_us_uac20.shp"),quiet = TRUE) |>
+us_city <- st_read(("~/lab-data/datasets/boundary/USAdministrative/USCities/tl_2024_us_uac20.shp"),quiet = TRUE) |>
   st_transform(4326)
-us_boundary <- st_read(here("data/raw/CONUS/boundary/US/us_boundarydissolve.shp"),quiet = TRUE) |>
+us_boundary <- st_read(("~/lab-data/datasets/boundary/USAdministrative/US/us_boundarydissolve.shp"),quiet = TRUE) |>
   st_transform(4326)
 threshold <- 21 # tolerance of gap to combine series
 
@@ -241,52 +241,52 @@ ggplot(npn_sos, aes(npn_doy)) +
 #| fig-width: 16
 #| warning: false
 
-top10_Species <- npn_sos |>
-  count(Species, sort = TRUE) |>
-  slice_head(n = 10) |>
-  pull(Species)
-npn_sos_top10 <- npn_sos |> filter(Species %in% top10_Species)
-
-ggplot(npn_sos_top10, aes(x = npn_doy)) +
-  geom_histogram(bins = 30, size = 0.2) +
-  labs(
-    x = "DOY",
-    y = "Density",
-    title = "Histogram of NPN-derived SOS by Species and Case Type"
-  ) +
-  facet_grid(Species ~ type, scales = "free") +
-  theme_minimal(base_size = 14) +
-  theme(
-    strip.text = element_text(size = 12),
-    strip.text.y = element_text(angle = 0),  # <-- this line sets vertical text orientation
-    axis.text.x = element_text(angle = 45, hjust = 1)
-  )
+# top10_Species <- npn_sos |>
+#   count(Species, sort = TRUE) |>
+#   slice_head(n = 10) |>
+#   pull(Species)
+# npn_sos_top10 <- npn_sos |> filter(Species %in% top10_Species)
+# 
+# ggplot(npn_sos_top10, aes(x = npn_doy)) +
+#   geom_histogram(bins = 30, size = 0.2) +
+#   labs(
+#     x = "DOY",
+#     y = "Density",
+#     title = "Histogram of NPN-derived SOS by Species and Case Type"
+#   ) +
+#   facet_grid(Species ~ type, scales = "free") +
+#   theme_minimal(base_size = 14) +
+#   theme(
+#     strip.text = element_text(size = 12),
+#     strip.text.y = element_text(angle = 0),  # <-- this line sets vertical text orientation
+#     axis.text.x = element_text(angle = 45, hjust = 1)
+#   )
 ```
 
 [@fig-npn-sos-spatial] shows the spatial distribution of these NPN samples across the US cities, and the size of the circle markers indicates the number of individuals at each unique location. Note that some cities contain multiple sampling locations, each with a different number of individuals.
 
 ```{r fig-npn-sos-spatial}
-npn_sos_spatial <- npn_sos |>
-  distinct(Individual_ID, Longitude, Latitude) |>
-  group_by(Longitude, Latitude) |>
-  summarise(
-    n = n(),
-    .groups = "drop"
-  ) |>
-  st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326, remove = FALSE) |>
-  st_join(us_city |> select(NAME20, UACE20), join = st_within)
-
-leaflet(data = npn_sos_spatial) |>
-  addProviderTiles(providers$OpenStreetMap, options = providerTileOptions(opacity = 0.9)) |>
-  addCircleMarkers(
-    popup = ~ paste0(
-      "<strong>", NAME20, "</strong><br>",
-      "Num individual: ", n, "<br>"
-    ),
-    radius = ~ sqrt(n),
-    stroke = FALSE, fillOpacity = 0.7,
-    color = "green"
-  )
+# npn_sos_spatial <- npn_sos |>
+#   distinct(Individual_ID, Longitude, Latitude) |>
+#   group_by(Longitude, Latitude) |>
+#   summarise(
+#     n = n(),
+#     .groups = "drop"
+#   ) |>
+#   st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326, remove = FALSE) |>
+#   st_join(us_city |> select(NAME20, UACE20), join = st_within)
+# 
+# leaflet(data = npn_sos_spatial) |>
+#   addProviderTiles(providers$OpenStreetMap, options = providerTileOptions(opacity = 0.9)) |>
+#   addCircleMarkers(
+#     popup = ~ paste0(
+#       "<strong>", NAME20, "</strong><br>",
+#       "Num individual: ", n, "<br>"
+#     ),
+#     radius = ~ sqrt(n),
+#     stroke = FALSE, fillOpacity = 0.7,
+#     color = "green"
+#   )
 ```
 
 ### Match the `End of Season (EOS)`
@@ -329,52 +329,52 @@ ggplot(npn_eos, aes(npn_doy)) +
 #| fig-width: 16
 #| warning: false
 
-top10_Species <- npn_eos |>
-  count(Species, sort = TRUE) |>
-  slice_head(n = 10) |>
-  pull(Species)
-npn_eos_top10 <- npn_eos |> filter(Species %in% top10_Species)
-
-ggplot(npn_eos_top10, aes(x = npn_doy)) +
-  geom_histogram(bins = 30, size = 0.2) +
-  labs(
-    x = "DOY",
-    y = "Density",
-    title = "Histogram of NPN-derived EOS by Species and Case Type"
-  ) +
-  facet_grid(Species ~ type, scales = "free") +
-  theme_minimal(base_size = 14) +
-  theme(
-    strip.text = element_text(size = 12),
-    strip.text.y = element_text(angle = 0),  # <-- this line sets vertical text orientation
-    axis.text.x = element_text(angle = 45, hjust = 1)
-  )
+# top10_Species <- npn_eos |>
+#   count(Species, sort = TRUE) |>
+#   slice_head(n = 10) |>
+#   pull(Species)
+# npn_eos_top10 <- npn_eos |> filter(Species %in% top10_Species)
+# 
+# ggplot(npn_eos_top10, aes(x = npn_doy)) +
+#   geom_histogram(bins = 30, size = 0.2) +
+#   labs(
+#     x = "DOY",
+#     y = "Density",
+#     title = "Histogram of NPN-derived EOS by Species and Case Type"
+#   ) +
+#   facet_grid(Species ~ type, scales = "free") +
+#   theme_minimal(base_size = 14) +
+#   theme(
+#     strip.text = element_text(size = 12),
+#     strip.text.y = element_text(angle = 0),  # <-- this line sets vertical text orientation
+#     axis.text.x = element_text(angle = 45, hjust = 1)
+#   )
 ```
 
 [@fig-npn-eos-spatial] shows the spatial distribution of these samples across the US cities, and the size of the circle markers indicates the number of individuals at given location.
 
 ```{r fig-npn-eos-spatial}
-npn_eos_spatial <- npn_eos |>
-  distinct(Individual_ID, Longitude, Latitude) |>
-  group_by(Longitude, Latitude) |>
-  summarise(
-    n = n(),
-    .groups = "drop"
-  ) |>
-  st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326, remove = FALSE) |>
-  st_join(us_city |> select(NAME20, UACE20), join = st_within)
-
-leaflet(data = npn_eos_spatial) |>
-  addProviderTiles(providers$OpenStreetMap, options = providerTileOptions(opacity = 0.9)) |>
-  addCircleMarkers(
-    popup = ~ paste0(
-      "<strong>", NAME20, "</strong><br>",
-      "Num individual: ", n, "<br>"
-    ),
-    radius = ~ sqrt(n),
-    stroke = FALSE, fillOpacity = 0.7,
-    color = "red"
-  )
+# npn_eos_spatial <- npn_eos |>
+#   distinct(Individual_ID, Longitude, Latitude) |>
+#   group_by(Longitude, Latitude) |>
+#   summarise(
+#     n = n(),
+#     .groups = "drop"
+#   ) |>
+#   st_as_sf(coords = c("Longitude", "Latitude"), crs = 4326, remove = FALSE) |>
+#   st_join(us_city |> select(NAME20, UACE20), join = st_within)
+# 
+# leaflet(data = npn_eos_spatial) |>
+#   addProviderTiles(providers$OpenStreetMap, options = providerTileOptions(opacity = 0.9)) |>
+#   addCircleMarkers(
+#     popup = ~ paste0(
+#       "<strong>", NAME20, "</strong><br>",
+#       "Num individual: ", n, "<br>"
+#     ),
+#     radius = ~ sqrt(n),
+#     stroke = FALSE, fillOpacity = 0.7,
+#     color = "red"
+#   )
 ```
 
 ### Prepare the location for PlanetScope
@@ -387,30 +387,30 @@ As demonstrated during the extraction of phenological metrics and in [@fig-npn-i
 #| fig-height: 5
 #| fig-width: 5
 #| warning: false
-npn_points <- npn_sos_spatial |>
-  st_drop_geometry() |>
-  rename(lon = Longitude, lat = Latitude, site=UACE20)|>
-  bind_rows(npn_eos_spatial |>
-             st_drop_geometry() |>
-             rename(lon = Longitude, lat = Latitude, site=UACE20)) |>
-  group_by(lon, lat, site) |>
-  summarise(
-    n = max(n),
-    .groups = "drop"
-  ) |>
-  mutate(id = row_number())
-
-# Plot the points
-ggplot(npn_points, aes(n)) +
-  geom_histogram(aes(y = ..density..), fill = "grey", color = NA) + 
-  geom_density(color = "black", size = 0.5) +
-  labs(
-    x = "Number of individuals",
-    y = "Density",
-    title = "Distribution of individuals at each location"
-  ) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+# npn_points <- npn_sos_spatial |>
+#   st_drop_geometry() |>
+#   rename(lon = Longitude, lat = Latitude, site=UACE20)|>
+#   bind_rows(npn_eos_spatial |>
+#              st_drop_geometry() |>
+#              rename(lon = Longitude, lat = Latitude, site=UACE20)) |>
+#   group_by(lon, lat, site) |>
+#   summarise(
+#     n = max(n),
+#     .groups = "drop"
+#   ) |>
+#   mutate(id = row_number())
+# 
+# # Plot the points
+# ggplot(npn_points, aes(n)) +
+#   geom_histogram(aes(y = ..density..), fill = "grey", color = NA) + 
+#   geom_density(color = "black", size = 0.5) +
+#   labs(
+#     x = "Number of individuals",
+#     y = "Density",
+#     title = "Distribution of individuals at each location"
+#   ) +
+#   theme_minimal() +
+#   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 # saveRDS(npn_points, here("data/raw/CONUS/NPN/NPN1624/npn_points.rds"))
 ```
@@ -445,7 +445,7 @@ Generally, the trend suggests a consistency between PS-derived SOS and NPN-deriv
 #| warning: false
 
 library(randomcoloR)
-npn_points <- readRDS("~/phenology-urban/data/raw/CONUS/StreetTrees/cleaned_ps_input/summary/matching_npn.rds")
+npn_points <- readRDS("~/lab-data/datasets/vegetation/StreetTrees/cleaned_ps_input/summary/matching_npn.rds")
 
 # read in all PS_doy_data.rds in the folder
 ps_doy_data <- lapply(list.files(here("data/raw/CONUS/NPN/PS_valid/"),
@@ -460,17 +460,44 @@ npn_sos_ps <- npn_sos |>
               filter(direction == "up"), by = c("new_id" = "id", "year")) |>
   filter(npn_doy <= 150, doy <= 150, npn_doy >= 0, doy >= 0) |>
   na.omit()
-summary_npn_sos_ps <- npn_sos_ps |>
-  group_by(Longitude, Latitude, year, city) |>
+species_npn_sos_ps <- npn_sos_ps |>
+  group_by(Species, city, year, Longitude, Latitude) |>
   summarise(
-    doy = mean(doy, na.rm = TRUE),
-    mean = mean(npn_doy, na.rm = TRUE),
-    sd = sd(npn_doy, na.rm = TRUE),
+    n(),
+    npn_doy = mean(npn_doy),
+    doy = mean(doy),
+    .groups = "drop"
+  ) |>
+  group_by(Species, city, year) |>
+  summarise(
+    n = n(),
+    npn_doy_mean = mean(npn_doy, na.rm = TRUE),
+    npn_doy_sd = sd(npn_doy, na.rm = TRUE),
+    ps_doy_mean = mean(doy, na.rm = TRUE),
+    ps_doy_sd = sd(doy, na.rm = TRUE),
     .groups = "drop"
   ) |>
   mutate(
-    low_bound = mean - sd,
-    up_bound = mean +  sd
+    npn_low_bound = npn_doy_mean - npn_doy_sd,
+    npn_up_bound = npn_doy_mean +  npn_doy_sd,
+    ps_low_bound = ps_doy_mean - ps_doy_sd,
+    ps_up_bound = ps_doy_mean +  ps_doy_sd
+  )
+location_npn_sos_ps <- npn_sos_ps |>
+  group_by(city, year, Longitude, Latitude) |>
+  summarise(
+    n = n(),
+    npn_doy_mean = mean(npn_doy, na.rm = TRUE),
+    npn_doy_sd = sd(npn_doy, na.rm = TRUE),
+    ps_doy_mean = mean(doy, na.rm = TRUE),
+    ps_doy_sd = sd(doy, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(
+    npn_low_bound = npn_doy_mean - npn_doy_sd,
+    npn_up_bound = npn_doy_mean +  npn_doy_sd,
+    ps_low_bound = ps_doy_mean - ps_doy_sd,
+    ps_up_bound = ps_doy_mean +  ps_doy_sd
   )
 
 npn_eos_ps <- npn_eos |>
@@ -480,17 +507,44 @@ npn_eos_ps <- npn_eos |>
              filter(direction == "down"), by = c("new_id" = "id", "year")) |>
   filter(npn_doy >= 150, doy >= 150, npn_doy <=365, doy <= 365) |>
   na.omit()
-summary_npn_eos_ps <- npn_eos_ps |>
-  group_by(Longitude, Latitude, year, city) |>
+species_npn_eos_ps <- npn_eos_ps |>
+  group_by(Species, city, year, Longitude, Latitude) |>
   summarise(
-    doy = mean(doy, na.rm = TRUE),
-    mean = mean(npn_doy, na.rm = TRUE),
-    sd = sd(npn_doy, na.rm = TRUE),
+    n(),
+    npn_doy = mean(npn_doy),
+    doy = mean(doy),
+    .groups = "drop"
+  ) |>
+  group_by(Species, city, year) |>
+  summarise(
+    n = n(),
+    npn_doy_mean = mean(npn_doy, na.rm = TRUE),
+    npn_doy_sd = sd(npn_doy, na.rm = TRUE),
+    ps_doy_mean = mean(doy, na.rm = TRUE),
+    ps_doy_sd = sd(doy, na.rm = TRUE),
     .groups = "drop"
   ) |>
   mutate(
-    low_bound = mean - sd,
-    up_bound = mean +  sd
+    npn_low_bound = npn_doy_mean - npn_doy_sd,
+    npn_up_bound = npn_doy_mean +  npn_doy_sd,
+    ps_low_bound = ps_doy_mean - ps_doy_sd,
+    ps_up_bound = ps_doy_mean +  ps_doy_sd
+  )
+location_npn_eos_ps <- npn_eos_ps |>
+  group_by(city, year, Longitude, Latitude) |>
+  summarise(
+    n = n(),
+    npn_doy_mean = mean(npn_doy, na.rm = TRUE),
+    npn_doy_sd = sd(npn_doy, na.rm = TRUE),
+    ps_doy_mean = mean(doy, na.rm = TRUE),
+    ps_doy_sd = sd(doy, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(
+    npn_low_bound = npn_doy_mean - npn_doy_sd,
+    npn_up_bound = npn_doy_mean +  npn_doy_sd,
+    ps_low_bound = ps_doy_mean - ps_doy_sd,
+    ps_up_bound = ps_doy_mean +  ps_doy_sd
   )
 
 set.seed(20260320)
@@ -501,62 +555,64 @@ color_palette <- setNames(
 )
 
 # Define a function to fit and plot each case
-plot_weighted_fit <- function(df, phe = "SOS") {
-  # model <- lm(doy ~ mean + 0, data = df)
-  # df$fitted <- predict(model)
+plot_weighted_fit <- function(df, phe = "SOS", metric = "mean") {
+  phe <- match.arg(phe, c("SOS", "EOS"))
+  metric <- match.arg(metric, c("mean", "sd"))
+  x_var <- paste0("npn_doy_", metric)
+  y_var <- paste0("ps_doy_", metric)
+  df <- df |> dplyr::filter(is.finite(.data[[x_var]]), is.finite(.data[[y_var]]))
 
-  # slope <- round(coef(model)[1], 3)
-  # p_value <- signif(summary(model)$coefficients[1, 4], 3)
-  # mse <- mean(residuals(model)^2)
-  # rmse <- round(sqrt(mse), 3)
-  # annot_label <- paste0("y = ", slope, "x",
-  #                       "\np-value = ", p_value)
-  cor_res <- cor.test(df$doy, df$mean, method = "pearson")
-  r <- round(unname(cor_res$estimate), 3)
-  p_value <- signif(cor_res$p.value, 3)
-  rmse <- round(sqrt(mean((df$doy - df$mean)^2)), 3)
-  annot_label <- paste0("r = ", r,
-                        "\np-value = ", p_value,
-                        "\nRMSE = ", rmse)
+  x <- df[[x_var]]; y <- df[[y_var]]
+  r <- if (length(x) >= 3 && sd(x) > 0 && sd(y) > 0)
+    cor.test(x, y, method = "pearson") else NULL
+  label <- sprintf(" r = %s\n p = %s\nRMSE = %.2f",
+                   if (is.null(r)) "NA" else sprintf("%.3f", unname(r$estimate)),
+                   if (is.null(r)) "NA" else format.pval(r$p.value, digits = 3),
+                   sqrt(mean((y - x)^2)))
 
-  ggplot(df, aes(x = mean, y = doy)) +
-    geom_linerange(aes(xmin = low_bound, xmax = up_bound, color = city), linewidth = 0.5, alpha = 0.3) +
-    geom_point(aes(color = city), alpha = 0.3, size = 1) +
-    geom_abline(slope = 1, intercept = 0, color = "grey50", linetype = "dashed") +
-    # geom_smooth(
-    #   method = "lm",
-    #   formula = y ~ x + 0,
-    #   se = FALSE,
-    #   color = "black",
-    #   linewidth = 0.7
-    # ) +
-    annotate("text",
-             x = min(df$low_bound, na.rm = TRUE),
-             y = max(df$doy, na.rm = TRUE),
-             label = annot_label,
-             hjust = 0, vjust = 1, size = 4) +
-    scale_color_manual(values = color_palette,
-                       limits = all_cities,
-                       drop = T) + 
-    labs(
-      x = case_when(
-        phe == "SOS" ~ paste0("Midpoint of the first leaf day and the last\nincreasing leaf size day (from NPN)"),
-        phe == "EOS" ~ paste0("Midpoint of the first colored leaves day and the last\nfalling leaves day (from NPN)")
-      ),
-      y = case_when(
-        phe == "SOS" ~ paste0("Day of 50% green-up (from PlanetScope)"),
-        phe == "EOS" ~ paste0("Day of 50% green-down (from PlanetScope)")
-      )
-    ) +
-    theme(
-      legend.position = "none",
-      strip.background = element_blank(),
-      strip.placement = "outside"
-    ) 
+  x_lab <- if (metric == "sd") paste0("SD of ", phe, " (NPN, days)") else
+    if (phe == "SOS") "Midpoint of first leaf and\nlast increasing leaf size (NPN)" else
+      "Midpoint of first colored leaves and\nlast falling leaves (NPN)"
+  y_lab <- if (metric == "sd") paste0("SD of ", phe, " (PlanetScope, days)") else
+    paste0("Day of 50% ", if (phe == "SOS") "green-up" else "green-down", " (PlanetScope)")
+
+  p <- ggplot(df, aes(x = .data[[x_var]], y = .data[[y_var]]))
+
+  if (metric == "mean"){
+    p <- p + 
+    geom_segment(aes(x = npn_low_bound, xend = npn_up_bound,
+                              yend = .data[[y_var]], color = city),
+                          linewidth = 0.5, alpha = 0.3, na.rm = TRUE) +
+    geom_segment(aes(y = ps_low_bound, yend = ps_up_bound,
+                          xend = .data[[x_var]], color = city),
+                      linewidth = 0.5, alpha = 0.3, na.rm = TRUE) }
+    
+
+  p +
+  geom_point(aes(color = city, size = n), alpha = 0.4) +
+  geom_abline(slope = 1, intercept = 0, color = "grey50", linetype = "dashed") +
+  annotate("text", x = -Inf, y = Inf, label = label,
+           hjust = -0.1, vjust = 1.2, size = 4) +
+  scale_color_manual(values = color_palette, limits = all_cities, drop = TRUE) +
+  scale_size_continuous(name = "Sample size", range = c(1, 5),
+                        breaks = function(x) round(seq(x[1], x[2], length.out = 3))) +
+  guides(
+    color = "none",
+    size = guide_legend(override.aes = list(color = "grey40", alpha = 0.8))
+  ) +
+  labs(x = x_lab, y = y_lab) +
+  theme(
+    legend.position = c(0.80, 0.2),
+    legend.background = element_rect(fill = NA, color = NA),
+    legend.key = element_blank(),
+    strip.background = element_blank()
+  )
 }
 
-plot_sos <- plot_weighted_fit(summary_npn_sos_ps, phe = "SOS")
-plot_eos <- plot_weighted_fit(summary_npn_eos_ps, phe = "EOS")
+sp_sos_mean <- plot_weighted_fit(species_npn_sos_ps, phe = "SOS", metric = "mean")
+sp_eos_mean <- plot_weighted_fit(species_npn_eos_ps, phe = "EOS", metric = "mean")
+loc_sos_mean <- plot_weighted_fit(location_npn_sos_ps, phe = "SOS", metric = "mean")
+loc_eos_mean <- plot_weighted_fit(location_npn_eos_ps, phe = "EOS", metric = "mean")
 ```
 
 [@fig-npn-eos-ps] compares the EOS derived from NPN observations with those estimated from PlanetScope imagery across the two cases. In terms of RMSE, there is a better agreement between PS-derived SOS and NPN-derived SOS compared to EOS. However, the scatter around the 1:1 line is more balanced for EOS, particularly in case 2, where the metric is based on 'Falling leaves'.
@@ -589,7 +645,7 @@ legend_plot <- ggplot(legend_df, aes(x, y, color = city)) +
         legend.title = element_text(size = 12))
 shared_legend <- cowplot::get_legend(legend_plot)
 
-p_main <- plot_sos + plot_eos +
+p_main <- loc_sos_mean + loc_eos_mean + sp_sos_mean + sp_eos_mean +
   patchwork::plot_annotation(tag_levels = "a") &
   theme(plot.tag = element_text(face = "bold"))
 p = cowplot::plot_grid(
@@ -598,12 +654,89 @@ p = cowplot::plot_grid(
   rel_widths = c(1,0.05, 0.18,0.05)
 )
 p
-ggsave("~/phenology-urban/temp/figure_supp/validate_ps_npn.png", p, width = 13.5, height = 5.7, dpi = 500)
+ggsave("~/phenology-urban/temp/figure_supp/validate_ps_npn.png", p, width = 14.5, height = 11.5, dpi = 500)
 ```
 
 The comparison results are similar to those of @ps_npn_zhao, where the PS-derived MOS (middle of spring) is generally lower than the ground-observed MOS, while the MOF (middle of fall) shows a more balanced distribution.
 
 ![Comparison of individual tree-scale phenological metrics respectively derived from PlanetScope and ground observations. The values plotted here include the dates for (b) MOS and (e) MOF in both 2018 (circles) and 2019 (triangles). Different colors indicate different study sites.](image/fig-zhao.png){#fig-zhao fig-align="center" width="40%"}
+
+## Just comparing the variance
+
+
+```{r}
+variance_npn_ps <- npn_sos_ps |>
+  group_by(Species, city, year, Longitude, Latitude) |>
+  summarise(
+    n(),
+    npn_doy = mean(npn_doy),
+    doy = mean(doy),
+    .groups = "drop"
+  ) |>
+  group_by(Species, city, year) |>
+  summarise(
+    n = n(),
+    npn_doy_mean = mean(npn_doy, na.rm = TRUE),
+    npn_doy_sd = sd(npn_doy, na.rm = TRUE),
+    ps_doy_mean = mean(doy, na.rm = TRUE),
+    ps_doy_sd = sd(doy, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(
+    phe = "SOS",
+    npn_low_bound = npn_doy_mean - npn_doy_sd,
+    npn_up_bound = npn_doy_mean +  npn_doy_sd,
+    ps_low_bound = ps_doy_mean - ps_doy_sd,
+    ps_up_bound = ps_doy_mean +  ps_doy_sd
+  ) |>
+  bind_rows(npn_eos_ps |>
+  group_by(Species, city, year, Longitude, Latitude) |>
+  summarise(
+    n(),
+    npn_doy = mean(npn_doy),
+    doy = mean(doy),
+    .groups = "drop"
+  ) |>
+  group_by(Species, city, year) |>
+  summarise(
+    n = n(),
+    npn_doy_mean = mean(npn_doy, na.rm = TRUE),
+    npn_doy_sd = sd(npn_doy, na.rm = TRUE),
+    ps_doy_mean = mean(doy, na.rm = TRUE),
+    ps_doy_sd = sd(doy, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(
+    phe = "EOS",
+    npn_low_bound = npn_doy_mean - npn_doy_sd,
+    npn_up_bound = npn_doy_mean +  npn_doy_sd,
+    ps_low_bound = ps_doy_mean - ps_doy_sd,
+    ps_up_bound = ps_doy_mean +  ps_doy_sd
+  ))
+
+
+ ggplot(variance_npn_ps, aes(x = npn_doy_sd, y = ps_doy_sd)) +
+    # geom_linerange(aes(xmin = low_bound, xmax = up_bound, color = city), linewidth = 0.5, alpha = 0.3) +
+    geom_point(aes(color = city, size = n), alpha = 0.3) +
+    geom_abline(slope = 1, intercept = 0, color = "grey50", linetype = "dashed") +
+    # geom_smooth(
+    #   method = "lm",
+    #   formula = y ~ x + 0,
+    #   se = FALSE,
+    #   color = "black",
+    #   linewidth = 0.7
+    # ) +
+    scale_color_manual(values = color_palette,
+                       limits = all_cities,
+                       drop = T) + 
+    facet_wrap(~ phe, scales = "free_y") +
+    theme(
+      legend.position = "none",
+      strip.background = element_blank(),
+      strip.placement = "outside"
+    ) 
+```
+
 
 ## Summarize by year-city-species
 
