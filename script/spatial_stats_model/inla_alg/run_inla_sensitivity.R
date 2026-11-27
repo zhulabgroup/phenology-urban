@@ -21,19 +21,26 @@ cities <- gsub("\\.rds$", "", basename(rds_files))
 ################################## run different preseason model ##################################
 
 source_output_dirs <- c(
-  Grid_early_season = "inla_early_season",
-  Grid_later_season = "inla_later_season",
-  Grid_pre60 = "inla_pre60",
-  Grid_pre30 = "inla_pre30"
+  Grid_early_season = "inla_early_season"
+  # Grid_later_season = "inla_later_season",
+  # Grid_pre60 = "inla_pre60",
+  # Grid_pre30 = "inla_pre30"
 )
 
 for (source_name in names(source_output_dirs)) {
   r_output_dir <- paste0(file.path(output_root, source_output_dirs[[source_name]]), "/")
-  for (city in cities) {
+  for (city in cities[48:76]) {
     for (phe_type in c("SOS", "EOS")) {
-      model_input_all <- prepare_data(city, source = source_name, taxa_col = "canonicalname", phe_type = phe_type)
-      batch_status <- run_inla_species(model_input_all, r_output_dir, phe_type, city, n_cores = 15)
-      print(batch_status)
+      tryCatch({
+        model_input_all <- prepare_data(city, source = source_name, taxa_col = "canonicalname", phe_type = phe_type)
+        batch_status <- run_inla_species(model_input_all, r_output_dir, phe_type, city, n_cores = 15)
+        print(batch_status)
+      }, error = function(e) {
+        message(
+          "FAILED: ", source_name, " | ", city, " | ", phe_type,
+          " | Error: ", conditionMessage(e)
+        )
+      })
     }
   }
 }
