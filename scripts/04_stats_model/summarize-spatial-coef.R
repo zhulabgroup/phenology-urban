@@ -54,11 +54,9 @@ summarize_spatial_coef <- function(model_type = "inla"){
           source(here("scripts/04_stats_model/fit_spatial/tidy_model_results.R"))
           message(paste0("Processing ", city, " Phenophase: ", phe_type))
           if (model_type != "mcmc"){
-            r_output_dir <- paste0(model_dir, city, "/canonicalname/")
             coef_summary <- prepare_coef_summary(r_output_dir, phe_type) |>
               dplyr::mutate(phe_type = phe_type, city = city)
             } else {
-              r_output_dir <- paste0(model_dir, city, "/canonicalname/")
               coef_summary <- prepare_coef_summary_mcmc(r_output_dir, phe_type)|>
                 dplyr::mutate(phe_type = phe_type, city = city)
             }
