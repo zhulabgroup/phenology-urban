@@ -26,7 +26,7 @@ source_output_dirs <- c(
 
 for (source_name in names(source_output_dirs)) {
   r_output_dir <- paste0(file.path(output_root, source_output_dirs[[source_name]]), "/")
-  for (city in cities[23]) {
+  for (city in cities) {
     for (phe_type in c("SOS", "EOS")) {
       model_input_all <- prepare_data(city, source = source_name, taxa_col = "canonicalname", phe_type = phe_type)
       batch_status <- run_inla_species(model_input_all, r_output_dir, phe_type, city, n_cores = 1)
