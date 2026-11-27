@@ -27,8 +27,8 @@ city_feature <- read_rds(here("data/input/tree_list/summary/city_feature.rds")) 
 summarize_spatial_coef <- function(model_type = "inla"){
   save_summary_path <- paste0(here("data/output/spatial_coef_summary_"), model_type, ".rds")
   phe_types <- c("SOS", "EOS")
-  if (model_type == "inla") {
-    model_dir <- here("data/intermediate/spatial/inla/spatial_spde/")
+  if (model_type %in% c("inla", "inla_early_season", "inla_later_season", "inla_pre30", "inla_pre60")) {
+    model_dir <- here("data/intermediate/spatial/", model_type, "spatial_spde/")
   } else if (model_type == "mcmc") {
     model_dir <- here("data/intermediate/spatial/mcmc/spatial_mat/")
   } else if (model_type == "freq") {
