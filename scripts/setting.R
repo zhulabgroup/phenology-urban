@@ -86,6 +86,21 @@ city_label <- c(
 
 ## Private paths
 library(zhulabtools)
+# Create parent directories for the project symlinks
+link_parent_dirs <- c(
+  "data/input/climate",
+  "data/input/phenology",
+  "data/intermediate/spatial",
+  "data/intermediate"
+)
+invisible(lapply(
+  link_parent_dirs,
+  \(path) dir.create(
+    here::here(path),
+    recursive = TRUE,
+    showWarnings = FALSE
+  )
+))
 create_symlink_turbo("data/input/climate/CHELSA", "proj-phenology-urban/proc/tree_origin/chelsa_map")
 create_symlink_turbo("data/input/climate/Daymet", "proj-phenology-urban/raw/CONUS/Daymet/all_city_trees")
 create_symlink_turbo("data/input/climate/UHAT", "datasets/climate/UHAT")
