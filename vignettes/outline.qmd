@@ -297,6 +297,11 @@ This section summarizes all the coefficients obtained from the spatial models fo
 ```{r input-coef}
 source(here("scripts/04_stats_model/summarize-spatial-coef.R"))
 df_coef <- summarize_spatial_coef(model_type = "inla")
+
+for (model_type_sen in c("inla_early_season", "inla_later_season", "inla_pre30", "inla_pre60")){
+  message(paste0("Reading: ", model_type_sen))
+  summarize_spatial_coef(model_type = model_type_sen)
+}
 ```
 
 ```{r}

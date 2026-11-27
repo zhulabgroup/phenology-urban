@@ -1,7 +1,4 @@
 ####################### INLA model results tidy #######################
-cities <- names(city_label)
-phe_types <- c("SOS", "EOS")
-
 prepare_coef_summary <- function(r_output_dir, phe_type){
   pattern = paste0(phe_type,"\\.rds$")
   files <- list.files(r_output_dir, pattern = pattern, full.names = TRUE)
@@ -28,15 +25,10 @@ prepare_coef_summary <- function(r_output_dir, phe_type){
     mutate(SigAlpha = ifelse(Sig == "*", 1, 0.2)) %>%
     mutate(Color = ifelse(Estimate >0, "#0D0887FF" , "#FCA636FF"))
   write_rds(coef_summary, paste0(r_output_dir, phe_type, "_summary.rds"))
+  return(coef_summary)
 }
 
-for (city in cities) { 
-  message(paste0("Processing city: ", city))
-  r_output_dir <- paste0(here("data/intermediate/spatial/inla/spatial_spde/"), city, "/canonicalname/")
-  for (phe_type in phe_types){
-    prepare_coef_summary(r_output_dir, phe_type)
-  }
-}
+
 
 ############################### MCMC model result #########################
 
@@ -75,12 +67,5 @@ prepare_coef_summary_mcmc <- function(r_output_dir, phe_type){
            SigAlpha = ifelse(Sig == "*", 1, 0.2),
            Color = ifelse(Estimate >0, "#0D0887FF" , "#FCA636FF")) 
   write_rds(summary_data, paste0(r_output_dir, phe_type, "_summary.rds"))
-}
-  
-for (city in cities) { 
-  message(paste0("Processing city: ", city))
-  r_output_dir <- paste0(here("data/intermediate/spatial/mcmc/spatial_mat/"), city, "/canonicalname/")
-  for (phe_type in phe_types){
-    prepare_coef_summary_mcmc(r_output_dir, phe_type)
-  }
+  return(summary_data)
 }
