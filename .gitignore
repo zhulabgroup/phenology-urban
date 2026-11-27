@@ -5,6 +5,7 @@ temp
 doc/image
 /data/
 
+
 # Mac files
 .DS_Store
 # Quarto files
